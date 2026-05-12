@@ -126,32 +126,5 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
-    [Route("scene/Item/add"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddKnowledgeSceneItemResponse))]
-    public async Task<IActionResult> AddKnowledgeSceneItemAsync([FromBody] AddKnowledgeSceneItemCommand command)
-    {
-        var response = await _mediator.SendAsync<AddKnowledgeSceneItemCommand, AddKnowledgeSceneItemResponse>(command).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-
-    [Route("scene/Item/update"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateKnowledgeSceneItemResponse))]
-    public async Task<IActionResult> UpdateKnowledgeSceneItemAsync([FromBody] UpdateKnowledgeSceneItemCommand command)
-    {
-        var response = await _mediator.SendAsync<UpdateKnowledgeSceneItemCommand, UpdateKnowledgeSceneItemResponse>(command).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-
-    [Route("scene/Item/delete"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteKnowledgeSceneItemResponse))]
-    public async Task<IActionResult> DeleteKnowledgeSceneItemAsync([FromBody] DeleteKnowledgeSceneItemCommand command)
-    {
-        var response = await _mediator.SendAsync<DeleteKnowledgeSceneItemCommand, DeleteKnowledgeSceneItemResponse>(command).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-    
     #endregion
 }

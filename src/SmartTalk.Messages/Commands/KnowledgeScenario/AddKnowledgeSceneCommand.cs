@@ -14,6 +14,8 @@ public class AddKnowledgeSceneCommand : ICommand
     public string Description { get; set; }
 
     public KnowledgeSceneStatus Status { get; set; } = KnowledgeSceneStatus.OffShelf;
+
+    public List<KnowledgeSceneItemDto> SceneItems { get; set; } = new();
 }
 
 public class AddKnowledgeSceneResponse : SmartTalkResponse<KnowledgeSceneDto>
