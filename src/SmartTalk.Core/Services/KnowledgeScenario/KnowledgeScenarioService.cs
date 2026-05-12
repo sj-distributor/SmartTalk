@@ -30,9 +30,13 @@ public interface IKnowledgeScenarioService : IScopedDependency
 
     Task<GetKnowledgeSceneItemsResponse> GetKnowledgeSceneItemsAsync(GetKnowledgeSceneItemsRequest request, CancellationToken cancellationToken);
 
+    Task<GetKnowledgeSceneHistoryResponse> GetKnowledgeSceneHistoryAsync(GetKnowledgeSceneHistoryRequest request, CancellationToken cancellationToken);
+
     Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken);
 
     Task<SaveKnowledgeSceneRelatedKnowledgesResponse> SaveKnowledgeSceneRelatedKnowledgesAsync(SaveKnowledgeSceneRelatedKnowledgesCommand command, CancellationToken cancellationToken);
+
+    Task<SwitchKnowledgeSceneVersionResponse> SwitchKnowledgeSceneVersionAsync(SwitchKnowledgeSceneVersionCommand command, CancellationToken cancellationToken);
 }
 
 public class KnowledgeScenarioService : IKnowledgeScenarioService
@@ -151,9 +155,12 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             throw new Exception($"AddKnowledgeScene Scene [{command.Name}] already exists in this folder.");
 
         var scene = _mapper.Map<KnowledgeScene>(command);
+        scene.Version = string.IsNullOrWhiteSpace(scene.Version) ? "1.0" : scene.Version;
+        scene.IsActive = true;
 
         await _knowledgeScenarioDataProvider.AddKnowledgeSceneAsync(scene, true, cancellationToken: cancellationToken).ConfigureAwait(false);
         var sceneItems = await AddKnowledgeSceneItemsInternalAsync(scene, command.SceneItems, false, cancellationToken).ConfigureAwait(false);
+        await SnapshotKnowledgeSceneAsync(scene, sceneItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
         
         Log.Information("AddKnowledgeSceneAsync completed. SceneId={@SceneId}, FolderId={@FolderId}, Status={@Status}, SceneItemCount={@SceneItemCount}", scene.Id, scene.FolderId, scene.Status, sceneItems.Count);
 
@@ -190,7 +197,10 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (duplicatedScene != null && duplicatedScene.Id != command.Id)
             throw new Exception($"UpdateKnowledgeScene Scene [{command.Name}] already exists in this folder.");
 
+        var nextVersion = await GetNextSceneVersionAsync(scene.Id, scene.Version, cancellationToken).ConfigureAwait(false);
         _mapper.Map(command, scene);
+        scene.Version = nextVersion;
+        scene.IsActive = true;
         var sceneItemsChanged = false;
         if (command.SceneItems != null)
             sceneItemsChanged = await SyncKnowledgeSceneItemsAsync(scene, command.SceneItems, cancellationToken).ConfigureAwait(false);
@@ -206,6 +216,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         Log.Information("UpdateKnowledgeSceneAsync updated scene. SceneId={@SceneId}, SceneFolderId={@SceneFolderId}, SceneName={@SceneName}", scene.Id, scene.FolderId, scene.Name);
 
         var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(scene.Id, null, cancellationToken).ConfigureAwait(false);
+        await SnapshotKnowledgeSceneAsync(scene, sceneItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
         sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems);
 
@@ -402,6 +413,64 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         };
     }
 
+    public async Task<GetKnowledgeSceneHistoryResponse> GetKnowledgeSceneHistoryAsync(GetKnowledgeSceneHistoryRequest request, CancellationToken cancellationToken)
+    {
+        if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneHistory SceneId is required.");
+
+        var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
+        if (scene == null)
+            throw new Exception($"GetKnowledgeSceneHistory Scene [{request.SceneId}] does not exist.");
+
+        var (count, histories) = await _knowledgeScenarioDataProvider
+            .GetKnowledgeSceneHistoriesAsync(request.SceneId, request.PageIndex, request.PageSize, cancellationToken)
+            .ConfigureAwait(false);
+        var historyItems = await _knowledgeScenarioDataProvider
+            .GetKnowledgeSceneHistoryItemsAsync(histories.Select(x => x.Id).ToList(), cancellationToken)
+            .ConfigureAwait(false);
+        var itemMap = historyItems.GroupBy(x => x.HistoryId).ToDictionary(x => x.Key, x => x.ToList());
+
+        var sceneDtos = histories.Select(history =>
+        {
+            var dto = new KnowledgeSceneDto
+            {
+                HistoryId = history.Id,
+                Id = history.SceneId,
+                FolderId = history.FolderId,
+                Name = history.Name,
+                Description = history.Description,
+                Version = history.Version,
+                IsActive = history.IsActive,
+                Status = history.Status,
+                CreatedAt = history.CreatedAt,
+                UpdatedAt = history.UpdatedAt,
+                SceneItems = itemMap.TryGetValue(history.Id, out var items)
+                    ? items.Select(item => new KnowledgeSceneItemDto
+                    {
+                        Id = item.SceneItemId ?? 0,
+                        SceneId = history.SceneId,
+                        Name = item.Name,
+                        Type = item.Type,
+                        Content = item.Content,
+                        FileName = item.FileName,
+                        CreatedAt = item.CreatedAt,
+                        UpdatedAt = item.UpdatedAt
+                    }).ToList()
+                    : new List<KnowledgeSceneItemDto>()
+            };
+
+            return dto;
+        }).ToList();
+
+        return new GetKnowledgeSceneHistoryResponse
+        {
+            Data = new GetKnowledgeSceneHistoryResponseData
+            {
+                Count = count,
+                Scenes = sceneDtos
+            }
+        };
+    }
+
     public async Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken)
     {
         if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges SceneId is required.");
@@ -475,6 +544,62 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         };
     }
 
+    public async Task<SwitchKnowledgeSceneVersionResponse> SwitchKnowledgeSceneVersionAsync(SwitchKnowledgeSceneVersionCommand command, CancellationToken cancellationToken)
+    {
+        if (command.SceneId <= 0) throw new Exception("SwitchKnowledgeSceneVersion SceneId is required.");
+        if (command.HistoryId <= 0) throw new Exception("SwitchKnowledgeSceneVersion HistoryId is required.");
+
+        var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
+        if (scene == null)
+            throw new Exception($"SwitchKnowledgeSceneVersion Scene [{command.SceneId}] does not exist.");
+
+        var targetHistory = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoryByIdAsync(command.HistoryId, cancellationToken).ConfigureAwait(false);
+        if (targetHistory == null || targetHistory.SceneId != command.SceneId)
+            throw new Exception($"SwitchKnowledgeSceneVersion History [{command.HistoryId}] does not exist in this scene.");
+
+        var historyItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoryItemsAsync([targetHistory.Id], cancellationToken).ConfigureAwait(false);
+        var currentItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(scene.Id, null, cancellationToken).ConfigureAwait(false);
+        var nextVersion = await GetNextSceneVersionAsync(scene.Id, scene.Version, cancellationToken).ConfigureAwait(false);
+
+        if (currentItems.Count != 0)
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneItemsAsync(currentItems, false, cancellationToken).ConfigureAwait(false);
+
+        var restoredItems = historyItems.Select(item => new KnowledgeSceneItem
+        {
+            SceneId = scene.Id,
+            Name = item.Name,
+            Type = item.Type,
+            Content = item.Content,
+            FileName = item.FileName,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt
+        }).ToList();
+
+        if (restoredItems.Count != 0)
+            await _knowledgeScenarioDataProvider.AddKnowledgeSceneItemsAsync(restoredItems, false, cancellationToken).ConfigureAwait(false);
+
+        scene.FolderId = targetHistory.FolderId;
+        scene.Name = targetHistory.Name;
+        scene.Description = targetHistory.Description;
+        scene.Version = nextVersion;
+        scene.Status = targetHistory.Status;
+        scene.IsActive = true;
+        scene.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
+        await SnapshotKnowledgeSceneAsync(scene, restoredItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
+
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+
+        var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
+        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(restoredItems);
+
+        return new SwitchKnowledgeSceneVersionResponse
+        {
+            Data = sceneDto
+        };
+    }
+
     private async Task<List<int>> BuildRelatedKnowledgeDtosAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, CancellationToken cancellationToken)
     {
         if (relations.Count == 0)
@@ -491,5 +616,68 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             .OrderByDescending(x => relationMap[x.Id].CreatedAt)
             .Select(x => x.Id)
             .ToList();
+    }
+
+    private async Task<string> GetNextSceneVersionAsync(int sceneId, string currentVersion, CancellationToken cancellationToken)
+    {
+        var (_, histories) = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoriesAsync(sceneId, null, null, cancellationToken).ConfigureAwait(false);
+        var versions = histories.Select(x => x.Version).ToList();
+        versions.Add(currentVersion);
+
+        var maxMajor = 1;
+        var maxMinor = 0;
+
+        foreach (var version in versions.Where(x => !string.IsNullOrWhiteSpace(x)))
+        {
+            var parts = version.Split('.');
+            if (parts.Length != 2 || !int.TryParse(parts[0], out var major) || !int.TryParse(parts[1], out var minor))
+                continue;
+
+            if (major > maxMajor || (major == maxMajor && minor > maxMinor))
+            {
+                maxMajor = major;
+                maxMinor = minor;
+            }
+        }
+
+        return $"{maxMajor}.{maxMinor + 1}";
+    }
+
+    private async Task SnapshotKnowledgeSceneAsync(KnowledgeScene scene, List<KnowledgeSceneItem> sceneItems, string version, bool isActive, CancellationToken cancellationToken)
+    {
+        var (_, histories) = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoriesAsync(scene.Id, null, null, cancellationToken).ConfigureAwait(false);
+        foreach (var history in histories)
+            history.IsActive = false;
+        await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneHistoriesAsync(histories, false, cancellationToken).ConfigureAwait(false);
+
+        var historyEntity = new KnowledgeSceneHistory
+        {
+            SceneId = scene.Id,
+            FolderId = scene.FolderId,
+            Name = scene.Name,
+            Description = scene.Description,
+            Version = version,
+            Status = scene.Status,
+            IsActive = isActive,
+            CreatedAt = scene.CreatedAt,
+            UpdatedAt = scene.UpdatedAt,
+            SnapshotAt = DateTimeOffset.UtcNow
+        };
+
+        await _knowledgeScenarioDataProvider.AddKnowledgeSceneHistoryAsync(historyEntity, false, cancellationToken).ConfigureAwait(false);
+
+        var historyItems = sceneItems.Select(item => new KnowledgeSceneHistoryItem
+        {
+            HistoryId = historyEntity.Id,
+            SceneItemId = item.Id,
+            Name = item.Name,
+            Type = item.Type,
+            Content = item.Content,
+            FileName = item.FileName,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt
+        }).ToList();
+
+        await _knowledgeScenarioDataProvider.AddKnowledgeSceneHistoryItemsAsync(historyItems, true, cancellationToken).ConfigureAwait(false);
     }
 }

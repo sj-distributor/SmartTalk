@@ -23,13 +23,25 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task<KnowledgeScene> GetKnowledgeSceneByIdAsync(int id, CancellationToken cancellationToken = default);
 
+    Task<KnowledgeSceneHistory> GetKnowledgeSceneHistoryByIdAsync(int historyId, CancellationToken cancellationToken = default);
+
     Task<List<KnowledgeScene>> GetKnowledgeScenesByFolderIdAsync(int folderId, CancellationToken cancellationToken = default);
 
     Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int folderId, string keyword, CancellationToken cancellationToken = default);
 
+    Task<(int, List<KnowledgeSceneHistory>)> GetKnowledgeSceneHistoriesAsync(int sceneId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default);
+
+    Task<List<KnowledgeSceneHistoryItem>> GetKnowledgeSceneHistoryItemsAsync(List<int> historyIds, CancellationToken cancellationToken = default);
+
     Task AddKnowledgeSceneAsync(KnowledgeScene scene, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task UpdateKnowledgeSceneAsync(KnowledgeScene scene, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task AddKnowledgeSceneHistoryAsync(KnowledgeSceneHistory history, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task AddKnowledgeSceneHistoryItemsAsync(List<KnowledgeSceneHistoryItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task UpdateKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task DeleteKnowledgeScenesAsync(List<KnowledgeScene> scenes, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -127,6 +139,13 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             .ConfigureAwait(false);
     }
 
+    public async Task<KnowledgeSceneHistory> GetKnowledgeSceneHistoryByIdAsync(int historyId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<KnowledgeSceneHistory>()
+            .FirstOrDefaultAsync(x => x.Id == historyId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task<List<KnowledgeScene>> GetKnowledgeScenesByFolderIdAsync(int folderId, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<KnowledgeScene>()
@@ -145,6 +164,34 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         return await query.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<(int, List<KnowledgeSceneHistory>)> GetKnowledgeSceneHistoriesAsync(int sceneId, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<KnowledgeSceneHistory>().Where(x => x.SceneId == sceneId);
+        var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        if (pageIndex.HasValue && pageSize.HasValue && pageIndex >= 0 && pageSize > 0)
+            query = query.Skip(pageIndex.Value * pageSize.Value).Take(pageSize.Value);
+
+        var histories = await query
+            .OrderByDescending(x => x.SnapshotAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return (count, histories);
+    }
+
+    public async Task<List<KnowledgeSceneHistoryItem>> GetKnowledgeSceneHistoryItemsAsync(List<int> historyIds, CancellationToken cancellationToken = default)
+    {
+        if (historyIds.Count == 0)
+            return new List<KnowledgeSceneHistoryItem>();
+
+        return await _repository.Query<KnowledgeSceneHistoryItem>()
+            .Where(x => historyIds.Contains(x.HistoryId))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task AddKnowledgeSceneAsync(KnowledgeScene scene, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(scene, cancellationToken).ConfigureAwait(false);
@@ -156,6 +203,32 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
     public async Task UpdateKnowledgeSceneAsync(KnowledgeScene scene, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAsync(scene, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddKnowledgeSceneHistoryAsync(KnowledgeSceneHistory history, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(history, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddKnowledgeSceneHistoryItemsAsync(List<KnowledgeSceneHistoryItem> items, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (items.Count != 0)
+            await _repository.InsertAllAsync(items, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (histories.Count != 0)
+            await _repository.UpdateAllAsync(histories, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

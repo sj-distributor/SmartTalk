@@ -418,6 +418,144 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         });
     }
 
+    [Fact]
+    public async Task ShouldGetKnowledgeSceneHistory()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        int sceneId = 0;
+        int folderId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            folderId = (await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}")).Id;
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var addResponse = await mediator.SendAsync<AddKnowledgeSceneCommand, AddKnowledgeSceneResponse>(
+                new AddKnowledgeSceneCommand
+                {
+                    FolderId = folderId,
+                    Name = $"Scene-{caseId}",
+                    Description = $"Desc-{caseId}",
+                    Status = KnowledgeSceneStatus.Published,
+                    SceneItems =
+                    [
+                        new KnowledgeSceneItemDto
+                        {
+                            Name = $"Item-{caseId}",
+                            Type = KnowledgeSceneItemType.Text,
+                            Content = $"Content-{caseId}"
+                        }
+                    ]
+                });
+            sceneId = addResponse.Data.Id;
+
+            await mediator.SendAsync<UpdateKnowledgeSceneCommand, UpdateKnowledgeSceneResponse>(
+                new UpdateKnowledgeSceneCommand
+                {
+                    Id = sceneId,
+                    FolderId = addResponse.Data.FolderId,
+                    Name = $"Scene-{caseId}",
+                    Description = $"Desc-Updated-{caseId}",
+                    Status = KnowledgeSceneStatus.Published,
+                    SceneItems =
+                    [
+                        new KnowledgeSceneItemDto
+                        {
+                            Id = addResponse.Data.SceneItems.Single().Id,
+                            Name = $"Item-{caseId}",
+                            Type = KnowledgeSceneItemType.Text,
+                            Content = $"Content-Updated-{caseId}"
+                        }
+                    ]
+                });
+
+            var historyResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
+                new GetKnowledgeSceneHistoryRequest { SceneId = sceneId });
+
+            historyResponse.Data.Count.ShouldBe(2);
+            historyResponse.Data.Scenes.Count.ShouldBe(2);
+            historyResponse.Data.Scenes.Any(x => x.Version == "1.0" && x.HistoryId.HasValue).ShouldBeTrue();
+            historyResponse.Data.Scenes.Any(x => x.Version == "1.1" && x.HistoryId.HasValue).ShouldBeTrue();
+        });
+    }
+
+    [Fact]
+    public async Task ShouldSwitchKnowledgeSceneVersion()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        int folderId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            folderId = (await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}")).Id;
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var addResponse = await mediator.SendAsync<AddKnowledgeSceneCommand, AddKnowledgeSceneResponse>(
+                new AddKnowledgeSceneCommand
+                {
+                    FolderId = folderId,
+                    Name = $"Scene-{caseId}",
+                    Description = $"Desc-{caseId}",
+                    Status = KnowledgeSceneStatus.Published,
+                    SceneItems =
+                    [
+                        new KnowledgeSceneItemDto
+                        {
+                            Name = $"Item-{caseId}",
+                            Type = KnowledgeSceneItemType.Text,
+                            Content = $"Content-{caseId}"
+                        }
+                    ]
+                });
+
+            var updateResponse = await mediator.SendAsync<UpdateKnowledgeSceneCommand, UpdateKnowledgeSceneResponse>(
+                new UpdateKnowledgeSceneCommand
+                {
+                    Id = addResponse.Data.Id,
+                    FolderId = folderId,
+                    Name = $"Scene-{caseId}",
+                    Description = $"Desc-Updated-{caseId}",
+                    Status = KnowledgeSceneStatus.Published,
+                    SceneItems =
+                    [
+                        new KnowledgeSceneItemDto
+                        {
+                            Id = addResponse.Data.SceneItems.Single().Id,
+                            Name = $"Item-{caseId}",
+                            Type = KnowledgeSceneItemType.Text,
+                            Content = $"Content-Updated-{caseId}"
+                        }
+                    ]
+                });
+
+            var historyResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
+                new GetKnowledgeSceneHistoryRequest { SceneId = addResponse.Data.Id });
+            var oldVersion = historyResponse.Data.Scenes.First(x => x.Version == "1.0");
+
+            var switchResponse = await mediator.SendAsync<SwitchKnowledgeSceneVersionCommand, SwitchKnowledgeSceneVersionResponse>(
+                new SwitchKnowledgeSceneVersionCommand
+                {
+                    SceneId = addResponse.Data.Id,
+                    HistoryId = oldVersion.HistoryId!.Value
+                });
+
+            switchResponse.Data.Description.ShouldBe($"Desc-{caseId}");
+            switchResponse.Data.Version.ShouldBe("1.2");
+            switchResponse.Data.SceneItems.Single().Content.ShouldBe($"Content-{caseId}");
+            updateResponse.Data.Version.ShouldBe("1.1");
+
+            var latestHistoryResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
+                new GetKnowledgeSceneHistoryRequest { SceneId = addResponse.Data.Id });
+            latestHistoryResponse.Data.Count.ShouldBe(3);
+            latestHistoryResponse.Data.Scenes.Count(x => x.IsActive).ShouldBe(1);
+            latestHistoryResponse.Data.Scenes.Single(x => x.IsActive).Version.ShouldBe("1.2");
+        });
+    }
+
     private static IAiSpeechAssistantKnowledgePromptService CreatePromptServiceMock()
     {
         var promptService = Substitute.For<IAiSpeechAssistantKnowledgePromptService>();
@@ -454,6 +592,8 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             FolderId = folderId,
             Name = name,
             Description = description,
+            Version = "1.0",
+            IsActive = true,
             Status = status,
             CreatedAt = DateTimeOffset.UtcNow
         };

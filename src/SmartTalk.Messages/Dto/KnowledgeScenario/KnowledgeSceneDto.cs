@@ -4,6 +4,8 @@ namespace SmartTalk.Messages.Dto.KnowledgeScenario;
 
 public class KnowledgeSceneDto
 {
+    public int? HistoryId { get; set; }
+
     public int Id { get; set; }
     
     public int FolderId { get; set; }
@@ -11,6 +13,10 @@ public class KnowledgeSceneDto
     public string Name { get; set; }
 
     public string Description { get; set; }
+
+    public string Version { get; set; }
+
+    public bool IsActive { get; set; }
 
     public KnowledgeSceneStatus Status { get; set; }
     

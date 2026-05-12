@@ -94,6 +94,24 @@ public class KnowledgeScenarioController : ControllerBase
 
         return Ok(response);
     }
+
+    [Route("scene/history/list"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneHistoryResponse))]
+    public async Task<IActionResult> GetKnowledgeSceneHistoryAsync([FromQuery] GetKnowledgeSceneHistoryRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("scene/version/switch"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchKnowledgeSceneVersionResponse))]
+    public async Task<IActionResult> SwitchKnowledgeSceneVersionAsync([FromBody] SwitchKnowledgeSceneVersionCommand command)
+    {
+        var response = await _mediator.SendAsync<SwitchKnowledgeSceneVersionCommand, SwitchKnowledgeSceneVersionResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
     #endregion
 
     #region scene_relation
