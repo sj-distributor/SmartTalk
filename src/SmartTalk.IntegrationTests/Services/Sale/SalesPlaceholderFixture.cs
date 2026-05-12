@@ -53,6 +53,7 @@ public class SalesPlaceholderFixture
             twilioService: null!,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
             aiSpeechAssistantKnowledgePromptService: null,
+            knowledgeScenarioDataProvider: null!,
             openaiWebSocket: null!
        );
 
