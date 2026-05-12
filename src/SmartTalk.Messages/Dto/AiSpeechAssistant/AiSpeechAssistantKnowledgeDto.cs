@@ -32,5 +32,5 @@ public class AiSpeechAssistantKnowledgeDto
     
     public List<AiSpeechAssistantKnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }
 
-    public List<AiSpeechAssistantKnowledgeSceneRelationDto> SceneRelations { get; set; } = new();
+    public List<AiSpeechAssistantKnowledgeSceneItemDto> SceneItems { get; set; } = new();
 }

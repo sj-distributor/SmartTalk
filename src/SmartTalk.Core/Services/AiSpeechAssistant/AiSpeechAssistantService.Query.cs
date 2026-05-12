@@ -1,6 +1,7 @@
 using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Serilog;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
@@ -87,9 +88,7 @@ public partial class AiSpeechAssistantService
         if (knowledge == null) { return new GetAiSpeechAssistantKnowledgeResponse { Data = null }; }
 
         var result = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-        
-        var sceneRelationMap = await BuildKnowledgeSceneRelationDtosAsync([knowledge.Id], cancellationToken).ConfigureAwait(false);
-        result.SceneRelations = sceneRelationMap.TryGetValue(knowledge.Id, out var relations) ? relations : [];
+        result.SceneItems = await BuildKnowledgeSceneItemsAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
         var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(request.AssistantId, cancellationToken).ConfigureAwait(false);
         
         if (premise != null && !string.IsNullOrEmpty(premise.Content))
@@ -196,6 +195,45 @@ public partial class AiSpeechAssistantService
         result.Details = detailDtos;
         
         return new GetAiSpeechAssistantKnowledgeResponse { Data = result };
+    }
+
+    private async Task<List<AiSpeechAssistantKnowledgeSceneItemDto>> BuildKnowledgeSceneItemsAsync(int knowledgeId, CancellationToken cancellationToken)
+    {
+        var sceneRelationMap = await BuildKnowledgeSceneRelationDtosAsync([knowledgeId], cancellationToken).ConfigureAwait(false);
+        var activeRelations = sceneRelationMap.TryGetValue(knowledgeId, out var relations)
+            ? relations.Where(x => x.SceneId > 0).ToList()
+            : [];
+
+        if (activeRelations.Count == 0)
+            return [];
+
+        var relationMap = activeRelations.GroupBy(x => x.SceneId).ToDictionary(x => x.Key, x => x.First());
+        var sceneIds = relationMap.Keys.ToList();
+        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+
+        return sceneItems
+            .Where(x => relationMap.ContainsKey(x.SceneId))
+            .OrderByDescending(x => relationMap[x.SceneId].CreatedAt)
+            .ThenByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .Select(x =>
+            {
+                var relation = relationMap[x.SceneId];
+                return new AiSpeechAssistantKnowledgeSceneItemDto
+                {
+                    Id = x.Id,
+                    SceneId = x.SceneId,
+                    SceneName = relation.SceneName,
+                    SceneStatus = relation.SceneStatus,
+                    Name = x.Name,
+                    Type = (int)x.Type,
+                    Content = x.Content,
+                    FileName = x.FileName,
+                    CreatedAt = x.CreatedAt,
+                    UpdatedAt = x.UpdatedAt
+                };
+            })
+            .ToList();
     }
 
     private static string EnsureCopySuffixForDetailMatching(string name)

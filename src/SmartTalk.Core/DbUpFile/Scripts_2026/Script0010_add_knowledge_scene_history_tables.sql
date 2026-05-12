@@ -1,6 +1,6 @@
 alter table knowledge_scene
-    add column `version` varchar(128) not null default '1.0' after `description`,
-    add column `is_active` tinyint(1) not null default 1 after `version`;
+    add column `version` varchar(128) not null default '1.0',
+    add column `is_active` tinyint(1) not null default 1;
 
 create table if not exists knowledge_scene_history
 (
