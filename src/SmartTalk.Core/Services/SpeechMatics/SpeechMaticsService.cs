@@ -1,4 +1,3 @@
-
 using Serilog;
 using SmartTalk.Core.Ioc;
 using Newtonsoft.Json.Linq;
@@ -9,7 +8,6 @@ using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Settings.SpeechMatics;
 using SmartTalk.Messages.Enums.SpeechMatics;
-
 
 namespace SmartTalk.Core.Services.SpeechMatics;
 
@@ -46,7 +44,8 @@ public class SpeechMaticsService : ISpeechMaticsService
 
         while (true)
         {
-            var transcriptionJobIdJObject = JObject.Parse(await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
+            var transcriptionJobIdJObject = JObject.Parse(
+                await CreateTranscriptionJobAsync(recordContent, recordName, language, cancellationToken).ConfigureAwait(false));
 
             var transcriptionJobId = transcriptionJobIdJObject["id"]?.ToString();
 
@@ -60,21 +59,21 @@ public class SpeechMaticsService : ISpeechMaticsService
                     JobId = transcriptionJobId,
                     CallbackUrl = _transcriptionCallbackSetting.Url
                 };
-                
+
                 await _speechMaticsDataProvider.AddSpeechMaticsJobAsync(speechMaticsJob, true, cancellationToken).ConfigureAwait(false);
-                
+
                 return transcriptionJobId;
             }
 
             Log.Information("Create speechMatics job abnormal, start replacement key");
 
             var keys = await _speechMaticsDataProvider.GetSpeechMaticsKeysAsync(
-                    [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken: cancellationToken).ConfigureAwait(false);
+                    [SpeechMaticsKeyStatus.Active, SpeechMaticsKeyStatus.NotEnabled], cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
 
             Log.Information("Get speechMatics keys：{@keys}", keys);
 
             var activeKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.Active);
-
             var notEnabledKey = keys.FirstOrDefault(x => x.Status == SpeechMaticsKeyStatus.NotEnabled);
 
             if (notEnabledKey != null && activeKey != null)
@@ -99,7 +98,7 @@ public class SpeechMaticsService : ISpeechMaticsService
                         MsgType = "text",
                         Text = new SendWorkWechatGroupRobotTextDto
                         {
-                            Content = $"SMT Speech Matics Key Error"
+                            Content = "SMT Speech Matics Key Error"
                         }
                     }, cancellationToken).ConfigureAwait(false);
 
@@ -109,7 +108,7 @@ public class SpeechMaticsService : ISpeechMaticsService
             Log.Information("Retrying Create Speech Matics Job Attempts remaining: {RetryCount}", retryCount);
         }
     }
-    
+
     private async Task<string> CreateTranscriptionJobAsync(byte[] data, string fileName, string language, CancellationToken cancellationToken)
     {
         var createTranscriptionDto = new SpeechMaticsCreateTranscriptionDto { Data = data, FileName = fileName };
@@ -125,18 +124,21 @@ public class SpeechMaticsService : ISpeechMaticsService
             },
             NotificationConfig = new List<SpeechMaticsNotificationConfigDto>
             {
-                new SpeechMaticsNotificationConfigDto
+                new()
                 {
                     AuthHeaders = _transcriptionCallbackSetting.AuthHeaders,
-                    Contents = new List<string> { "transcript" },
+                    Contents = ["transcript"],
                     Url = _transcriptionCallbackSetting.Url
                 }
             }
         };
 
-        return await _speechMaticsClient.CreateJobAsync(new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto }, createTranscriptionDto, cancellationToken).ConfigureAwait(false);
+        return await _speechMaticsClient.CreateJobAsync(
+            new SpeechMaticsCreateJobRequestDto { JobConfig = jobConfigDto },
+            createTranscriptionDto,
+            cancellationToken).ConfigureAwait(false);
     }
-    
+
     private SpeechMaticsLanguageType SelectSpeechMetisLanguageType(string language)
     {
         return language switch

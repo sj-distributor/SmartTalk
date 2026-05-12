@@ -11,7 +11,9 @@ public interface ISalesService : IScopedDependency
 {
     Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
-    Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
+    Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
+    Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken);
 
     Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
 
@@ -125,23 +127,45 @@ public class SalesService : ISalesService
 
         return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
     }
-    
-    public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
+
+    public async Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var deliveryProgressTexts = new List<string>();
+
+        if (soldToIds == null || soldToIds.Count == 0)
+        {
+            Log.Warning("BuildCustomerDeliveryProgressStringAsync called with empty soldToIds");
+            return string.Empty;
+        }
+
+        foreach (var soldToId in soldToIds)
+        {
+            var deliveryProgressText = await BuildDeliveryProgressListAsync([soldToId], cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(deliveryProgressText)) continue;
+
+            deliveryProgressTexts.Add($"=== 客户 {soldToId} 配送进度 ===");
+            deliveryProgressTexts.Add(deliveryProgressText.TrimEnd());
+        }
+
+        return string.Join(Environment.NewLine, deliveryProgressTexts);
+    }
+
+    public async Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken)
     {
         var processedCustomerIds = customerIds.Select(id => "0000" + id).ToList();
 
-        var getOrderArrivalTimeList = await _salesClient.GetOrderArrivalTimeAsync(
+        var deliveryProgressResponse = await _salesClient.GetOrderArrivalTimeAsync(
             new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds }, cancellationToken).ConfigureAwait(false);
 
-        if (getOrderArrivalTimeList.Data.Count == 0) return "这位客户暂时没有订单。";
+        if (deliveryProgressResponse.Data.Count == 0) return "这位客户暂时没有订单。";
         
         var resultBuilder = new StringBuilder();
         
-        var notDeliveredOrders = getOrderArrivalTimeList.Data.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
+        var notDeliveredOrders = deliveryProgressResponse.Data.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
         
-        var deliveringOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 4).ToList();
+        var deliveringOrders = deliveryProgressResponse.Data.Where(order => order.OrderStatus == 4).ToList();
         
-        var completedOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 7).ToList();
+        var completedOrders = deliveryProgressResponse.Data.Where(order => order.OrderStatus == 7).ToList();
         
         AppendOrderSection(resultBuilder, "未配送", notDeliveredOrders);
         AppendOrderSection(resultBuilder, "配送中", deliveringOrders);
