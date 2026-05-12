@@ -565,7 +565,6 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var historyItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoryItemsAsync([targetHistory.Id], cancellationToken).ConfigureAwait(false);
         var currentItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(scene.Id, null, cancellationToken).ConfigureAwait(false);
-        var nextVersion = await GetNextSceneVersionAsync(scene.Id, scene.Version, cancellationToken).ConfigureAwait(false);
 
         if (currentItems.Count != 0)
             await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneItemsAsync(currentItems, false, cancellationToken).ConfigureAwait(false);
@@ -587,13 +586,17 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         scene.FolderId = targetHistory.FolderId;
         scene.Name = targetHistory.Name;
         scene.Description = targetHistory.Description;
-        scene.Version = nextVersion;
+        scene.Version = targetHistory.Version;
         scene.Status = targetHistory.Status;
         scene.IsActive = true;
         scene.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, true, cancellationToken).ConfigureAwait(false);
-        await SnapshotKnowledgeSceneAsync(scene, restoredItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
+
+        var (_, allHistories) = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoriesAsync(scene.Id, null, null, cancellationToken).ConfigureAwait(false);
+        foreach (var history in allHistories)
+            history.IsActive = history.Id == targetHistory.Id;
+        await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneHistoriesAsync(allHistories, true, cancellationToken).ConfigureAwait(false);
 
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
 
