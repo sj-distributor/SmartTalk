@@ -8,9 +8,9 @@ public class GetKnowledgeSceneHistoryRequest : IRequest
 {
     public int SceneId { get; set; }
 
-    public int? PageIndex { get; set; }
+    public int? PageIndex { get; set; } = 1;
 
-    public int? PageSize { get; set; }
+    public int? PageSize { get; set; } = 15;
 }
 
 public class GetKnowledgeSceneHistoryResponse : SmartTalkResponse<GetKnowledgeSceneHistoryResponseData>
