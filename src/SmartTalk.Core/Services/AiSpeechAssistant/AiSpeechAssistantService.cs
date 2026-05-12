@@ -552,7 +552,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         switch (assistant.ModelProvider)
         {
             case RealtimeAiProvider.OpenAi:
-                clientWebSocket.Options.SetRequestHeader("OpenAI-Beta", "realtime=v1");
                 clientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {_openAiSettings.ApiKey}");
                 break;
             case RealtimeAiProvider.ZhiPuAi:

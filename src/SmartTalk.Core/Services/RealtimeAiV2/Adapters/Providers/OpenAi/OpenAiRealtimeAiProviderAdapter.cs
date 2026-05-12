@@ -25,7 +25,6 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         
         return new Dictionary<string, string>
         {
-            { "OpenAI-Beta", "realtime=v1" },
             { "Authorization", $"Bearer {apiKey}" }
         };
     }
