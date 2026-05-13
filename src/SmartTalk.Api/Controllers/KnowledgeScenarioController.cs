@@ -104,6 +104,24 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
+    [Route("scene/market/list"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneMarketResponse))]
+    public async Task<IActionResult> GetKnowledgeSceneMarketAsync([FromQuery] GetKnowledgeSceneMarketRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetKnowledgeSceneMarketRequest, GetKnowledgeSceneMarketResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("scene/market/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateKnowledgeSceneCompanyResponse))]
+    public async Task<IActionResult> UpdateKnowledgeSceneCompanyAsync([FromBody] UpdateKnowledgeSceneCompanyCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateKnowledgeSceneCompanyCommand, UpdateKnowledgeSceneCompanyResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
     [Route("scene/version/switch"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchKnowledgeSceneVersionResponse))]
     public async Task<IActionResult> SwitchKnowledgeSceneVersionAsync([FromBody] SwitchKnowledgeSceneVersionCommand command)
