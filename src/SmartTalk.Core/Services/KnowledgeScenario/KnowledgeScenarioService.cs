@@ -32,11 +32,15 @@ public interface IKnowledgeScenarioService : IScopedDependency
 
     Task<GetKnowledgeSceneHistoryResponse> GetKnowledgeSceneHistoryAsync(GetKnowledgeSceneHistoryRequest request, CancellationToken cancellationToken);
 
+    Task<GetKnowledgeSceneMarketResponse> GetKnowledgeSceneMarketAsync(GetKnowledgeSceneMarketRequest request, CancellationToken cancellationToken);
+
     Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken);
 
     Task<SaveKnowledgeSceneRelatedKnowledgesResponse> SaveKnowledgeSceneRelatedKnowledgesAsync(SaveKnowledgeSceneRelatedKnowledgesCommand command, CancellationToken cancellationToken);
 
     Task<SwitchKnowledgeSceneVersionResponse> SwitchKnowledgeSceneVersionAsync(SwitchKnowledgeSceneVersionCommand command, CancellationToken cancellationToken);
+
+    Task<UpdateKnowledgeSceneCompanyResponse> UpdateKnowledgeSceneCompanyAsync(UpdateKnowledgeSceneCompanyCommand command, CancellationToken cancellationToken);
 }
 
 public class KnowledgeScenarioService : IKnowledgeScenarioService
@@ -477,6 +481,39 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         };
     }
 
+    public async Task<GetKnowledgeSceneMarketResponse> GetKnowledgeSceneMarketAsync(GetKnowledgeSceneMarketRequest request, CancellationToken cancellationToken)
+    {
+        if (request.CompanyId <= 0) throw new Exception("GetKnowledgeSceneMarket CompanyId is required.");
+
+        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(companyId: request.CompanyId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        Log.Information("GetKnowledgeSceneMarket sceneCompanies {@SceneCompanies}", sceneCompanies.Count);
+        
+        if (sceneCompanies.Count == 0)
+            return new GetKnowledgeSceneMarketResponse { Data = new GetKnowledgeSceneMarketResponseData() { Scenes = new List<KnowledgeSceneDto>() } };
+
+        var sceneIds = sceneCompanies.Select(x => x.SceneId).Distinct().ToList();
+        var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("GetKnowledgeSceneMarket ScenIds {@SceneIds}", sceneIds);
+        if (scenes.Count == 0)
+            return new GetKnowledgeSceneMarketResponse { Data = new GetKnowledgeSceneMarketResponseData() { Scenes = new List<KnowledgeSceneDto>() } };
+
+        var keyword = request.Keyword?.Trim();
+        var filteredScenes = scenes
+            .Where(x => string.IsNullOrWhiteSpace(keyword) || x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.IsActive)
+            .ToList();
+        
+        return new GetKnowledgeSceneMarketResponse
+        {
+            Data = new GetKnowledgeSceneMarketResponseData
+            {
+                Scenes = filteredScenes.Select(x => _mapper.Map<KnowledgeSceneDto>(x)).ToList()
+            }
+        };
+    }
+
     public async Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken)
     {
         if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges SceneId is required.");
@@ -547,6 +584,31 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         return new SaveKnowledgeSceneRelatedKnowledgesResponse
         {
             Data = data
+        };
+    }
+
+    public async Task<UpdateKnowledgeSceneCompanyResponse> UpdateKnowledgeSceneCompanyAsync(UpdateKnowledgeSceneCompanyCommand command, CancellationToken cancellationToken)
+    {
+        if (command.SceneId <= 0) throw new Exception("UpdateKnowledgeSceneCompany SceneId is required.");
+        if (command.CompanyId <= 0) throw new Exception("UpdateKnowledgeSceneCompany CompanyId is required.");
+
+        var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
+        if (scene == null)
+            throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] does not exist.");
+
+        var sceneCompany = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompanyAsync(command.SceneId, command.CompanyId, cancellationToken).ConfigureAwait(false);
+        if (sceneCompany == null)
+            throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] is not authorized for Company [{command.CompanyId}].");
+
+        if (sceneCompany.IsApplied != command.IsApplied)
+        {
+            sceneCompany.IsApplied = command.IsApplied;
+            await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneCompanyAsync(sceneCompany, true, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new UpdateKnowledgeSceneCompanyResponse
+        {
+            Data = _mapper.Map<KnowledgeSceneCompanyDto>(sceneCompany)
         };
     }
 
