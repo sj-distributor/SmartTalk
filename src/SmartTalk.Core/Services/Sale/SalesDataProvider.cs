@@ -61,8 +61,19 @@ public class SalesDataProvider : ISalesDataProvider
         if (string.IsNullOrWhiteSpace(assistantName))
             return [];
 
+        var filters = assistantName
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var trimmedAssistantName = assistantName.Trim();
+        if (!filters.Contains(trimmedAssistantName, StringComparer.OrdinalIgnoreCase))
+            filters.Add(trimmedAssistantName);
+
         return await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>()
-            .Where(x => x.CacheKey == "customer_items" && x.Filter == assistantName)
+            .Where(x => x.CacheKey == CustomerItemsCacheKey && filters.Contains(x.Filter))
             .ToListAsync(cancellationToken);
     }
 
