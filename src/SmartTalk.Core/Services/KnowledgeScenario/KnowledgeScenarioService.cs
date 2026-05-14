@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
 
@@ -41,6 +42,8 @@ public interface IKnowledgeScenarioService : IScopedDependency
     Task<SwitchKnowledgeSceneVersionResponse> SwitchKnowledgeSceneVersionAsync(SwitchKnowledgeSceneVersionCommand command, CancellationToken cancellationToken);
 
     Task<UpdateKnowledgeSceneCompanyResponse> UpdateKnowledgeSceneCompanyAsync(UpdateKnowledgeSceneCompanyCommand command, CancellationToken cancellationToken);
+
+    Task<GetAgentKnowledgeResponse> GetAgentKnowledgeAsync(GetAgentKnowledgeRequest request, CancellationToken cancellationToken);
 }
 
 public class KnowledgeScenarioService : IKnowledgeScenarioService
@@ -750,5 +753,37 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         }).ToList();
 
         await _knowledgeScenarioDataProvider.AddKnowledgeSceneHistoryItemsAsync(historyItems, true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<GetAgentKnowledgeResponse> GetAgentKnowledgeAsync(GetAgentKnowledgeRequest request, CancellationToken cancellationToken)
+    {
+        if (request.CompanyId <= 0)
+            throw new Exception("CompanyId is required.");
+
+        var sources = await _knowledgeScenarioDataProvider.GetAgentKnowledgeAsync(request.CompanyId, request.Keyword, cancellationToken).ConfigureAwait(false);
+
+        var result = sources
+            .GroupBy(x => new { x.AgentId, x.AgentName })
+            .Select(agentGroup => new GetAgentKnowledgeResponseData
+            {
+                AgentId = agentGroup.Key.AgentId,
+                AgentName = agentGroup.Key.AgentName,
+                Assistants = agentGroup
+                    .GroupBy(x => new { x.AssistantId, x.AssistantName })
+                    .Select(assistantGroup => new AssistantDto
+                    {
+                        AssistantId = assistantGroup.Key.AssistantId,
+                        AssistantName = assistantGroup.Key.AssistantName
+                    })
+                    .OrderBy(x => x.AssistantName)
+                    .ToList()
+            })
+            .OrderBy(x => x.AgentName)
+            .ToList();
+
+        return new GetAgentKnowledgeResponse
+        {
+            Data = result
+        };
     }
 }
