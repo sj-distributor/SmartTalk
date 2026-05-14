@@ -150,6 +150,15 @@ public class KnowledgeScenarioController : ControllerBase
 
         return Ok(response);
     }
+    
+    [Route("agent/knowledge"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAgentKnowledgeResponse))]
+    public async Task<IActionResult> GetAgentKnowledgeAsync([FromQuery] GetAgentKnowledgeRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.RequestAsync<GetAgentKnowledgeRequest, GetAgentKnowledgeResponse>(request, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
+    }
     #endregion
 
     #region scene_item

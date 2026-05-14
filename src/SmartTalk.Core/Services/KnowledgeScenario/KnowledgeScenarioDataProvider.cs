@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Data;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
+using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
@@ -54,6 +57,8 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
     Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(List<int> sceneIds = null, int? companyId = null, bool? isApplied = null, CancellationToken cancellationToken = default);
 
     Task<KnowledgeSceneCompany> GetKnowledgeSceneCompanyAsync(int sceneId, int companyId, CancellationToken cancellationToken = default);
+
+    Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -299,6 +304,45 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             .ConfigureAwait(false);
     }
 
+    public async Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default)
+    {
+        if (companyId <= 0)
+            throw new Exception("CompanyId is required.");
+
+        var trimmedKeyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim();
+
+        var query =
+            from store in _repository.QueryNoTracking<CompanyStore>()
+            join posAgent in _repository.QueryNoTracking<PosAgent>() on store.Id equals posAgent.StoreId
+            join agent in _repository.QueryNoTracking<Agent>() on posAgent.AgentId equals agent.Id
+            join agentAssistant in _repository.QueryNoTracking<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            join knowledge in _repository.QueryNoTracking<AiSpeechAssistantKnowledge>() on assistant.Id equals knowledge.AssistantId
+            where store.CompanyId == companyId && knowledge.IsActive
+            select new AgentKnowledgeDto
+            {
+                StoreId = store.Id,
+                StoreName = store.Names,
+                AgentId = agent.Id,
+                AgentName = agent.Name,
+                AssistantId = assistant.Id,
+                AssistantName = assistant.Name,
+            };
+
+        if (!string.IsNullOrWhiteSpace(trimmedKeyword))
+        {
+            query = query.Where(x =>
+                x.StoreName.Contains(trimmedKeyword) || x.AgentName.Contains(trimmedKeyword));
+        }
+
+        return await query
+            .Distinct()
+            .OrderBy(x => x.StoreName)
+            .ThenBy(x => x.AgentName)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+    
     public async Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         if (knowledges.Count != 0)
