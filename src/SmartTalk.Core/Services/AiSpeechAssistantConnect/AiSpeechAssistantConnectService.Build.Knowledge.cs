@@ -140,8 +140,6 @@ public partial class AiSpeechAssistantConnectService
         var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
         
         if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
-        
-        if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return;
 
         var soldToIds = GetAssistantSoldToIds();
         if (soldToIds.Count == 0) return;
