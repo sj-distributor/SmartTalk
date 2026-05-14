@@ -53,7 +53,7 @@ public class SalesDataProvider : ISalesDataProvider
 
         if (type.HasValue) query = query.Where(s => s.Type == type.Value);
 
-        return await query.FirstOrDefaultAsync(cancellationToken);
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken)
@@ -72,9 +72,7 @@ public class SalesDataProvider : ISalesDataProvider
         if (!filters.Contains(trimmedAssistantName, StringComparer.OrdinalIgnoreCase))
             filters.Add(trimmedAssistantName);
 
-        return await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>()
-            .Where(x => x.CacheKey == CustomerItemsCacheKey && filters.Contains(x.Filter))
-            .ToListAsync(cancellationToken);
+        return await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, filters, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
@@ -132,6 +130,19 @@ public class SalesDataProvider : ISalesDataProvider
         return await GetPhoneScopedCacheByPhoneNumberAsync(DeliveryInfoCacheKey, phoneNumber, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetKnowledgeVariableCachesByFiltersAsync(
+        string cacheKey,
+        List<string> filters,
+        CancellationToken cancellationToken)
+    {
+        if (filters == null || filters.Count == 0) return [];
+
+        return await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>()
+            .Where(x => x.CacheKey == cacheKey && filters.Contains(x.Filter))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+    
     private async Task UpsertPhoneScopedCacheAsync(
         string cacheKey,
         string phoneNumber,
