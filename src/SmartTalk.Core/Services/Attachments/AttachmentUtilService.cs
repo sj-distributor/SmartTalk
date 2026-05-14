@@ -44,7 +44,11 @@ public class AttachmentUtilService : IAttachmentUtilService
             {
                 var fullFile = $"{file.FileIndex}/{file.FileName}";
                 
-                _ossService.UploadFile(fullFile, file.FileContent);
+                await RetryHelper.RetryAsync(() =>
+                {
+                    _ossService.UploadFile(fullFile, file.FileContent);
+                    return Task.CompletedTask;
+                }, maxRetryCount: 3, delaySeconds: 3, cancellationToken).ConfigureAwait(false);
 
                 var attachment = new Attachment
                 {

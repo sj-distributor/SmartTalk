@@ -7,11 +7,13 @@ using Shouldly;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.IntegrationTests.Mocks;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
 

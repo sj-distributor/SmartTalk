@@ -10,8 +10,6 @@ namespace SmartTalk.Core.Services.Audio.Provider;
 
 public class QwenAudioModelProvider : IAudioModelProvider
 {
-    private const string Model = "Qwen3-Omni-30B-A3B-Instruct";
-
     private readonly QwenSettings _qwenSettings;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
 
@@ -51,7 +49,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
         var requestBody = new
         {
             stream = false,
-            model = Model,
+            model = _qwenSettings.CrmModel,
             messages,
             modalities = new[] { "text" }
         };

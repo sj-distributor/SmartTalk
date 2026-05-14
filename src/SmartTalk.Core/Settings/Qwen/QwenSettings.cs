@@ -10,6 +10,7 @@ public class QwenSettings : IConfigurationSetting
     {
         _crmBaseUrls = ReadBaseUrls(configuration, "Qwen:Crm:BaseUrl");
         CrmApiKey = configuration.GetValue<string>("Qwen:Crm:ApiKey");
+        CrmModel = configuration.GetValue<string>("Qwen:Crm:Model");
     }
 
     public IReadOnlyList<string> CrmBaseUrls => _crmBaseUrls;
@@ -32,6 +33,8 @@ public class QwenSettings : IConfigurationSetting
         }
     }
     public string CrmApiKey { get; set; }
+    
+    public string CrmModel { get; set; }
 
     private static IReadOnlyList<string> ReadBaseUrls(IConfiguration configuration, string key)
     {
