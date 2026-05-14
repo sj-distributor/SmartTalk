@@ -141,6 +141,8 @@ public partial class AiSpeechAssistantConnectService
         
         if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
 
+        if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return;
+
         var soldToIds = GetAssistantSoldToIds();
         if (soldToIds.Count == 0) return;
 
