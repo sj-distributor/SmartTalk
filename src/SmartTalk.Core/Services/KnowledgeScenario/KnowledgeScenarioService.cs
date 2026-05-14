@@ -3,10 +3,12 @@ using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
+using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
@@ -51,17 +53,20 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     private readonly IMapper _mapper;
     private readonly IAiSpeechAssistantKnowledgePromptService _aiSpeechAssistantKnowledgePromptService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IPosDataProvider _posDataProvider;
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
 
     public KnowledgeScenarioService(
         IMapper mapper,
         IKnowledgeScenarioDataProvider knowledgeScenarioDataProvider,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        IPosDataProvider posDataProvider,
         IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService)
     {
         _mapper = mapper;
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _posDataProvider = posDataProvider;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
     }
 
@@ -487,6 +492,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     public async Task<GetKnowledgeSceneMarketResponse> GetKnowledgeSceneMarketAsync(GetKnowledgeSceneMarketRequest request, CancellationToken cancellationToken)
     {
         if (request.CompanyId <= 0) throw new Exception("GetKnowledgeSceneMarket CompanyId is required.");
+        if (request.StoreId <= 0) throw new Exception("GetKnowledgeSceneMarket StoreId is required.");
+
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null || store.CompanyId != request.CompanyId)
+            throw new Exception($"Store [{request.StoreId}] does not belong to Company [{request.CompanyId}].");
 
         var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(companyId: request.CompanyId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -507,7 +517,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             .Where(x => string.IsNullOrWhiteSpace(keyword) || x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.IsActive)
             .ToList();
-        
+
+        filteredScenes = request.MarketType == KnowledgeSceneMarketType.MyTemplates
+            ? filteredScenes.Where(x => sceneCompanies.Any(c => c.SceneId == x.Id && c.IsApplied)).ToList()
+            : filteredScenes.ToList();
+
         return new GetKnowledgeSceneMarketResponse
         {
             Data = new GetKnowledgeSceneMarketResponseData
@@ -594,10 +608,15 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (command.SceneId <= 0) throw new Exception("UpdateKnowledgeSceneCompany SceneId is required.");
         if (command.CompanyId <= 0) throw new Exception("UpdateKnowledgeSceneCompany CompanyId is required.");
+        if (command.StoreId <= 0) throw new Exception("UpdateKnowledgeSceneCompany StoreId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
         if (scene == null)
             throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] does not exist.");
+
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null || store.CompanyId != command.CompanyId)
+            throw new Exception($"Store [{command.StoreId}] does not belong to Company [{command.CompanyId}].");
 
         var sceneCompany = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompanyAsync(command.SceneId, command.CompanyId, cancellationToken).ConfigureAwait(false);
         if (sceneCompany == null)
