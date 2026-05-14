@@ -117,16 +117,14 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)
     {
+
         var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
         
         var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
         
         if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
 
-        var soldToIds = !string.IsNullOrEmpty(_ctx.Assistant.Name) ? _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
-        if (soldToIds.Count == 0) return;
-
-        var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(_ctx.Assistant.Name, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
         var value = customerItems.Count > 0
