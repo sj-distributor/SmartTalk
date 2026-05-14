@@ -103,7 +103,7 @@ public class AiSpeechAssistantController : ControllerBase
         
         return Ok();
     }
-    
+
     [Route("numbers"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetNumbersResponse))]
     public async Task<IActionResult> GetNumbersAsync([FromQuery] GetNumbersRequest request)
