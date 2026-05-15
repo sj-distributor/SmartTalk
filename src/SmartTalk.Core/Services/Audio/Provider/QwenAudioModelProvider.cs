@@ -1,8 +1,7 @@
-using System.ClientModel;
-using OpenAI;
-using OpenAI.Chat;
+using System.Net.Http.Headers;
+using System.Text;
+using Newtonsoft.Json;
 using Serilog;
-using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Settings.Qwen;
 using SmartTalk.Messages.Commands.SpeechMatics;
 using SmartTalk.Messages.Enums.Audio;
@@ -11,10 +10,11 @@ namespace SmartTalk.Core.Services.Audio.Provider;
 
 public class QwenAudioModelProvider : IAudioModelProvider
 {
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(10);
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly QwenSettings _qwenSettings;
-    private readonly ISmartTalkHttpClientFactory _httpClientFactory;
 
-    public QwenAudioModelProvider(QwenSettings qwenSettings, ISmartTalkHttpClientFactory httpClientFactory)
+    public QwenAudioModelProvider(QwenSettings qwenSettings, IHttpClientFactory httpClientFactory)
     {
         _qwenSettings = qwenSettings;
         _httpClientFactory = httpClientFactory;
@@ -67,18 +67,41 @@ public class QwenAudioModelProvider : IAudioModelProvider
         Log.Information("Qwen LLM call start time: {Now}", DateTimeOffset.Now);
         
         var response = new QwenChatCompletionResponse();
+        var requestBodyJson = JsonConvert.SerializeObject(requestBody, new JsonSerializerSettings
+        {
+            NullValueHandling = NullValueHandling.Ignore
+        });
         
         try
         {
-            response = await _httpClientFactory.PostAsJsonAsync<QwenChatCompletionResponse>(
-                requestUrl,
-                requestBody,
-                cancellationToken,
-                timeout: TimeSpan.FromMinutes(10),
-                headers: headers, 
-                isNeedToReadErrorContent: true).ConfigureAwait(false);
-            
-            Log.Information("Received QwenChatCompletionResponse {@Response}", response);
+            using var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = RequestTimeout;
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl)
+            {
+                Content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json")
+            };
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _qwenSettings.CrmApiKey);
+
+            using var httpResponse = await httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
+
+            var responseContent = await httpResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                Log.Error(
+                    "Qwen LLM http error. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}, Response: {Response}",
+                    (int)httpResponse.StatusCode,
+                    httpResponse.ReasonPhrase,
+                    responseContent);
+            }
+            else if (!string.IsNullOrWhiteSpace(responseContent))
+            {
+                response = JsonConvert.DeserializeObject<QwenChatCompletionResponse>(responseContent) ?? new QwenChatCompletionResponse();
+            }
         }
         catch (Exception e)
         {
