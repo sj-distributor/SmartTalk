@@ -62,13 +62,27 @@ public class QwenAudioModelProvider : IAudioModelProvider
         var requestUrl = $"{_qwenSettings.CrmBaseUrl}/chat/completions";
         
         Log.Information("LLM http call url: {CallUrl} ,headers: {CallHeader}, request body: {@requestBody}", requestUrl, ToMaskedHeadersForLog(headers), requestBody);
-
-        var response = await _httpClientFactory.PostAsJsonAsync<QwenChatCompletionResponse>(
-            requestUrl,
-            requestBody,
-            cancellationToken,
-            timeout: TimeSpan.FromMinutes(10),
-            headers: headers).ConfigureAwait(false);
+        
+        Log.Information("Qwen LLM call start time: {Now}", DateTimeOffset.Now);
+        
+        var response = new QwenChatCompletionResponse();
+        
+        try
+        {
+            response = await _httpClientFactory.PostAsJsonAsync<QwenChatCompletionResponse>(
+                requestUrl,
+                requestBody,
+                cancellationToken,
+                timeout: TimeSpan.FromMinutes(10),
+                headers: headers, 
+                isNeedToReadErrorContent: true).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Qwen LLM calling exception");
+        }
+        
+        Log.Information("Qwen LLM call end time: {Now}", DateTimeOffset.Now);
         
         return response?.Choices?.FirstOrDefault()?.Message?.Content ?? string.Empty;
     }
