@@ -29,7 +29,7 @@ public interface ISmartiesHttpClientFactory : IScopedDependency
 
     HttpClient CreateClient(TimeSpan? timeout = null, bool beginScope = false, Dictionary<string, string> headers = null);
 
-    Task<T> SafelyProcessRequestAsync<T>(string methodName, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldThrow = false);
+    Task<T> SafelyProcessRequestAsync<T>(string methodName, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldLogError = true);
 }
 
 public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
@@ -163,21 +163,19 @@ public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
     private static async Task<T> ReadAndLogResponseAsync<T>(string requestUrl, HttpMethod httpMethod, 
         HttpResponseMessage response, CancellationToken cancellationToken, bool isNeedToReadErrorContent = false)
     {
-        if (response.IsSuccessStatusCode || isNeedToReadErrorContent)
+        if (!response.IsSuccessStatusCode && !isNeedToReadErrorContent)
+            throw await CreateRequestFailedExceptionAsync(requestUrl, httpMethod, response, cancellationToken).ConfigureAwait(false);
+
+        try
         {
-            try
-            {
-                return await ReadResponseContentAs<T>(response, cancellationToken).ConfigureAwait(false);
-            }
-            catch
-            {
-                await LogHttpErrorAsync(requestUrl, httpMethod, response, cancellationToken).ConfigureAwait(false);
-            }
+            return await ReadResponseContentAs<T>(response, cancellationToken).ConfigureAwait(false);
         }
-
-        await LogHttpErrorAsync(requestUrl, httpMethod, response, cancellationToken).ConfigureAwait(false);
-
-        return default;
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                await BuildResponseErrorMessageAsync("Failed to deserialize HTTP response.", requestUrl, httpMethod, response, cancellationToken).ConfigureAwait(false),
+                ex);
+        }
     }
 
     private static async Task<T> ReadResponseContentAs<T>(HttpResponseMessage response, CancellationToken cancellationToken)
@@ -192,12 +190,30 @@ public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
         return await response.Content.ReadAsAsync<T>(cancellationToken).ConfigureAwait(false);
     }
     
-    private static async Task LogHttpErrorAsync(string requestUrl, HttpMethod httpMethod, HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task<string> BuildResponseErrorMessageAsync(string message, string requestUrl, HttpMethod httpMethod,
+        HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var responseAsString = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        
-        Log.Error("Smarties http {Method} {Url} error, The response: {ResponseJson}, As string: {ResponseAsString}", 
-            httpMethod.ToString(), requestUrl, JsonConvert.SerializeObject(response), responseAsString);
+        var responseAsString = await ReadResponseBodyAsync(response, cancellationToken).ConfigureAwait(false);
+
+        return $"{message} Method={httpMethod}, Url={requestUrl}, StatusCode={(int)response.StatusCode} ({response.StatusCode}), " +
+               $"ReasonPhrase={response.ReasonPhrase}, Body={responseAsString}";
+    }
+
+    private static async Task<string> ReadResponseBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.Content == null)
+            return string.Empty;
+
+        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<HttpRequestException> CreateRequestFailedExceptionAsync(string requestUrl, HttpMethod httpMethod,
+        HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var message = await BuildResponseErrorMessageAsync("HTTP request failed.", requestUrl, httpMethod, response, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new HttpRequestException(message, null, response.StatusCode);
     }
     
     public async Task<T> SafelyProcessRequestAsync<T>(string requestUrl, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldLogError = true)
@@ -208,13 +224,18 @@ public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
             
             return await func().ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             if (shouldLogError)
                 Log.Error(ex, "Error on requesting {RequestUrl}", requestUrl);
             else
                 Log.Warning(ex, "Error on requesting {RequestUrl}", requestUrl);
-            return default;
+
+            throw;
         }
     }
 }
