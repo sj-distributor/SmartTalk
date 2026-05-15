@@ -169,9 +169,10 @@ public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
             {
                 return await ReadResponseContentAs<T>(response, cancellationToken).ConfigureAwait(false);
             }
-            catch
+            catch (Exception ex)
             {
-                await LogHttpErrorAsync(requestUrl, httpMethod, response, cancellationToken).ConfigureAwait(false);
+                await LogHttpErrorAsync(requestUrl, httpMethod, response, cancellationToken, ex).ConfigureAwait(false);
+                return default;
             }
         }
 
@@ -192,12 +193,28 @@ public class SmartiesHttpClientFactory : ISmartiesHttpClientFactory
         return await response.Content.ReadAsAsync<T>(cancellationToken).ConfigureAwait(false);
     }
     
-    private static async Task LogHttpErrorAsync(string requestUrl, HttpMethod httpMethod, HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task LogHttpErrorAsync(string requestUrl, HttpMethod httpMethod, HttpResponseMessage response, CancellationToken cancellationToken,
+        Exception ex = null)
     {
-        var responseAsString = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        
-        Log.Error("Smarties http {Method} {Url} error, The response: {ResponseJson}, As string: {ResponseAsString}", 
-            httpMethod.ToString(), requestUrl, JsonConvert.SerializeObject(response), responseAsString);
+        var responseAsString = response.Content == null
+            ? string.Empty
+            : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        var responseHeaders = JsonConvert.SerializeObject(response.Headers);
+        var contentHeaders = JsonConvert.SerializeObject(response.Content?.Headers);
+        var responseJson = JsonConvert.SerializeObject(response);
+
+        if (ex == null)
+        {
+            Log.Error(
+                "Smarties http {Method} {Url} error. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}, ResponseHeaders: {ResponseHeaders}, ContentHeaders: {ContentHeaders}, ResponseJson: {ResponseJson}, ResponseAsString: {ResponseAsString}",
+                httpMethod.ToString(), requestUrl, (int)response.StatusCode, response.ReasonPhrase, responseHeaders, contentHeaders, responseJson, responseAsString);
+            return;
+        }
+
+        Log.Error(ex,
+            "Smarties http {Method} {Url} error. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}, ResponseHeaders: {ResponseHeaders}, ContentHeaders: {ContentHeaders}, ResponseJson: {ResponseJson}, ResponseAsString: {ResponseAsString}",
+            httpMethod.ToString(), requestUrl, (int)response.StatusCode, response.ReasonPhrase, responseHeaders, contentHeaders, responseJson, responseAsString);
     }
     
     public async Task<T> SafelyProcessRequestAsync<T>(string requestUrl, Func<Task<T>> func, CancellationToken cancellationToken, bool shouldLogError = true)
