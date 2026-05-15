@@ -62,7 +62,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
         };
         var requestUrl = $"{_qwenSettings.CrmBaseUrl}/chat/completions";
         
-        Log.Information("LLM http call url: {CallUrl} ,headers: {CallHeader}", requestUrl, ToMaskedHeadersForLog(headers));
+        Log.Information("LLM http call url: {CallUrl} ,headers: {CallHeader}, request body: {@requestBody}", requestUrl, ToMaskedHeadersForLog(headers), requestBody);
 
         var response = await _httpClientFactory.PostAsJsonAsync<QwenChatCompletionResponse>(
             requestUrl,
