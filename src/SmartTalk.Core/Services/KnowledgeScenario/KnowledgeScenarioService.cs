@@ -608,16 +608,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (command.SceneId <= 0) throw new Exception("UpdateKnowledgeSceneCompany SceneId is required.");
         if (command.CompanyId <= 0) throw new Exception("UpdateKnowledgeSceneCompany CompanyId is required.");
-        if (command.StoreId <= 0) throw new Exception("UpdateKnowledgeSceneCompany StoreId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
         if (scene == null)
             throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] does not exist.");
-
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (store == null || store.CompanyId != command.CompanyId)
-            throw new Exception($"Store [{command.StoreId}] does not belong to Company [{command.CompanyId}].");
-
+        
         var sceneCompany = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompanyAsync(command.SceneId, command.CompanyId, cancellationToken).ConfigureAwait(false);
         if (sceneCompany == null)
             throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] is not authorized for Company [{command.CompanyId}].");
