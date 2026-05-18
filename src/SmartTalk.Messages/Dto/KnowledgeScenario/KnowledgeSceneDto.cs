@@ -26,6 +26,7 @@ public class KnowledgeSceneDto
     
     public DateTimeOffset? UpdatedAt { get; set; }
 
+    public DateTimeOffset? SnapshotAt { get; set; }
 
     public List<KnowledgeSceneItemDto> SceneItems { get; set; }
 }
