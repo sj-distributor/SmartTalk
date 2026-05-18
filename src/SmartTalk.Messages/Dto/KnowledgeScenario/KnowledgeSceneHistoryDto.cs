@@ -2,14 +2,14 @@ using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Messages.Dto.KnowledgeScenario;
 
-public class KnowledgeSceneDto
+public class KnowledgeSceneHistoryDto
 {
-    public int? HistoryId { get; set; }
-
     public int Id { get; set; }
-    
+
+    public int SceneId { get; set; }
+
     public int FolderId { get; set; }
-    
+
     public string Name { get; set; }
 
     public string Description { get; set; }
@@ -21,12 +21,12 @@ public class KnowledgeSceneDto
     public bool IsActive { get; set; }
 
     public KnowledgeSceneStatus Status { get; set; }
-    
+
     public DateTimeOffset CreatedAt { get; set; }
-    
+
     public DateTimeOffset? UpdatedAt { get; set; }
 
-    public DateTimeOffset? SnapshotAt { get; set; }
+    public DateTimeOffset SnapshotAt { get; set; }
 
     public List<KnowledgeSceneItemDto> SceneItems { get; set; }
 }
