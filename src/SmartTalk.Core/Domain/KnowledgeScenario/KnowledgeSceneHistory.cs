@@ -28,7 +28,7 @@ public class KnowledgeSceneHistory : IEntity
     public string Version { get; set; }
 
     [Column("brief"), StringLength(128)]
-    public string Brief { get; set; }
+    public string Brief { get; set; } = "未命名改動";
 
     [Column("status")]
     public KnowledgeSceneStatus Status { get; set; }
