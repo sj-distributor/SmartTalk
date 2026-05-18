@@ -104,11 +104,38 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
+    [Route("scene/history/update"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateKnowledgeSceneHistoryResponse))]
+    public async Task<IActionResult> UpdateKnowledgeSceneHistoryAsync([FromBody] UpdateKnowledgeSceneHistoryCommand command)
+    {
+        var response = await _mediator.SendAsync<UpdateKnowledgeSceneHistoryCommand, UpdateKnowledgeSceneHistoryResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
     [Route("scene/market/list"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneMarketResponse))]
     public async Task<IActionResult> GetKnowledgeSceneMarketAsync([FromQuery] GetKnowledgeSceneMarketRequest request)
     {
         var response = await _mediator.RequestAsync<GetKnowledgeSceneMarketRequest, GetKnowledgeSceneMarketResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("scene/company/list"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneCompaniesResponse))]
+    public async Task<IActionResult> GetKnowledgeSceneCompaniesAsync([FromQuery] GetKnowledgeSceneCompaniesRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetKnowledgeSceneCompaniesRequest, GetKnowledgeSceneCompaniesResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("scene/company/save"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SaveKnowledgeSceneCompaniesResponse))]
+    public async Task<IActionResult> SaveKnowledgeSceneCompaniesAsync([FromBody] SaveKnowledgeSceneCompaniesCommand command)
+    {
+        var response = await _mediator.SendAsync<SaveKnowledgeSceneCompaniesCommand, SaveKnowledgeSceneCompaniesResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
     }

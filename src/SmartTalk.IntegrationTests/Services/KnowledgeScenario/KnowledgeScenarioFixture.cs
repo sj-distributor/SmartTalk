@@ -476,8 +476,8 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
 
             historyResponse.Data.Count.ShouldBe(2);
             historyResponse.Data.Scenes.Count.ShouldBe(2);
-            historyResponse.Data.Scenes.Any(x => x.Version == "1.0" && x.HistoryId.HasValue).ShouldBeTrue();
-            historyResponse.Data.Scenes.Any(x => x.Version == "1.1" && x.HistoryId.HasValue).ShouldBeTrue();
+            historyResponse.Data.Scenes.Any(x => x.Version == "1.0" && x.Id > 0).ShouldBeTrue();
+            historyResponse.Data.Scenes.Any(x => x.Version == "1.1" && x.Id > 0).ShouldBeTrue();
         });
     }
 
@@ -540,7 +540,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                 new SwitchKnowledgeSceneVersionCommand
                 {
                     SceneId = addResponse.Data.Id,
-                    HistoryId = oldVersion.HistoryId!.Value
+                    HistoryId = oldVersion.Id
                 });
 
             switchResponse.Data.Description.ShouldBe($"Desc-{caseId}");
