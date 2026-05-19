@@ -9,6 +9,7 @@
 | `SQUID_SMARTTALK_REALTIME_WS_KEEPALIVE_SECONDS` | PR 2.3 | `15` | default | 提供 OpenAI/Google realtime WebSocket 客戶端的 keep-alive 間隔（秒）。範圍 5–120；越界或非數字回退為 15s。比 .NET 默認 30s 更頻繁，避免 corporate proxy / cloud LB 在 AI 沉默期間 idle-out 連線。 |
 | `SQUID_SMARTTALK_RECORDING_BUFFER_MODE` | PR 3.2 | `unbounded` | default | 錄音 buffer 實現策略。值：`unbounded`（與當前行為一致）或 `rolling`（環形 buffer，超出窗口的舊數據自動丟棄）。任何非 `rolling` 值（含未設）視為 unbounded。 |
 | `SQUID_SMARTTALK_RECORDING_BUFFER_SECONDS` | PR 3.2 | `300` | default | 當 `BUFFER_MODE=rolling` 時的窗口大小（秒）。範圍 30–3600；越界回退 300。300s × 48,000 byte/s = 14.4 MB cap per call。 |
+| `SQUID_SMARTTALK_REALTIME_ASSISTANT_CONFIG_ENFORCEMENT` | PR 4.2 (Round 2) | `off` | default | Per-assistant Realtime API session-config overrides 的總開關。`off`（默認）→ 完全忽略每個 assistant 的新配置欄位（`transcription_language`、`turn_detection_type`、`output_audio_speed` 等），與當前 prod 行為 byte-equivalent。`warn`/`strict`/`enforce`/`1`/`true` → 啟用 per-assistant 覆蓋。所有 Phase 5.* 的 opt-in 都通過此 flag 控制總開關，無需逐個 deploy。緊急回滾命令：`unset SQUID_SMARTTALK_REALTIME_ASSISTANT_CONFIG_ENFORCEMENT && systemctl restart smarttalk` 或設為 `off`。 |
 
 ## 灰度狀態定義
 
