@@ -61,6 +61,17 @@ public class RealtimeAiModelConfig
     /// OpenAI-specific input audio noise reduction configuration. Ignored by other providers.
     /// </summary>
     public object InputAudioNoiseReduction { get; set; }
+
+    /// <summary>
+    /// Optional ISO-639-1 language code (or <c>"yue"</c> for Cantonese) hinted to
+    /// OpenAI's transcription model. <c>null</c> or empty → no hint emitted, leaving
+    /// the GA <c>session.audio.input.transcription</c> object byte-equivalent to the
+    /// pre-hint payload. A non-null value is appended as the <c>language</c> property
+    /// next to <c>model</c>; the adapter relies on the caller's
+    /// <see cref="Newtonsoft.Json.NullValueHandling.Ignore"/> setting (active in
+    /// <c>RealtimeAiService.Connect</c>) to strip the property when the value is null.
+    /// </summary>
+    public string TranscriptionLanguage { get; set; }
 }
 
 /// <summary>

@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
@@ -32,7 +33,8 @@ public partial class AiSpeechAssistantConnectService
                     .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
                     .ToList(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
-                InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
+                InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage))
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
@@ -77,5 +79,24 @@ public partial class AiSpeechAssistantConnectService
         var content = _ctx.FunctionCalls.FirstOrDefault(x => x.Type == type && !string.IsNullOrWhiteSpace(x.Content))?.Content;
 
         return content != null ? JsonConvert.DeserializeObject<object>(content) : null;
+    }
+
+    /// <summary>
+    /// Extracts the <c>language</c> string from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.TranscriptionLanguage"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the transcription payload
+    /// byte-equivalent to the pre-hint behaviour: null input, non-JObject input,
+    /// missing <c>language</c> property, or empty / whitespace value. This is the only
+    /// place that interprets the JSON schema for the language hint — the adapter just
+    /// reads the resulting nullable string.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static string ParseTranscriptionLanguage(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var language = obj["language"]?.Value<string>();
+
+        return string.IsNullOrWhiteSpace(language) ? null : language;
     }
 }
