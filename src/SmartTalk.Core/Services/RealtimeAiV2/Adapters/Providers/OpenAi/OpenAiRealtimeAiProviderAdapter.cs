@@ -5,6 +5,7 @@ using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Messages.Hardening;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -12,6 +13,20 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
 
 public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 {
+    /// <summary>
+    /// Env var that gates per-assistant Realtime API session-config overrides
+    /// (Phase 4.2 of the Round 2 stability rollout). Default mode is
+    /// <see cref="EnforcementMode.Off"/> — until an operator flips this to
+    /// <c>warn</c> or <c>strict</c>, the adapter ignores every per-assistant
+    /// override field and emits the same JSON it does today (byte-equivalent).
+    ///
+    /// <para>
+    /// Renaming this constant breaks every air-gapped operator who pinned this
+    /// flag via env. The literal value is hard-pinned in unit tests (Rule 8).
+    /// </para>
+    /// </summary>
+    public const string AssistantConfigEnforcementEnvVar = "SQUID_SMARTTALK_REALTIME_ASSISTANT_CONFIG_ENFORCEMENT";
+
     private readonly OpenAiSettings _openAiSettings;
 
     public OpenAiRealtimeAiProviderAdapter(OpenAiSettings openAiSettings)
@@ -35,6 +50,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec)
     {
         var modelConfig = options.ModelConfig;
+        var useOverrides = AreAssistantConfigOverridesEnabled();
 
         // GA session.update payload (post 2026-05-07):
         // - new required `session.type` field ("realtime" | "transcription")
@@ -43,6 +59,12 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         // - `modalities` → `output_modalities`; `temperature` field dropped
         // Reference: https://platform.openai.com/docs/guides/realtime
         // Canonical sample: https://github.com/twilio-samples/speech-assistant-openai-realtime-api-python
+        //
+        // Phase 4.2 contract: when `useOverrides` is false (env var = off, the default),
+        // every helper below emits exactly the same shape as before, and the additional
+        // session-level fields are null. The outer JsonSerializerSettings.NullValueHandling.Ignore
+        // (RealtimeAiService.Connect.cs:23) then strips those nulls, leaving the payload
+        // byte-equivalent to the pre-4.2 output. Pin tests cover both modes.
         return new
         {
             type = "session.update",
@@ -51,24 +73,82 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 type = "realtime",
                 instructions = modelConfig.Prompt,
                 output_modalities = new[] { "audio" },
+                max_response_output_tokens = useOverrides ? modelConfig.MaxResponseOutputTokens : null,
                 audio = new
                 {
                     input = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        transcription = new { model = "whisper-1" },
-                        turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
-                        noise_reduction = modelConfig.InputAudioNoiseReduction
+                        transcription = BuildTranscriptionConfig(modelConfig, useOverrides),
+                        turn_detection = BuildTurnDetection(modelConfig, useOverrides),
+                        noise_reduction = BuildNoiseReduction(modelConfig, useOverrides)
                     },
                     output = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice
+                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
+                        speed = useOverrides ? modelConfig.OutputAudioSpeed : null
                     }
                 },
                 tools = modelConfig.Tools.Any() ? modelConfig.Tools : null
             }
         };
+    }
+
+    /// <summary>
+    /// Reads the assistant-config enforcement env var and returns true when overrides
+    /// should be honoured. <see cref="EnforcementMode.Off"/> (the default) → false, which
+    /// keeps the outbound session payload byte-equivalent to pre-Phase-4.2.
+    /// </summary>
+    private static bool AreAssistantConfigOverridesEnabled() =>
+        EnforcementModeReader.Read(AssistantConfigEnforcementEnvVar, EnforcementMode.Off) != EnforcementMode.Off;
+
+    /// <summary>
+    /// Builds the <c>audio.input.transcription</c> object. When overrides are disabled,
+    /// returns the exact pre-4.2 shape (<c>{ model = "whisper-1" }</c>) so the JSON is
+    /// byte-equivalent. When enabled, allows per-assistant model override and emits an
+    /// optional <c>language</c> hint (omitted via NullValueHandling.Ignore when null).
+    /// </summary>
+    private static object BuildTranscriptionConfig(RealtimeAiModelConfig cfg, bool useOverrides)
+    {
+        if (!useOverrides)
+            return new { model = "whisper-1" };
+
+        var model = string.IsNullOrEmpty(cfg.TranscriptionModel) ? "whisper-1" : cfg.TranscriptionModel;
+
+        return new { model, language = cfg.TranscriptionLanguage };
+    }
+
+    /// <summary>
+    /// Builds the <c>audio.input.turn_detection</c> object. When overrides are disabled
+    /// OR the assistant has no explicit type override, returns the pre-4.2 fallback
+    /// (<c>modelConfig.TurnDetection ?? { type = "server_vad" }</c>) — preserving every
+    /// existing function-call-based turn-detection configuration on every assistant.
+    /// </summary>
+    private static object BuildTurnDetection(RealtimeAiModelConfig cfg, bool useOverrides)
+    {
+        if (!useOverrides || string.IsNullOrEmpty(cfg.TurnDetectionType))
+            return cfg.TurnDetection ?? new { type = "server_vad" };
+
+        return new
+        {
+            type = cfg.TurnDetectionType,
+            threshold = cfg.TurnDetectionThreshold,
+            silence_duration_ms = cfg.TurnDetectionSilenceMs
+        };
+    }
+
+    /// <summary>
+    /// Builds the <c>audio.input.noise_reduction</c> object. When overrides are disabled
+    /// OR the assistant has no explicit type override, returns the pre-4.2 fallback
+    /// (<c>modelConfig.InputAudioNoiseReduction</c>) — which may itself be null.
+    /// </summary>
+    private static object BuildNoiseReduction(RealtimeAiModelConfig cfg, bool useOverrides)
+    {
+        if (!useOverrides || string.IsNullOrEmpty(cfg.InputNoiseReductionType))
+            return cfg.InputAudioNoiseReduction;
+
+        return new { type = cfg.InputNoiseReductionType };
     }
 
     /// <summary>
