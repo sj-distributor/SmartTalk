@@ -68,7 +68,7 @@ public class OpenaiClient : IOpenaiClient
 
     public async Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio-1.5", _openAiSettings.ApiKey);
         List<ChatMessage> messages =
         [
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),

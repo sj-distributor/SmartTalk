@@ -171,7 +171,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, string defaultLanguageCode, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio-1.5", _openAiSettings.ApiKey);
 
         var audioData = BinaryData.FromBytes(audioContent);
         var normalizedDefaultLanguageCode = NormalizeLanguageCode(defaultLanguageCode) ?? "en";

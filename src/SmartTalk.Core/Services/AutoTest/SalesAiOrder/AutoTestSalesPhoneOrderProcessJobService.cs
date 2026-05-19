@@ -502,7 +502,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             new SystemChatMessage(prompt)
         };
 
-        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var client = new ChatClient("gpt-audio-1.5", _openAiSettings.ApiKey);
 
         var options = new ChatCompletionOptions
         {
@@ -650,7 +650,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         var messages = await ConfigureRecordAnalyzePromptAsync(assistant, audio, cancellationToken).ConfigureAwait(false);
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio-1.5", _openAiSettings.ApiKey);
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
