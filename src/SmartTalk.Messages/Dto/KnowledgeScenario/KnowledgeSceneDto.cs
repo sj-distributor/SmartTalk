@@ -16,6 +16,8 @@ public class KnowledgeSceneDto
     
     public bool IsActive { get; set; }
 
+    public bool IsApplied { get; set; }
+
     public KnowledgeSceneStatus Status { get; set; }
     
     public DateTimeOffset CreatedAt { get; set; }
