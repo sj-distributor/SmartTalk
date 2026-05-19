@@ -32,20 +32,7 @@ public partial class AiSpeechAssistantConnectService
                     .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
                     .ToList(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
-                InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
-
-                // Per-assistant GA config overrides (Phase 4.2 of Round 2). NULL passthrough is
-                // load-bearing — adapter null-checks each field individually before changing the
-                // outbound payload, so an assistant with all-null config stays byte-equivalent
-                // to today's session.update output.
-                TranscriptionModel       = assistant.TranscriptionModel,
-                TranscriptionLanguage    = assistant.TranscriptionLanguage,
-                TurnDetectionType        = assistant.TurnDetectionType,
-                TurnDetectionThreshold   = assistant.TurnDetectionThreshold,
-                TurnDetectionSilenceMs   = assistant.TurnDetectionSilenceMs,
-                InputNoiseReductionType  = assistant.InputNoiseReductionType,
-                MaxResponseOutputTokens  = assistant.MaxResponseOutputTokens,
-                OutputAudioSpeed         = assistant.OutputAudioSpeed
+                InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
