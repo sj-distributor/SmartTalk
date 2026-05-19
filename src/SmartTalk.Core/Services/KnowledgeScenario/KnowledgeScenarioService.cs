@@ -390,12 +390,22 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (request.FolderId <= 0) throw new Exception("GetKnowledgeScenes FolderId is required.");
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(request.FolderId, request.Keyword, cancellationToken).ConfigureAwait(false);
+        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(scenes.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var sceneItemMap = sceneItems.GroupBy(x => x.SceneId).ToDictionary(x => x.Key, x => x.ToList());
         
         Log.Information("GetKnowledgeScenesAsync completed. FolderId={FolderId}, SceneCount={Count}", request.FolderId, scenes.Count);
 
+        var sceneDtos = scenes.Select(scene =>
+        {
+            var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
+            sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItemMap.TryGetValue(scene.Id, out var items) ? items : []);
+            sceneDto.SceneItems.ForEach(x => x.SceneStatus = scene.Status);
+            return sceneDto;
+        }).ToList();
+
         return new GetKnowledgeScenesResponse
         {
-            Data = _mapper.Map<List<KnowledgeSceneDto>>(scenes)
+            Data = sceneDtos
         };
     }
 

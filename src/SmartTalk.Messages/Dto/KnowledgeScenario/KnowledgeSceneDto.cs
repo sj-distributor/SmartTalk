@@ -4,8 +4,6 @@ namespace SmartTalk.Messages.Dto.KnowledgeScenario;
 
 public class KnowledgeSceneDto
 {
-    public int? HistoryId { get; set; }
-
     public int Id { get; set; }
     
     public int FolderId { get; set; }
@@ -15,9 +13,7 @@ public class KnowledgeSceneDto
     public string Description { get; set; }
 
     public string Version { get; set; }
-
-    public string Brief { get; set; }
-
+    
     public bool IsActive { get; set; }
 
     public KnowledgeSceneStatus Status { get; set; }
@@ -25,8 +21,6 @@ public class KnowledgeSceneDto
     public DateTimeOffset CreatedAt { get; set; }
     
     public DateTimeOffset? UpdatedAt { get; set; }
-
-    public DateTimeOffset? SnapshotAt { get; set; }
 
     public List<KnowledgeSceneItemDto> SceneItems { get; set; }
 }
