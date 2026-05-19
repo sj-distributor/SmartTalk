@@ -56,7 +56,12 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     input = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        transcription = new { model = "whisper-1" },
+                        // `language` is null for every assistant with no TranscriptionLanguage
+                        // row in ai_speech_assistant_function_call; the caller's
+                        // NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23) strips
+                        // the key entirely, so the transcription object stays byte-equivalent
+                        // to `{ model: "whisper-1" }` for every existing prod row.
+                        transcription = new { model = "whisper-1", language = modelConfig.TranscriptionLanguage },
                         turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
                         noise_reduction = modelConfig.InputAudioNoiseReduction
                     },
