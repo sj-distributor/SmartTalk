@@ -39,7 +39,38 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     
     [Column("model_voice")]
     public string ModelVoice { get; set; }
-    
+
+    // ── Realtime API GA session-config knobs (Phase 4.1 of Round 2 rollout) ───────
+    // All NULLABLE. NULL means "use the same hard-coded default as today" — these
+    // fields are only consumed in Phase 4.2+ when the matching env var is non-off.
+    // Until then this is a pure schema add and the runtime path is unchanged.
+
+    [Column("transcription_model"), StringLength(64)]
+    public string TranscriptionModel { get; set; }
+
+    [Column("transcription_language"), StringLength(8)]
+    public string TranscriptionLanguage { get; set; }
+
+    [Column("turn_detection_type"), StringLength(32)]
+    public string TurnDetectionType { get; set; }
+
+    [Column("turn_detection_threshold")]
+    public decimal? TurnDetectionThreshold { get; set; }
+
+    [Column("turn_detection_silence_ms")]
+    public int? TurnDetectionSilenceMs { get; set; }
+
+    [Column("input_noise_reduction_type"), StringLength(32)]
+    public string InputNoiseReductionType { get; set; }
+
+    [Column("max_response_output_tokens")]
+    public int? MaxResponseOutputTokens { get; set; }
+
+    [Column("output_audio_speed")]
+    public decimal? OutputAudioSpeed { get; set; }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+
     [Column("agent_id")]
     public int AgentId { get; set; }
     
