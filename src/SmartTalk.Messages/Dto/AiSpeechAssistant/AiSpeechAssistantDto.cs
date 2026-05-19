@@ -26,6 +26,29 @@ public class AiSpeechAssistantDto
     public string ModelVoice { get; set; }
 
     public string ModelLanguage { get; set; }
+
+    // ── Realtime API GA session-config knobs (Phase 4.2 of Round 2 rollout) ───────
+    // All NULLABLE. NULL means "use today's hard-coded default". A non-null value
+    // combined with `SQUID_SMARTTALK_REALTIME_ASSISTANT_CONFIG_ENFORCEMENT != off`
+    // (read by the adapter) activates the per-assistant override.
+
+    public string TranscriptionModel { get; set; }
+
+    public string TranscriptionLanguage { get; set; }
+
+    public string TurnDetectionType { get; set; }
+
+    public decimal? TurnDetectionThreshold { get; set; }
+
+    public int? TurnDetectionSilenceMs { get; set; }
+
+    public string InputNoiseReductionType { get; set; }
+
+    public int? MaxResponseOutputTokens { get; set; }
+
+    public decimal? OutputAudioSpeed { get; set; }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     
     public string CustomRecordAnalyzePrompt { get; set; }
     
