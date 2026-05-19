@@ -10,6 +10,15 @@
 | `SQUID_SMARTTALK_RECORDING_BUFFER_MODE` | PR 3.2 | `unbounded` | default | 錄音 buffer 實現策略。值：`unbounded`（與當前行為一致）或 `rolling`（環形 buffer，超出窗口的舊數據自動丟棄）。任何非 `rolling` 值（含未設）視為 unbounded。 |
 | `SQUID_SMARTTALK_RECORDING_BUFFER_SECONDS` | PR 3.2 | `300` | default | 當 `BUFFER_MODE=rolling` 時的窗口大小（秒）。範圍 30–3600；越界回退 300。300s × 48,000 byte/s = 14.4 MB cap per call。 |
 
+## Round 2 — per-assistant config（無 env var）
+
+Phase 4.2 起的 Realtime API session-config overrides **不引入 env var**：activation 完全由 DB 欄位驅動。
+
+- 每個 override 欄位（`transcription_language`、`turn_detection_type`、`output_audio_speed` 等）在 `ai_speech_assistant` 表為 NULLABLE
+- NULL → 走 pre-4.2 默認分支（byte-equivalent 與當前 prod 一致）
+- 非 NULL → 該欄位 per-assistant 生效（其他欄位獨立）
+- 緊急回滾：`UPDATE ai_speech_assistant SET <field> = NULL WHERE id = <assistant_id>` — 不需要重啟服務，per-assistant 粒度
+
 ## 灰度狀態定義
 
 - `default` — 默認值，與線上行為一致

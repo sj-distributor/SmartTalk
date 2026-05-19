@@ -43,6 +43,15 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         // - `modalities` → `output_modalities`; `temperature` field dropped
         // Reference: https://platform.openai.com/docs/guides/realtime
         // Canonical sample: https://github.com/twilio-samples/speech-assistant-openai-realtime-api-python
+        //
+        // Per-assistant override contract (Phase 4.2 of Round 2):
+        // every override field on `modelConfig` is nullable. NULL means "use today's default" —
+        // the helpers below fall back to the pre-4.2 shape, and the two session-level nullable
+        // fields (`max_response_output_tokens`, `audio.output.speed`) are stripped by the
+        // outer serializer's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23).
+        // Non-null means "this assistant opts into this specific field" — only that field
+        // activates, the others stay default. Activation is per-field per-assistant, with
+        // no global gate; the DB column being NULL is the safety net.
         return new
         {
             type = "session.update",
@@ -51,24 +60,73 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 type = "realtime",
                 instructions = modelConfig.Prompt,
                 output_modalities = new[] { "audio" },
+                max_response_output_tokens = modelConfig.MaxResponseOutputTokens,
                 audio = new
                 {
                     input = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        transcription = new { model = "whisper-1" },
-                        turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
-                        noise_reduction = modelConfig.InputAudioNoiseReduction
+                        transcription = BuildTranscriptionConfig(modelConfig),
+                        turn_detection = BuildTurnDetection(modelConfig),
+                        noise_reduction = BuildNoiseReduction(modelConfig)
                     },
                     output = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice
+                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
+                        speed = modelConfig.OutputAudioSpeed
                     }
                 },
                 tools = modelConfig.Tools.Any() ? modelConfig.Tools : null
             }
         };
+    }
+
+    /// <summary>
+    /// Builds the <c>audio.input.transcription</c> object. <c>model</c> defaults to
+    /// <c>whisper-1</c> when not overridden. <c>language</c> is emitted only when set —
+    /// the outer serializer's NullValueHandling.Ignore strips the property when null,
+    /// preserving the pre-4.2 payload shape byte-for-byte for assistants that have not
+    /// opted into a hint.
+    /// </summary>
+    private static object BuildTranscriptionConfig(RealtimeAiModelConfig cfg)
+    {
+        var model = string.IsNullOrEmpty(cfg.TranscriptionModel) ? "whisper-1" : cfg.TranscriptionModel;
+
+        return new { model, language = cfg.TranscriptionLanguage };
+    }
+
+    /// <summary>
+    /// Builds the <c>audio.input.turn_detection</c> object. When the assistant has no
+    /// explicit <c>TurnDetectionType</c> override, returns the pre-4.2 fallback
+    /// (<c>modelConfig.TurnDetection ?? { type = "server_vad" }</c>) — preserving every
+    /// existing function-call-based turn-detection configuration on every assistant.
+    /// Override threshold / silence values are nullable and stripped when null.
+    /// </summary>
+    private static object BuildTurnDetection(RealtimeAiModelConfig cfg)
+    {
+        if (string.IsNullOrEmpty(cfg.TurnDetectionType))
+            return cfg.TurnDetection ?? new { type = "server_vad" };
+
+        return new
+        {
+            type = cfg.TurnDetectionType,
+            threshold = cfg.TurnDetectionThreshold,
+            silence_duration_ms = cfg.TurnDetectionSilenceMs
+        };
+    }
+
+    /// <summary>
+    /// Builds the <c>audio.input.noise_reduction</c> object. When the assistant has no
+    /// explicit <c>InputNoiseReductionType</c> override, returns the pre-4.2 fallback
+    /// (<c>modelConfig.InputAudioNoiseReduction</c>) — which may itself be null.
+    /// </summary>
+    private static object BuildNoiseReduction(RealtimeAiModelConfig cfg)
+    {
+        if (string.IsNullOrEmpty(cfg.InputNoiseReductionType))
+            return cfg.InputAudioNoiseReduction;
+
+        return new { type = cfg.InputNoiseReductionType };
     }
 
     /// <summary>

@@ -61,6 +61,61 @@ public class RealtimeAiModelConfig
     /// OpenAI-specific input audio noise reduction configuration. Ignored by other providers.
     /// </summary>
     public object InputAudioNoiseReduction { get; set; }
+
+    // ── Realtime API GA per-assistant config overrides (Phase 4.2 of Round 2) ────
+    // All NULLABLE. NULL means "fall back to today's default branch in the adapter"
+    // (byte-equivalent to pre-Phase-4.2 output). A non-null value activates the
+    // override for that specific field only — activation is per-field per-assistant.
+    // The DB column being NULL is the safety net: no global gate, no env var.
+    // See `OpenAiRealtimeAiProviderAdapter.BuildSessionConfig` for the precise
+    // null-vs-value branching contract.
+
+    /// <summary>
+    /// OpenAI transcription model. <c>null</c> → adapter default (<c>whisper-1</c>).
+    /// Non-null values are not validated here; the adapter applies whichever value
+    /// the operator configured. Phase 5.4 adds value validation.
+    /// </summary>
+    public string TranscriptionModel { get; set; }
+
+    /// <summary>
+    /// OpenAI transcription language hint (ISO-639-1 or <c>"yue"</c>).
+    /// <c>null</c> → field omitted from the payload (today's behaviour). Phase 5.1
+    /// adds value validation.
+    /// </summary>
+    public string TranscriptionLanguage { get; set; }
+
+    /// <summary>
+    /// Explicit turn-detection type override (<c>server_vad</c> / <c>semantic_vad</c>).
+    /// <c>null</c> → adapter falls back to <see cref="TurnDetection"/> or
+    /// <c>{ type = "server_vad" }</c>. Phase 5.2 adds value validation.
+    /// </summary>
+    public string TurnDetectionType { get; set; }
+
+    /// <summary>
+    /// Turn-detection threshold (0.0–1.0). <c>null</c> → field omitted.
+    /// </summary>
+    public decimal? TurnDetectionThreshold { get; set; }
+
+    /// <summary>
+    /// Turn-detection silence duration in milliseconds. <c>null</c> → field omitted.
+    /// </summary>
+    public int? TurnDetectionSilenceMs { get; set; }
+
+    /// <summary>
+    /// Input noise-reduction profile (<c>near_field</c> / <c>far_field</c>).
+    /// <c>null</c> → adapter falls back to <see cref="InputAudioNoiseReduction"/>.
+    /// </summary>
+    public string InputNoiseReductionType { get; set; }
+
+    /// <summary>
+    /// Maximum response output tokens. <c>null</c> → field omitted (GA server default).
+    /// </summary>
+    public int? MaxResponseOutputTokens { get; set; }
+
+    /// <summary>
+    /// Output audio playback speed (0.25–1.5). <c>null</c> → field omitted (1.0 default).
+    /// </summary>
+    public decimal? OutputAudioSpeed { get; set; }
 }
 
 /// <summary>
