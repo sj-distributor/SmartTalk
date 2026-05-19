@@ -27,6 +27,9 @@ public class KnowledgeSceneHistory : IEntity
     [Column("version"), StringLength(128)]
     public string Version { get; set; }
 
+    [Column("brief"), StringLength(128)]
+    public string Brief { get; set; } = "未命名改動";
+
     [Column("status")]
     public KnowledgeSceneStatus Status { get; set; }
 
@@ -41,4 +44,7 @@ public class KnowledgeSceneHistory : IEntity
 
     [Column("snapshot_at")]
     public DateTimeOffset SnapshotAt { get; set; } = DateTimeOffset.UtcNow;
+    
+    [NotMapped]
+    public List<KnowledgeSceneItem> SceneItems { get; set; }
 }

@@ -58,6 +58,10 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task<KnowledgeSceneCompany> GetKnowledgeSceneCompanyAsync(int sceneId, int companyId, CancellationToken cancellationToken = default);
 
+    Task AddKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeleteKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default);
+
     Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -176,8 +180,8 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         var query = _repository.Query<KnowledgeSceneHistory>().Where(x => x.SceneId == sceneId);
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
-        if (pageIndex.HasValue && pageSize.HasValue && pageIndex >= 0 && pageSize > 0)
-            query = query.Skip(pageIndex.Value * pageSize.Value).Take(pageSize.Value);
+        if (pageIndex.HasValue && pageSize.HasValue && pageSize > 0)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
 
         var histories = await query
             .OrderByDescending(x => x.SnapshotAt)
@@ -302,6 +306,24 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         return await _repository.Query<KnowledgeSceneCompany>()
             .FirstOrDefaultAsync(x => x.SceneId == sceneId && x.CompanyId == companyId, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task AddKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (knowledgeSceneCompanies.Count != 0)
+            await _repository.InsertAllAsync(knowledgeSceneCompanies, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (knowledgeSceneCompanies.Count != 0)
+            await _repository.DeleteAllAsync(knowledgeSceneCompanies, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default)

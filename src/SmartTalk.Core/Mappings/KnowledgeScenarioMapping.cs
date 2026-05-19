@@ -10,9 +10,12 @@ public class KnowledgeScenarioMapping : Profile
     public KnowledgeScenarioMapping()
     {
         CreateMap<AddKnowledgeSceneCommand, KnowledgeScene>();
-       CreateMap<UpdateKnowledgeSceneCommand, KnowledgeScene>();
+        CreateMap<UpdateKnowledgeSceneCommand, KnowledgeScene>();
         CreateMap<KnowledgeSceneItemDto, KnowledgeSceneItem>().ReverseMap();
         CreateMap<KnowledgeScene, KnowledgeSceneDto>().ReverseMap();
+        CreateMap<KnowledgeSceneHistory, KnowledgeSceneHistoryDto>().ReverseMap();
         CreateMap<KnowledgeSceneFolder, KnowledgeSceneFolderDto>().ReverseMap();
+        CreateMap<KnowledgeSceneCompany, KnowledgeSceneCompanyDto>().ReverseMap();
+        CreateMap<KnowledgeSceneHistory, KnowledgeSceneHistoryDto>().ReverseMap();
     }
 }

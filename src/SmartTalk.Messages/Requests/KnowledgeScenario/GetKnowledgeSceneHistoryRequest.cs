@@ -21,5 +21,5 @@ public class GetKnowledgeSceneHistoryResponseData
 {
     public int Count { get; set; }
 
-    public List<KnowledgeSceneDto> Scenes { get; set; }
+    public List<KnowledgeSceneHistoryDto> Scenes { get; set; }
 }
