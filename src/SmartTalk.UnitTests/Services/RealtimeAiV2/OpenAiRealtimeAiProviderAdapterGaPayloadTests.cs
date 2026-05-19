@@ -15,14 +15,6 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 /// Pins the OpenAI Realtime API GA contract (post 2026-05-07).
 /// Beta-era fields that would now be rejected by the server MUST stay out of the payload.
 /// </summary>
-/// <remarks>
-/// Serialised with <see cref="OpenAiRealtimeAiProviderAdapterAssistantConfigTests"/> via
-/// the <c>EnvVarSerial</c> collection: the sibling class mutates the process-global
-/// <c>SQUID_SMARTTALK_REALTIME_ASSISTANT_CONFIG_ENFORCEMENT</c> env var; without the
-/// barrier, xUnit could run these GA assertions while that var is temporarily set to
-/// <c>warn</c>, silently exercising the override-enabled branch instead of the default.
-/// </remarks>
-[Collection("EnvVarSerial")]
 public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
 {
     private static OpenAiRealtimeAiProviderAdapter NewAdapter() =>
