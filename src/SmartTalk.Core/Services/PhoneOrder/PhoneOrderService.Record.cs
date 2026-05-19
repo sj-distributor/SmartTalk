@@ -713,6 +713,8 @@ public partial class PhoneOrderService
             ? []
             : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("GetPhoneOrderCompanyCallReportAsync records count{@Count}", records.Count);
+        
         var reportRows = BuildCompanyCallReportRows(records, assistantIds, assistantNameMap, assistantLanguageMap, latestRecords, daysWindow);
         var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
 
@@ -783,6 +785,9 @@ public partial class PhoneOrderService
 
                 var scenarioCounts = Enum.GetValues<DialogueScenarios>()
                     .ToDictionary(scenario => scenario, scenario => groupRecords.Count(x => x.Scenario == scenario));
+
+                Log.Information(
+                    "Company call report row assistantId:{AssistantId}, customerId:{CustomerId}, totalCalls:{TotalCalls}, invalidCalls:{InvalidCalls}, recordIds:{RecordIds}", assistantId, string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName, groupRecords.Count, scenarioCounts.GetValueOrDefault(DialogueScenarios.InvalidCall), groupRecords.Select(x => x.Id).ToList());
 
                 var daysSinceLastCallText = latestRecord == null
                     ? $"超过{daysWindow}天"
