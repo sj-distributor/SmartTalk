@@ -521,7 +521,12 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         {
             Data = new GetKnowledgeSceneMarketResponseData
             {
-                Scenes = filteredScenes.Select(x => _mapper.Map<KnowledgeSceneDto>(x)).ToList()
+                Scenes = filteredScenes.Select(scene =>
+                {
+                    var dto = _mapper.Map<KnowledgeSceneDto>(scene);
+                    dto.IsApplied = sceneCompanies.Any(x => x.SceneId == scene.Id && x.IsApplied);
+                    return dto;
+                }).ToList()
             }
         };
     }

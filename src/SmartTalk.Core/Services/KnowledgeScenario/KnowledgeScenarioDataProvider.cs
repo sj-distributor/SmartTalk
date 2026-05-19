@@ -180,8 +180,8 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         var query = _repository.Query<KnowledgeSceneHistory>().Where(x => x.SceneId == sceneId);
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
-        if (pageIndex.HasValue && pageSize.HasValue && pageIndex >= 0 && pageSize > 0)
-            query = query.Skip(pageIndex.Value * pageSize.Value).Take(pageSize.Value);
+        if (pageIndex.HasValue && pageSize.HasValue && pageSize > 0)
+            query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
 
         var histories = await query
             .OrderByDescending(x => x.SnapshotAt)
