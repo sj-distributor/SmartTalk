@@ -293,15 +293,18 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 case "session.updated":
                     return Result(RealtimeAiWssEventType.SessionInitialized, rawMessage);
 
-                // GA renamed several audio events; accept BOTH the old beta name and the new GA
-                // name so the deploy is robust to any leftover preview snapshots and to the GA
-                // models. https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/realtime-audio-preview-api-migration-guide
-                case "response.audio.delta":
+                // Beta-era event names (`response.audio.delta`, `response.audio.done`,
+                // `response.audio_transcript.delta`, `response.audio_transcript.done`) were
+                // accepted alongside the GA names during the hotfix #934 transition window.
+                // OpenAI completed the GA cutover on 2026-05-07 and has not emitted Beta names
+                // in production logs for ≥ 2 weeks; the dual-case branches are removed here so
+                // a Beta-named event surfaces as Unknown (= operator-visible Serilog warning)
+                // rather than silently working — that surface signal is required to detect any
+                // future provider regression that would re-emit Beta names.
                 case "response.output_audio.delta":
                     var audioPayload = root.TryGetProperty("delta", out var deltaProp) ? deltaProp.GetString() : null;
                     return Result(RealtimeAiWssEventType.ResponseAudioDelta, new RealtimeAiWssAudioData { Base64Payload = audioPayload, ItemId = itemId });
 
-                case "response.audio.done":
                 case "response.output_audio.done":
                     return Result(RealtimeAiWssEventType.ResponseAudioDone);
 
@@ -317,11 +320,9 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 case "conversation.item.input_audio_transcription.completed":
                     return Result(RealtimeAiWssEventType.InputAudioTranscriptionCompleted, Transcription("transcript", AiSpeechAssistantSpeaker.User));
 
-                case "response.audio_transcript.delta":
                 case "response.output_audio_transcript.delta":
                     return Result(RealtimeAiWssEventType.OutputAudioTranscriptionPartial, Transcription("delta", AiSpeechAssistantSpeaker.Ai));
 
-                case "response.audio_transcript.done":
                 case "response.output_audio_transcript.done":
                     return Result(RealtimeAiWssEventType.OutputAudioTranscriptionCompleted, Transcription("transcript", AiSpeechAssistantSpeaker.Ai));
 
