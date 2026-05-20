@@ -120,38 +120,74 @@ public partial class AiSpeechAssistantConnectService
         return from.StartsWith("+1") ? from[2..] : from;
     }
 
+    // ── Greeting ──────────────────────────────────────────────────────────
+    //
+    // Each ResolveX preserves the original check-fetch-apply order so the
+    // cross-token cascade (see ShouldResolveCrossTokenCascade_* in the
+    // KnowledgeBase fixture) continues to work: any token literal an earlier
+    // Resolve injects into _ctx.Prompt is processed by a later Resolve.
+    // Internal split into FetchX + ApplyX is a pure structural refactor —
+    // no externally observable change, byte-equivalent prompt output.
+
+    private sealed record GreetingFetchResult(string FetchedGreeting);
+
     private async Task ResolveGreetingAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.NumberId.HasValue || !_ctx.Prompt.Contains("#{greeting}")) return;
+        var fetched = await FetchGreetingAsync(cancellationToken).ConfigureAwait(false);
+        ApplyGreeting(fetched);
+    }
 
-        var greeting = await _smartiesClient
+    private async Task<GreetingFetchResult> FetchGreetingAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.NumberId.HasValue || !_ctx.Prompt.Contains("#{greeting}")) return null;
+
+        var response = await _smartiesClient
             .GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest { Id = _ctx.NumberId.Value }, cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrEmpty(greeting.Data.Number.Greeting))
-            _ctx.Knowledge.Greetings = greeting.Data.Number.Greeting;
-        
+        return new GreetingFetchResult(response.Data.Number.Greeting);
+    }
+
+    private void ApplyGreeting(GreetingFetchResult result)
+    {
+        if (result == null) return;
+
+        if (!string.IsNullOrEmpty(result.FetchedGreeting))
+            _ctx.Knowledge.Greetings = result.FetchedGreeting;
+
         _ctx.Prompt = _ctx.Prompt.Replace("#{greeting}", _ctx.Knowledge.Greetings ?? string.Empty);
     }
 
+    // ── Customer items (HiFood / customer_items) ──────────────────────────
+
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)
     {
-        var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
-        
-        var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
-        
-        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
+        var fetched = await FetchCustomerItemsAsync(cancellationToken).ConfigureAwait(false);
+        ApplyCustomerItems(fetched);
+    }
 
-        if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return;
+    private async Task<string> FetchCustomerItemsAsync(CancellationToken cancellationToken)
+    {
+        var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
+        var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
+
+        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return null;
+
+        if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return null;
 
         var soldToIds = GetAssistantSoldToIds();
-        if (soldToIds.Count == 0) return;
+        if (soldToIds.Count == 0) return null;
 
         var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
-        var value = customerItems.Count > 0
+        return customerItems.Count > 0
             ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50))
             : " ";
+    }
+
+    private void ApplyCustomerItems(string value)
+    {
+        if (value == null) return;
 
         _ctx.Prompt = _ctx.Prompt.Replace("#{customer_items}", value).Replace("{HiFood_商品_商品数据}", value);
     }
@@ -179,73 +215,121 @@ public partial class AiSpeechAssistantConnectService
         _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_progress}", deliveryProgressText);
     }
 
+    // ── Menu items ────────────────────────────────────────────────────────
+
+    private sealed record MenuItemsFetchResult(string MenuItems);
+
     private async Task ResolveMenuItemsAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase)) return;
+        var fetched = await FetchMenuItemsAsync(cancellationToken).ConfigureAwait(false);
+        ApplyMenuItems(fetched);
+    }
+
+    private async Task<MenuItemsFetchResult> FetchMenuItemsAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.Prompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase)) return null;
 
         var menuItems = await GenerateMenuItemsAsync(cancellationToken).ConfigureAwait(false);
 
-        _ctx.Prompt = _ctx.Prompt.Replace("#{menu_items}", menuItems ?? "");
+        // Wrap so a null/empty fetch result is still distinguishable from "fetch was skipped".
+        return new MenuItemsFetchResult(menuItems);
     }
+
+    private void ApplyMenuItems(MenuItemsFetchResult result)
+    {
+        if (result == null) return;
+
+        _ctx.Prompt = _ctx.Prompt.Replace("#{menu_items}", result.MenuItems ?? "");
+    }
+
+    // ── Customer info (CRM / customer_info) ───────────────────────────────
 
     private async Task ResolveCustomerInfoAsync(CancellationToken cancellationToken)
     {
+        var fetched = await FetchCustomerInfoAsync(cancellationToken).ConfigureAwait(false);
+        ApplyCustomerInfo(fetched);
+    }
+
+    private async Task<string> FetchCustomerInfoAsync(CancellationToken cancellationToken)
+    {
         var hasCustomerInfoToken = _ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase);
-        
         var hasCrmCustomerToken = _ctx.Prompt.Contains("{CRM_客户_客户数据}", StringComparison.OrdinalIgnoreCase);
-        
-        if (!hasCustomerInfoToken && !hasCrmCustomerToken) return;
+
+        if (!hasCustomerInfoToken && !hasCrmCustomerToken) return null;
 
         var cache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
 
-        var value = cache?.CacheValue?.Trim() ?? " ";
+        return cache?.CacheValue?.Trim() ?? " ";
+    }
+
+    private void ApplyCustomerInfo(string value)
+    {
+        if (value == null) return;
 
         _ctx.Prompt = _ctx.Prompt
             .Replace("#{customer_info}", value)
             .Replace("{CRM_客户_客户数据}", value);
     }
 
-    private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
-    {
-        if (!HasDeliveryInfoToken(_ctx.Prompt)) return;
+    // ── POS prompt variables (products + store hours) ─────────────────────
 
-        var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-
-        _ctx.Prompt = ApplyDeliveryInfoTokens(_ctx.Prompt, cache?.CacheValue?.Trim());
-    }
+    private sealed record PosPromptFetchResult(
+        bool NeedProducts,
+        bool NeedStoreHours,
+        List<string> RequestedProductTokens,
+        TranscriptionLanguage Language,
+        List<PosMenuProductBriefDto> Products,
+        string StoreHours);
 
     private async Task ResolvePosPromptVariablesAsync(CancellationToken cancellationToken)
+    {
+        var fetched = await FetchPosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
+        ApplyPosPromptVariables(fetched);
+    }
+
+    private async Task<PosPromptFetchResult> FetchPosPromptVariablesAsync(CancellationToken cancellationToken)
     {
         var requestedProductTokens = GetRequestedPosProductTokens();
         var needProducts = requestedProductTokens.Count > 0;
         var needStoreHours = HasPromptToken("{POS_店铺信息_营业时间}");
 
-        if (!needProducts && !needStoreHours) return;
+        if (!needProducts && !needStoreHours) return null;
 
         var language = ResolvePosPromptLanguage();
         var products = needProducts
             ? await _posUtilService.GetPosMenuProductBriefsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
-            : [];
+            : new List<PosMenuProductBriefDto>();
 
-        if (requestedProductTokens.Count > 2)
+        var storeHours = needStoreHours
+            ? await _posUtilService.GetPosStoreTimePeriodsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
+            : null;
+
+        return new PosPromptFetchResult(needProducts, needStoreHours, requestedProductTokens, language, products, storeHours);
+    }
+
+    private void ApplyPosPromptVariables(PosPromptFetchResult result)
+    {
+        if (result == null) return;
+
+        if (result.NeedProducts)
         {
-            ResolveCompactPosProductData(products, requestedProductTokens, language);
-        }
-        else
-        {
-            ResolvePosMenuProductNames(products);
-            ResolvePosMenuProductCategories(products);
-            ResolvePosMenuProductSpecifications(products);
-            ResolvePosMenuProductTaxes(products);
-            ResolvePosMenuProductPrices(products);
-            ResolvePosMenuProductTimes(products);
+            if (result.RequestedProductTokens.Count > 2)
+            {
+                ResolveCompactPosProductData(result.Products, result.RequestedProductTokens, result.Language);
+            }
+            else
+            {
+                ResolvePosMenuProductNames(result.Products);
+                ResolvePosMenuProductCategories(result.Products);
+                ResolvePosMenuProductSpecifications(result.Products);
+                ResolvePosMenuProductTaxes(result.Products);
+                ResolvePosMenuProductPrices(result.Products);
+                ResolvePosMenuProductTimes(result.Products);
+            }
         }
 
-        if (needStoreHours)
-        {
-            var storeHours = await _posUtilService.GetPosStoreTimePeriodsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false);
-            ResolvePosStoreBusinessHours(storeHours);
-        }
+        if (result.NeedStoreHours)
+            ResolvePosStoreBusinessHours(result.StoreHours);
     }
 
     private void ResolvePosMenuProductNames(List<PosMenuProductBriefDto> products)
@@ -633,6 +717,32 @@ public partial class AiSpeechAssistantConnectService
             AiSpeechAssistantMainLanguage.Korean => TranscriptionLanguage.Korean,
             _ => TranscriptionLanguage.English
         };
+    }
+
+    // ── Delivery info (CRM 送货日 / delivery_info) ─────────────────────────
+
+    private sealed record DeliveryInfoFetchResult(string DeliveryValue);
+
+    private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
+    {
+        var fetched = await FetchDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
+        ApplyDeliveryInfo(fetched);
+    }
+
+    private async Task<DeliveryInfoFetchResult> FetchDeliveryInfoAsync(CancellationToken cancellationToken)
+    {
+        if (!HasDeliveryInfoToken(_ctx.Prompt)) return null;
+
+        var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
+
+        return new DeliveryInfoFetchResult(cache?.CacheValue?.Trim());
+    }
+
+    private void ApplyDeliveryInfo(DeliveryInfoFetchResult result)
+    {
+        if (result == null) return;
+
+        _ctx.Prompt = ApplyDeliveryInfoTokens(_ctx.Prompt, result.DeliveryValue);
     }
 
     private List<string> GetAssistantSoldToIds()

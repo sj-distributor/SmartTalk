@@ -1,7 +1,5 @@
-using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
@@ -18,7 +16,7 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
 {
     private static OpenAiRealtimeAiProviderAdapter NewAdapter() =>
-        new(new OpenAiSettings(Substitute.For<IConfiguration>()));
+        new(new OpenAiSettings(OpenAiRealtimeAiProviderAdapterTestSettings.BuildConfiguration()));
 
     private static RealtimeSessionOptions OptionsWithPromptAndVoice(string prompt = "you are helpful", string voice = "alloy") =>
         new()
@@ -148,6 +146,11 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
     [Fact]
     public void BuildSessionConfig_AudioInput_CarriesTranscriptionAndTurnDetection()
     {
+        // Default transcription model upgraded from "whisper-1" to "gpt-4o-transcribe"
+        // (OpenAI's most capable transcription model, priced identically to whisper-1).
+        // The literal lives at OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel —
+        // referencing the const here ties the assertion to the production constant so
+        // a future default change updates one place.
         var adapter = NewAdapter();
         var options = OptionsWithPromptAndVoice();
         options.ModelConfig.TurnDetection = new { type = "server_vad" };
@@ -155,7 +158,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         var json = SerializeSession(adapter.BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
 
         var input = json["session"]!["audio"]!["input"]!;
-        input["transcription"]!["model"]!.Value<string>().ShouldBe("whisper-1");
+        input["transcription"]!["model"]!.Value<string>().ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
         input["turn_detection"]!["type"]!.Value<string>().ShouldBe("server_vad");
     }
 

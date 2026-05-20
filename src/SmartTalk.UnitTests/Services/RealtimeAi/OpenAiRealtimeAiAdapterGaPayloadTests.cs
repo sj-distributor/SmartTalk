@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NSubstitute;
@@ -9,6 +8,7 @@ using SmartTalk.Core.Services.RealtimeAi.Services;
 using SmartTalk.Core.Services.RealtimeAi.wss.OpenAi;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.UnitTests.Services.RealtimeAiV2;
 using Xunit;
 
 namespace SmartTalk.UnitTests.Services.RealtimeAi;
@@ -23,7 +23,7 @@ public class OpenAiRealtimeAiAdapterGaPayloadTests
 {
     private static OpenAiRealtimeAiAdapter NewAdapter(IAiSpeechAssistantDataProvider dataProvider = null)
     {
-        var settings = new OpenAiSettings(Substitute.For<IConfiguration>());
+        var settings = new OpenAiSettings(OpenAiRealtimeAiProviderAdapterTestSettings.BuildConfiguration());
         var provider = dataProvider ?? Substitute.For<IAiSpeechAssistantDataProvider>();
 
         // Default: no knowledge entry, no function calls, no caches.

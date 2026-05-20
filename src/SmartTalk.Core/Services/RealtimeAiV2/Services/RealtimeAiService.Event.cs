@@ -47,6 +47,8 @@ public partial class RealtimeAiService
                 case RealtimeAiWssEventType.ResponseTurnCompleted:
                     if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
                         await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
+                    if (parsedEvent.Usage != null)
+                        await OnResponseUsageReceivedAsync(parsedEvent.Usage).ConfigureAwait(false);
                     await OnAiTurnCompletedAsync().ConfigureAwait(false);
                     break;
 
@@ -157,6 +159,23 @@ public partial class RealtimeAiService
         await SendToClientAsync(_ctx.ClientAdapter.BuildTranscriptionMessage(eventType, transcriptionData, _ctx.SessionId)).ConfigureAwait(false);
     }
     
+    private async Task OnResponseUsageReceivedAsync(RealtimeAiWssUsageData usage)
+    {
+        // Always log the breakdown — gives ops a free cost-tracking signal in
+        // structured Serilog properties even when the consumer doesn't wire a callback.
+        Log.Information(
+            "[RealtimeAi] Token usage reported, SessionId: {SessionId}, Round: {Round}, " +
+            "Total: {Total}, Input: {Input}, Output: {Output}, Cached: {Cached}, " +
+            "InputAudio: {InputAudio}, InputText: {InputText}, OutputAudio: {OutputAudio}, OutputText: {OutputText}",
+            _ctx.SessionId, _ctx.Round,
+            usage.TotalTokens, usage.InputTokens, usage.OutputTokens, usage.CachedTokens,
+            usage.InputAudioTokens, usage.InputTextTokens, usage.OutputAudioTokens, usage.OutputTextTokens);
+
+        if (_ctx.Options.OnResponseUsageReceivedAsync == null) return;
+
+        await _ctx.Options.OnResponseUsageReceivedAsync(usage).ConfigureAwait(false);
+    }
+
     private async Task OnFunctionCallsReceivedAsync(List<RealtimeAiWssFunctionCallData> functionCalls)
     {
         if (_ctx.Options.OnFunctionCallAsync == null) return;
