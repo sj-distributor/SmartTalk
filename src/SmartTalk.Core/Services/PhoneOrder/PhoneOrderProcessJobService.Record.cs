@@ -228,7 +228,7 @@ public partial class PhoneOrderProcessJobService
         var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
 
         var client = new ChatClient(
-            "gpt-audio-1.5",
+            "gpt-audio-2025-08-28",
             new ApiKeyCredential(_openAiSettings.ApiKey),
             new OpenAIClientOptions
             {
