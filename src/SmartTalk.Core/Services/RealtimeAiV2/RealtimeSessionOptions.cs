@@ -222,6 +222,15 @@ public class RealtimeSessionOptions
     /// Parameters: (sessionId, wavBytes).
     /// </summary>
     public Func<string, byte[], Task> OnRecordingCompleteAsync { get; set; }
+
+    /// <summary>
+    /// Called when the provider reports token usage for an AI turn (currently OpenAI's
+    /// <c>response.done.response.usage</c>). Invoked once per turn that includes a usage
+    /// block. <c>null</c> callback skips the notification entirely — older provider
+    /// snapshots without usage data continue to work transparently. Use to log
+    /// per-call costs or push to a cost-tracking dashboard.
+    /// </summary>
+    public Func<RealtimeAiWssUsageData, Task> OnResponseUsageReceivedAsync { get; set; }
 }
 
 public class RealtimeSessionIdleFollowUp

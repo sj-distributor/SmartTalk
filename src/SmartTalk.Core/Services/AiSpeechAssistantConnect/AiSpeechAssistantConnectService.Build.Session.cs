@@ -1,8 +1,10 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
@@ -54,8 +56,29 @@ public partial class AiSpeechAssistantConnectService
             OnSessionEndedAsync = HandleSessionEndedAsync,
             OnTranscriptionsCompletedAsync = HandleTranscriptionsCompletedAsync,
             OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
-            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None)
+            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
+            OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };
+    }
+
+    /// <summary>
+    /// Logs per-turn OpenAI token usage with assistant + call context so cost reports
+    /// can be reconstructed from structured Serilog properties. Intentionally fire-and-
+    /// forget — never throws to the realtime event loop. Future work can route the same
+    /// payload to a cost-tracking sink (e.g. AiSpeechAssistantCallReport.TokensUsed)
+    /// without touching the adapter side.
+    /// </summary>
+    private Task HandleResponseUsageReceivedAsync(RealtimeAiWssUsageData usage)
+    {
+        Log.Information(
+            "[AiAssistant] Token usage, AssistantId: {AssistantId}, CallSid: {CallSid}, " +
+            "Total: {Total}, Input: {Input}, Output: {Output}, Cached: {Cached}, " +
+            "InputAudio: {InputAudio}, InputText: {InputText}, OutputAudio: {OutputAudio}, OutputText: {OutputText}",
+            _ctx.Assistant?.Id, _ctx.CallSid,
+            usage.TotalTokens, usage.InputTokens, usage.OutputTokens, usage.CachedTokens,
+            usage.InputAudioTokens, usage.InputTextTokens, usage.OutputAudioTokens, usage.OutputTextTokens);
+
+        return Task.CompletedTask;
     }
 
     private RealtimeSessionIdleFollowUp BuildIdleFollowUp()
