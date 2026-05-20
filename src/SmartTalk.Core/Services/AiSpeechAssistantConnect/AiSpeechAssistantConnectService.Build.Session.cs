@@ -35,7 +35,8 @@ public partial class AiSpeechAssistantConnectService
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
-                TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel))
+                TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel)),
+                MaxResponseOutputTokens = ParseMaxResponseOutputTokens(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens))
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
@@ -119,5 +120,30 @@ public partial class AiSpeechAssistantConnectService
         var model = obj["model"]?.Value<string>();
 
         return string.IsNullOrWhiteSpace(model) ? null : model;
+    }
+
+    /// <summary>
+    /// Extracts the <c>value</c> integer from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the response cap unset
+    /// (so OpenAI uses its server-side default): null input, non-JObject input,
+    /// missing <c>value</c> property, non-integer value, or non-positive integer.
+    /// Non-positive caps are rejected here rather than passed through because they
+    /// would either be rejected by OpenAI server-side anyway (zero / negative) or
+    /// silently truncate AI responses to an empty turn (one), which is worse than
+    /// the default.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static int? ParseMaxResponseOutputTokens(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var token = obj["value"];
+
+        if (token == null || token.Type != JTokenType.Integer) return null;
+
+        var value = token.Value<int>();
+
+        return value > 0 ? value : null;
     }
 }

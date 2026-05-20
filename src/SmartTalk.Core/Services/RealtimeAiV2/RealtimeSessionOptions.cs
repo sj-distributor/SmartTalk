@@ -83,6 +83,15 @@ public class RealtimeAiModelConfig
     /// than the adapter silently falling back.
     /// </summary>
     public string TranscriptionModel { get; set; }
+
+    /// <summary>
+    /// Optional cap on the response output tokens for a single AI turn, sent under
+    /// <c>session.max_response_output_tokens</c>. <c>null</c> → the field is omitted
+    /// from the payload (the caller's <see cref="Newtonsoft.Json.NullValueHandling.Ignore"/>
+    /// strips it), so OpenAI uses its server-side default. Positive integer → caps a
+    /// runaway monologue; OpenAI rejects non-positive integers server-side.
+    /// </summary>
+    public int? MaxResponseOutputTokens { get; set; }
 }
 
 /// <summary>

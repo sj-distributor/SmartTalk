@@ -67,6 +67,11 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 type = "realtime",
                 instructions = modelConfig.Prompt,
                 output_modalities = new[] { "audio" },
+                // null for every assistant without a MaxResponseOutputTokens row; the
+                // caller's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23)
+                // strips the key entirely, so OpenAI uses its server-side default
+                // (effectively unlimited within the session budget).
+                max_response_output_tokens = modelConfig.MaxResponseOutputTokens,
                 audio = new
                 {
                     input = new
