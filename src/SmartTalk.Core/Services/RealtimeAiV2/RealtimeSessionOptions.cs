@@ -101,6 +101,15 @@ public class RealtimeAiModelConfig
     /// rather than the adapter silently clamping.
     /// </summary>
     public decimal? OutputAudioSpeed { get; set; }
+
+    /// <summary>
+    /// Optional opt-in to OpenAI's official session tracing. <c>true</c> → adapter
+    /// emits <c>session.tracing = "auto"</c>, telling OpenAI to retain the session
+    /// in their trace dashboard for 30 days. <c>null</c> or <c>false</c> → the
+    /// <c>tracing</c> field is omitted (current behaviour). Use during customer
+    /// escalations to capture an intermittent reproduction; disable afterwards.
+    /// </summary>
+    public bool? EnableRealtimeTracing { get; set; }
 }
 
 /// <summary>

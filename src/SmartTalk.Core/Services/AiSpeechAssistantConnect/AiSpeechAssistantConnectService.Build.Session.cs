@@ -37,7 +37,8 @@ public partial class AiSpeechAssistantConnectService
                 TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
                 TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel)),
                 MaxResponseOutputTokens = ParseMaxResponseOutputTokens(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens)),
-                OutputAudioSpeed = ParseOutputAudioSpeed(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.OutputAudioSpeed))
+                OutputAudioSpeed = ParseOutputAudioSpeed(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.OutputAudioSpeed)),
+                EnableRealtimeTracing = ParseEnableRealtimeTracing(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.RealtimeTracing))
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
@@ -171,5 +172,26 @@ public partial class AiSpeechAssistantConnectService
         var value = token.Value<decimal>();
 
         return value > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// Extracts the <c>enabled</c> boolean from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.RealtimeTracing"/> config object.
+    /// Returns <c>null</c> for every shape that should leave tracing off (current
+    /// behaviour): null input, non-JObject input, missing <c>enabled</c> property,
+    /// non-boolean value, or explicit <c>false</c>. Only an explicit <c>true</c>
+    /// activates tracing; the parser distinguishes <c>false</c> from <c>null</c> so
+    /// an operator can persist an explicit "off" state alongside the inactive flag.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static bool? ParseEnableRealtimeTracing(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var token = obj["enabled"];
+
+        if (token == null || token.Type != JTokenType.Boolean) return null;
+
+        return token.Value<bool>() ? true : null;
     }
 }
