@@ -20,7 +20,8 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 /// is null or empty (the realistic state for every existing prod assistant — no
 /// TranscriptionLanguage row in <c>ai_speech_assistant_function_call</c>), the
 /// serialised <c>transcription</c> object MUST be byte-equivalent to the pre-hint
-/// payload: <c>{ "model": "whisper-1" }</c> with no <c>language</c> key.
+/// payload: <c>{ "model": &lt;default&gt; }</c> with no <c>language</c> key. The
+/// default model is sourced from <see cref="OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel"/>.
 /// </para>
 ///
 /// <para>
@@ -63,10 +64,12 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
         // The load-bearing test: every existing prod assistant has no
         // TranscriptionLanguage config row, so ModelConfig.TranscriptionLanguage is null.
         // The serialised transcription object MUST contain only `model` — no `language`.
+        // `model` resolves to OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel
+        // (whatever OpenAI's strongest model is at the time of the build).
         var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(null), RealtimeAiAudioCodec.MULAW));
 
         var transcription = json["session"]!["audio"]!["input"]!["transcription"]!;
-        transcription["model"]!.Value<string>().ShouldBe("whisper-1");
+        transcription["model"]!.Value<string>().ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
         transcription["language"].ShouldBeNull();
     }
 
@@ -130,10 +133,13 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
     [InlineData("ja")]
     public void BuildSessionConfig_TranscriptionLanguageSet_EmitsLanguageProperty(string language)
     {
+        // Setting a language hint must not perturb the model field — it stays on the
+        // adapter's compile-time default unless the assistant also opted into a
+        // TranscriptionModel override (covered separately).
         var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(language), RealtimeAiAudioCodec.MULAW));
 
         var transcription = json["session"]!["audio"]!["input"]!["transcription"]!;
-        transcription["model"]!.Value<string>().ShouldBe("whisper-1");
+        transcription["model"]!.Value<string>().ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
         transcription["language"]!.Value<string>().ShouldBe(language);
     }
 

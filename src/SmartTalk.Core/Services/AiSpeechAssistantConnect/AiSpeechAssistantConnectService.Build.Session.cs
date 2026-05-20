@@ -34,7 +34,8 @@ public partial class AiSpeechAssistantConnectService
                     .ToList(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
-                TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage))
+                TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
+                TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel))
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
@@ -98,5 +99,25 @@ public partial class AiSpeechAssistantConnectService
         var language = obj["language"]?.Value<string>();
 
         return string.IsNullOrWhiteSpace(language) ? null : language;
+    }
+
+    /// <summary>
+    /// Extracts the <c>model</c> string from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.TranscriptionModel"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the adapter on its
+    /// compile-time default: null input, non-JObject input, missing <c>model</c>
+    /// property, or empty / whitespace value. The string itself is NOT validated
+    /// against a known list — operators may opt into future OpenAI models without
+    /// a code change, and OpenAI rejects unknown values server-side rather than us
+    /// silently falling back.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static string ParseTranscriptionModel(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var model = obj["model"]?.Value<string>();
+
+        return string.IsNullOrWhiteSpace(model) ? null : model;
     }
 }

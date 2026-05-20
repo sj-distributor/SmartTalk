@@ -12,6 +12,22 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
 
 public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 {
+    /// <summary>
+    /// Compile-time default for the OpenAI transcription model. As of 2026-05-19
+    /// <c>gpt-4o-transcribe</c> is OpenAI's most capable transcription model and is
+    /// priced identically to the legacy <c>whisper-1</c> ($0.006/min), so this is a
+    /// strict quality upgrade with no operating-cost change.
+    /// <para>
+    /// This is the ONE place to change when OpenAI ships a stronger default. Per-
+    /// assistant override goes through <see cref="RealtimeAiModelConfig.TranscriptionModel"/>
+    /// — operators who need to pin a specific assistant to <c>whisper-1</c> or to
+    /// <c>gpt-4o-mini-transcribe</c> (cheaper) do so by inserting a
+    /// <see cref="SmartTalk.Messages.Enums.AiSpeechAssistant.AiSpeechAssistantSessionConfigType.TranscriptionModel"/>
+    /// row in <c>ai_speech_assistant_function_call</c>.
+    /// </para>
+    /// </summary>
+    public const string DefaultTranscriptionModel = "gpt-4o-transcribe";
+
     private readonly OpenAiSettings _openAiSettings;
 
     public OpenAiRealtimeAiProviderAdapter(OpenAiSettings openAiSettings)
@@ -56,12 +72,22 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     input = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        // `language` is null for every assistant with no TranscriptionLanguage
-                        // row in ai_speech_assistant_function_call; the caller's
-                        // NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23) strips
-                        // the key entirely, so the transcription object stays byte-equivalent
-                        // to `{ model: "whisper-1" }` for every existing prod row.
-                        transcription = new { model = "whisper-1", language = modelConfig.TranscriptionLanguage },
+                        // model defaults to DefaultTranscriptionModel (currently gpt-4o-transcribe);
+                        // operators downgrade specific assistants to whisper-1 or gpt-4o-mini-transcribe
+                        // by populating a TranscriptionModel row in ai_speech_assistant_function_call.
+                        //
+                        // language is null when no TranscriptionLanguage row exists for the assistant;
+                        // the caller's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23) strips
+                        // the key entirely, keeping the transcription object byte-equivalent to
+                        // `{ model: <default> }` for every assistant without the language hint.
+                        transcription = new
+                        {
+                            // IsNullOrWhiteSpace (not IsNullOrEmpty) so an accidental " " or "\t"
+                            // in the config row also falls back to the adapter default rather than
+                            // being forwarded as an invalid model literal and rejected by OpenAI.
+                            model = string.IsNullOrWhiteSpace(modelConfig.TranscriptionModel) ? DefaultTranscriptionModel : modelConfig.TranscriptionModel,
+                            language = modelConfig.TranscriptionLanguage
+                        },
                         turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
                         noise_reduction = modelConfig.InputAudioNoiseReduction
                     },

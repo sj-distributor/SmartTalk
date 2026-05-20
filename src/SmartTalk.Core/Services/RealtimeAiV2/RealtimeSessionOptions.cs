@@ -72,6 +72,17 @@ public class RealtimeAiModelConfig
     /// <c>RealtimeAiService.Connect</c>) to strip the property when the value is null.
     /// </summary>
     public string TranscriptionLanguage { get; set; }
+
+    /// <summary>
+    /// Optional override of the OpenAI transcription model string sent under
+    /// <c>session.audio.input.transcription.model</c>. <c>null</c> or empty →
+    /// adapter uses its compile-time default (currently <c>gpt-4o-transcribe</c>).
+    /// Recognised operator values: <c>"whisper-1"</c>, <c>"gpt-4o-mini-transcribe"</c>,
+    /// <c>"gpt-4o-transcribe"</c>. Unrecognised values are passed through verbatim
+    /// (operator's responsibility) — OpenAI will reject them server-side rather
+    /// than the adapter silently falling back.
+    /// </summary>
+    public string TranscriptionModel { get; set; }
 }
 
 /// <summary>
