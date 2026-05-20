@@ -161,8 +161,19 @@ public partial class PhoneOrderProcessJobService
                 .BuildOpenAiComparisonConversationsAsync(normalizedSpeakInfos, record, cancellationToken)
                 .ConfigureAwait(false);
 
+            var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken).ConfigureAwait(false);
+            
+            var reportText = originalReport?.Report ?? record.TranscriptionText ?? string.Empty;
+
+            var optimizedConversations = conversations.Count == 0 ? conversations
+                : await OptimizeOpenAiComparisonConversationsAsync(
+                        normalizedSpeakInfos,
+                        conversations,
+                        reportText,
+                        cancellationToken).ConfigureAwait(false);
+
             var persistableConversations = conversations.Count != 0
-                ? conversations
+                ? optimizedConversations
                 : [
                     new PhoneOrderConversationOpenAi
                     {
@@ -458,6 +469,134 @@ public partial class PhoneOrderProcessJobService
         Log.Information("Normalized OpenAI diarized speak infos: {@SpeakInfos}", mergedSpeakInfos);
 
         return mergedSpeakInfos;
+    }
+
+    private async Task<List<PhoneOrderConversationOpenAi>> OptimizeOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> speakInfos, List<PhoneOrderConversationOpenAi> draftConversations, string reportText, CancellationToken cancellationToken)
+    {
+        if (draftConversations is not { Count: > 0 })
+            return draftConversations;
+
+        var client = new ChatClient("gpt-5.1", _openAiSettings.ApiKey);
+
+        var draftPayload = draftConversations
+            .OrderBy(x => x.Order)
+            .Select(x => new
+            {
+                x.Order,
+                x.Question,
+                x.Answer
+            }).ToList();
+
+        var diarizedPayload = speakInfos
+            .Select(x => new
+            {
+                startTime = x.StartTime,
+                endTime = x.EndTime,
+                speaker = x.Speaker,
+                role = x.Role?.ToString(),
+                text = x.Text
+            }).ToList();
+
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage("""
+                                  You are a transcript cleanup assistant for wholesale order phone calls.
+                                  You will receive:
+                                  1. diarized transcription turns
+                                  2. draft conversations where question=agent/customer service and answer=user/customer
+
+                                  Your task is to clean up only the text content while preserving the existing conversation order.
+
+                                  Rules:
+                                  1. Return a JSON object with one field: conversations.
+                                  2. Keep the same number of conversation items and keep the same order values.
+                                  3. Only rewrite question and answer text. Do not add new conversations. Do not remove conversations.
+                                  4. Preserve speaker ownership: question is the service side, answer is the user side.
+                                  5. You will also receive an original report generated from the whole call. Treat that report as a correction reference for product names, quantities, units, and obvious intent.
+                                  6. Use the report to correct text only when the report clearly supports the correction.
+                                  7. Fix obvious ASR mistakes using the full context of the call.
+                                  8. Fix incorrect Chinese quantity/unit words when the intended wording is clear from context.
+                                  9. If Chinese was transcribed as pinyin, rewrite it into proper Chinese characters.
+                                  10. If a product name is clearly inconsistent, duplicated incorrectly, or does not make sense in context, rewrite it to the most plausible product mentioned elsewhere in the transcript or report.
+                                  11. Do not translate fluent English into Chinese. Only normalize obvious pinyin-Chinese or transcription errors.
+                                  12. Do not invent new products, quantities, prices, addresses, or requests that are not supported by the transcript or report.
+                                  13. If something is uncertain, keep the original wording instead of guessing.
+                                  14. Return valid JSON only.
+
+                                  Example corrections:
+                                  - "一香鸡腿肉" can become "一箱鸡胸肉" if the full call context clearly supports it.
+                                  - "Bao qian, wo zhe bian mei you ji xiong rou de chi cun zi xun." should become "抱歉，我这边没有鸡胸肉的尺寸资讯。"
+                                  - If the transcript contains both "流通果" and "牛筒骨" and context shows they refer to the same requested item, normalize them to "牛筒骨".
+                                  """),
+            new UserChatMessage(
+                "Diarized turns JSON:\n" +
+                JsonConvert.SerializeObject(diarizedPayload, Formatting.None) +
+                "\n\nDraft conversations JSON:\n" +
+                JsonConvert.SerializeObject(draftPayload, Formatting.None) +
+                "\n\nOriginal report text:\n" +
+                reportText)
+        };
+
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions
+        {
+            ResponseModalities = ChatResponseModalities.Text,
+            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+        }, cancellationToken).ConfigureAwait(false);
+
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text;
+
+        if (string.IsNullOrWhiteSpace(jsonResponse))
+        {
+            Log.Warning("OpenAI comparison conversation cleanup returned empty response. Falling back to draft conversations.");
+            return draftConversations;
+        }
+
+        OpenAiConversationCleanupResponse cleanupResponse;
+
+        try
+        {
+            cleanupResponse = JsonConvert.DeserializeObject<OpenAiConversationCleanupResponse>(jsonResponse);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to deserialize OpenAI comparison conversation cleanup response. Falling back to draft conversations. Response: {Response}", jsonResponse);
+            return draftConversations;
+        }
+
+        if (cleanupResponse?.Conversations is not { Count: > 0 })
+        {
+            Log.Warning("OpenAI comparison conversation cleanup returned no conversations. Falling back to draft conversations. Response: {Response}", jsonResponse);
+            return draftConversations;
+        }
+
+        var optimizedConversationMap = cleanupResponse.Conversations
+            .GroupBy(x => x.Order)
+            .ToDictionary(
+                x => x.Key,
+                x => x.First());
+
+        var optimizedConversations = draftConversations
+            .OrderBy(x => x.Order)
+            .Select(conversation =>
+            {
+                if (!optimizedConversationMap.TryGetValue(conversation.Order, out var optimized))
+                    return conversation;
+
+                conversation.Question = string.IsNullOrWhiteSpace(optimized.Question)
+                    ? string.Empty
+                    : optimized.Question.Trim();
+                conversation.Answer = string.IsNullOrWhiteSpace(optimized.Answer)
+                    ? string.Empty
+                    : optimized.Answer.Trim();
+
+                return conversation;
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Question) || !string.IsNullOrWhiteSpace(x.Answer))
+            .ToList();
+
+        Log.Information("Optimized OpenAI comparison conversations: {@Conversations}", optimizedConversations);
+
+        return optimizedConversations.Count == 0 ? draftConversations : optimizedConversations;
     }
 
     private async Task<List<PhoneOrderOpenAiSpeakInfoDto>> TranscribePhoneOrderSegmentsByOpenAiAsync(byte[] audioContent, CancellationToken cancellationToken)
@@ -782,6 +921,20 @@ public partial class PhoneOrderProcessJobService
     private static string NormalizeSegmentText(string text)
     {
         return Regex.Replace(text ?? string.Empty, @"\s+", " ").Trim();
+    }
+
+    private sealed class OpenAiConversationCleanupResponse
+    {
+        public List<OpenAiConversationCleanupItem> Conversations { get; set; } = [];
+    }
+
+    private sealed class OpenAiConversationCleanupItem
+    {
+        public int Order { get; set; }
+
+        public string Question { get; set; }
+
+        public string Answer { get; set; }
     }
 
     private TranscriptionLanguage SelectReportLanguageEnum(string language)
