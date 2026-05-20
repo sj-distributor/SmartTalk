@@ -99,7 +99,11 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     output = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice
+                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
+                        // null for every assistant without an OutputAudioSpeed row; the
+                        // caller's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23)
+                        // strips the key entirely, so OpenAI uses its default 1.0.
+                        speed = modelConfig.OutputAudioSpeed
                     }
                 },
                 tools = modelConfig.Tools.Any() ? modelConfig.Tools : null

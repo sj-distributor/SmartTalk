@@ -92,6 +92,15 @@ public class RealtimeAiModelConfig
     /// runaway monologue; OpenAI rejects non-positive integers server-side.
     /// </summary>
     public int? MaxResponseOutputTokens { get; set; }
+
+    /// <summary>
+    /// Optional playback-speed multiplier for the AI's audio output, sent under
+    /// <c>session.audio.output.speed</c>. <c>null</c> → the field is omitted (so
+    /// OpenAI uses 1.0, current behaviour). Range supported by OpenAI is 0.25 – 1.5
+    /// (1.0 = natural). Values outside the range are rejected by OpenAI server-side
+    /// rather than the adapter silently clamping.
+    /// </summary>
+    public decimal? OutputAudioSpeed { get; set; }
 }
 
 /// <summary>
