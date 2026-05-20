@@ -28,6 +28,15 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     /// </summary>
     public const string DefaultTranscriptionModel = "gpt-4o-transcribe";
 
+    /// <summary>
+    /// Wire value emitted under <c>session.tracing</c> when an assistant opts into
+    /// OpenAI's official session tracing. As of 2026-05-20 OpenAI documents <c>"auto"</c>
+    /// as the no-config opt-in: OpenAI picks sensible defaults for workflow grouping
+    /// and retention. Operators see the captured sessions at
+    /// <c>https://platform.openai.com/traces</c>.
+    /// </summary>
+    public const string EnabledTracingMode = "auto";
+
     private readonly OpenAiSettings _openAiSettings;
 
     public OpenAiRealtimeAiProviderAdapter(OpenAiSettings openAiSettings)
@@ -72,6 +81,12 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 // strips the key entirely, so OpenAI uses its server-side default
                 // (effectively unlimited within the session budget).
                 max_response_output_tokens = modelConfig.MaxResponseOutputTokens,
+                // null for every assistant without an opt-in RealtimeTracing row; the
+                // serializer strips the key, so OpenAI does not retain a trace
+                // (current behaviour). Setting EnableRealtimeTracing = true emits
+                // `tracing = "auto"` and the session shows up in the OpenAI
+                // traces dashboard for 30 days — escalation-debug tool.
+                tracing = modelConfig.EnableRealtimeTracing == true ? EnabledTracingMode : null,
                 audio = new
                 {
                     input = new

@@ -47,5 +47,18 @@ public enum AiSpeechAssistantSessionConfigType
     /// Absent / inactive row → no <c>speed</c> field is sent, so OpenAI uses
     /// 1.0 (current behaviour).
     /// </summary>
-    OutputAudioSpeed
+    OutputAudioSpeed,
+
+    /// <summary>
+    /// Optional per-assistant opt-in to OpenAI's official session tracing.
+    /// Row content is a JSON object with a single boolean <c>enabled</c>
+    /// property. Example: <c>{ "enabled": true }</c>. Absent / inactive row
+    /// or <c>{ "enabled": false }</c> → no <c>tracing</c> field is sent, so
+    /// OpenAI does not retain a session trace (current behaviour). When
+    /// enabled the adapter sends <c>tracing = "auto"</c>, which makes OpenAI
+    /// retain the session in <c>platform.openai.com/traces</c> for 30 days —
+    /// essential for diagnosing intermittent calls during customer
+    /// escalations. Disable after capturing the reproduction.
+    /// </summary>
+    RealtimeTracing
 }
