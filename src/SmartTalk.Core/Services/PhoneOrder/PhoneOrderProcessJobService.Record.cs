@@ -590,7 +590,6 @@ public partial class PhoneOrderProcessJobService
 
         var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions
         {
-            ResponseModalities = ChatResponseModalities.Text,
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         }, cancellationToken).ConfigureAwait(false);
 
