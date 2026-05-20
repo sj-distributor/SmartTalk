@@ -36,7 +36,8 @@ public partial class AiSpeechAssistantConnectService
                 InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
                 TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel)),
-                MaxResponseOutputTokens = ParseMaxResponseOutputTokens(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens))
+                MaxResponseOutputTokens = ParseMaxResponseOutputTokens(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens)),
+                OutputAudioSpeed = ParseOutputAudioSpeed(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.OutputAudioSpeed))
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
@@ -143,6 +144,31 @@ public partial class AiSpeechAssistantConnectService
         if (token == null || token.Type != JTokenType.Integer) return null;
 
         var value = token.Value<int>();
+
+        return value > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// Extracts the <c>value</c> decimal from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.OutputAudioSpeed"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the speed unset (so
+    /// OpenAI uses 1.0, current behaviour): null input, non-JObject input, missing
+    /// <c>value</c> property, non-numeric value, or non-positive value. The parser
+    /// does NOT enforce OpenAI's range (currently 0.25 – 1.5) — operators who set
+    /// out-of-range values are rejected by OpenAI server-side with a clear error,
+    /// rather than the adapter silently clamping into a different speed than the
+    /// operator intended.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static decimal? ParseOutputAudioSpeed(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var token = obj["value"];
+
+        if (token == null || (token.Type != JTokenType.Float && token.Type != JTokenType.Integer)) return null;
+
+        var value = token.Value<decimal>();
 
         return value > 0 ? value : null;
     }

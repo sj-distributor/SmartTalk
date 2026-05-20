@@ -36,5 +36,16 @@ public enum AiSpeechAssistantSessionConfigType
     /// budget). Caps a single AI turn — useful when an assistant occasionally
     /// monologues and delays the user's next prompt.
     /// </summary>
-    MaxResponseOutputTokens
+    MaxResponseOutputTokens,
+
+    /// <summary>
+    /// Optional per-assistant playback-speed multiplier for the AI's audio
+    /// output. Row content is a JSON object with a single <c>value</c>
+    /// property holding a decimal in the range supported by OpenAI (currently
+    /// 0.25 – 1.5; 1.0 = natural). Example: <c>{ "value": 0.9 }</c> for
+    /// elderly customers, <c>{ "value": 1.1 }</c> for fast-paced ones.
+    /// Absent / inactive row → no <c>speed</c> field is sent, so OpenAI uses
+    /// 1.0 (current behaviour).
+    /// </summary>
+    OutputAudioSpeed
 }
