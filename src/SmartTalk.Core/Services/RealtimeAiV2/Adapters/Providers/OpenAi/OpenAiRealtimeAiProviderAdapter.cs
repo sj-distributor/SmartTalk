@@ -37,6 +37,41 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     /// </summary>
     public const string EnabledTracingMode = "auto";
 
+    /// <summary>
+    /// Compile-time default <c>audio.output.voice</c> when an assistant has no explicit
+    /// <see cref="RealtimeAiModelConfig.Voice"/> override. Matches OpenAI's historical
+    /// default and is one of the values in <see cref="SupportedVoices"/>.
+    /// </summary>
+    public const string DefaultVoice = "alloy";
+
+    /// <summary>
+    /// The voice IDs OpenAI's Realtime API accepts as of 2026-05-20. The adapter does
+    /// NOT enforce this list — operators can opt into a future OpenAI voice without a
+    /// code change, and OpenAI rejects unknown values server-side. The pin exists so
+    /// (a) UI / operator tooling has a single source of truth for the dropdown and
+    /// (b) a unit test asserts every entry stays in sync with the OpenAI docs.
+    ///
+    /// <para>
+    /// Source: https://platform.openai.com/docs/guides/realtime — Voice Options.
+    /// </para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> SupportedVoices = new[]
+    {
+        "alloy",
+        "ash",
+        "ballad",
+        "coral",
+        "echo",
+        "fable",
+        "onyx",
+        "nova",
+        "sage",
+        "shimmer",
+        "verse",
+        "marin",
+        "cedar"
+    };
+
     private readonly OpenAiSettings _openAiSettings;
 
     public OpenAiRealtimeAiProviderAdapter(OpenAiSettings openAiSettings)
@@ -114,7 +149,11 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     output = new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
-                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? "alloy" : modelConfig.Voice,
+                        // Single source of truth for the default; SupportedVoices documents
+                        // the full operator-selectable list. The adapter does NOT validate
+                        // against the list — operators can opt into a future OpenAI voice
+                        // without a code change, and OpenAI rejects unknown ones server-side.
+                        voice = string.IsNullOrEmpty(modelConfig.Voice) ? DefaultVoice : modelConfig.Voice,
                         // null for every assistant without an OutputAudioSpeed row; the
                         // caller's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23)
                         // strips the key entirely, so OpenAI uses its default 1.0.
