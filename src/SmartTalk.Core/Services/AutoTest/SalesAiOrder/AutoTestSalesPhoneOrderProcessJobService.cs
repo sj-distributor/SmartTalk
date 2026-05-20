@@ -613,7 +613,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         var messages = await ConfigureRecordAnalyzePromptAsync(assistant, audio, cancellationToken).ConfigureAwait(false);
         
-        ChatClient client = new("gpt-audio-1.5", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio-2025-08-28", _openAiSettings.ApiKey);
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
