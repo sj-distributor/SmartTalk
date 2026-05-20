@@ -41,73 +41,64 @@ public partial class AiSpeechAssistantService
             ModelDescription = x.Description?.Trim()
         }).ToList();
 
+        if (normalizedModels.Any(x => string.IsNullOrWhiteSpace(x.ModelId)))
+            throw new Exception("Model id is required when syncing model descriptions.");
 
-        var modelIds = normalizedModels.Select(x => x.ModelId!).ToList(); 
-        
+        var duplicatedModelIds = normalizedModels
+            .GroupBy(x => x.ModelId, StringComparer.OrdinalIgnoreCase)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+
+        if (duplicatedModelIds.Count > 0) throw new Exception($"Duplicate model ids in sync request, modelIds={string.Join(",", duplicatedModelIds)}");
+
+        var grouped = normalizedModels.ToLookup(x => x.Type);
+        var toDeleteModels = grouped[AiSpeechAssistantModelDescriptionSyncType.Delete].ToList();
+        var toAddModels = grouped[AiSpeechAssistantModelDescriptionSyncType.Add].ToList();
+        var toUpdateModels = grouped[AiSpeechAssistantModelDescriptionSyncType.Update].ToList();
+
+        var modelIds = normalizedModels.Select(x => x.ModelId!).ToList();
+
         var existingModels = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionsAsync(modelIds, cancellationToken).ConfigureAwait(false);
 
         var existingLookup = existingModels.ToDictionary(x => x.ModelId, x => x, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var model in normalizedModels)
+        var existingAddIds = toAddModels
+            .Where(x => existingLookup.ContainsKey(x.ModelId!))
+            .Select(x => x.ModelId)
+            .ToList();
+
+        if (existingAddIds.Count > 0)
+            throw new Exception($"Models already exist, modelIds={string.Join(",", existingAddIds)}");
+
+        var effectiveDeleteModels = toDeleteModels.Where(x => existingLookup.ContainsKey(x.ModelId!)).ToList();
+        var effectiveUpdateModels = toUpdateModels.Where(x => existingLookup.ContainsKey(x.ModelId!)).ToList();
+
+        foreach (var model in toAddModels.Concat(effectiveUpdateModels))
         {
-            switch (model.Type)
+            if (string.IsNullOrWhiteSpace(model.ModelValue))
             {
-                case AiSpeechAssistantModelDescriptionSyncType.Delete:
-                    if (!existingLookup.ContainsKey(model.ModelId!))
-                        throw new Exception($"Could not find model for delete, modelId={model.ModelId}");
-                    break;
-
-                case AiSpeechAssistantModelDescriptionSyncType.Add:
-                    if (existingLookup.ContainsKey(model.ModelId!))
-                        throw new Exception($"Model already exists, modelId={model.ModelId}");
-                    if (string.IsNullOrWhiteSpace(model.ModelValue))
-                        throw new Exception($"Model value is required when adding, modelId={model.ModelId}");
-                    break;
-
-                case AiSpeechAssistantModelDescriptionSyncType.Update:
-                    if (!existingLookup.ContainsKey(model.ModelId!))
-                        throw new Exception($"Could not find model for update, modelId={model.ModelId}");
-                    if (string.IsNullOrWhiteSpace(model.ModelValue))
-                        throw new Exception($"Model value is required when updating, modelId={model.ModelId}");
-                    break;
-
-                default:
-                    throw new NotSupportedException($"Unsupported sync type, type={model.Type}");
+                var operation = model.Type == AiSpeechAssistantModelDescriptionSyncType.Add ? "adding" : "updating";
+                throw new Exception($"Model value is required when {operation}, modelId={model.ModelId}");
             }
         }
 
-        var toDelete = new List<AiSpeechAssistantDescription>();
-        var toAdd = new List<AiSpeechAssistantDescription>();
-        var toUpdate = new List<AiSpeechAssistantDescription>();
+        var toDelete = effectiveDeleteModels.Select(x => existingLookup[x.ModelId!]).ToList();
 
-        foreach (var model in normalizedModels)
+        var toAdd = toAddModels.Select(model => new AiSpeechAssistantDescription
         {
-            switch (model.Type)
-            {
-                case AiSpeechAssistantModelDescriptionSyncType.Delete:
-                    toDelete.Add(existingLookup[model.ModelId!]);
-                    break;
+            ModelId = model.ModelId!,
+            ModelValue = model.ModelValue!,
+            ModelDescription = model.ModelDescription
+        }).ToList();
 
-                case AiSpeechAssistantModelDescriptionSyncType.Add:
-                    toAdd.Add(new AiSpeechAssistantDescription
-                    {
-                        ModelId = model.ModelId!,
-                        ModelValue = model.ModelValue!,
-                        ModelDescription = model.ModelDescription
-                    });
-                    break;
-
-                case AiSpeechAssistantModelDescriptionSyncType.Update:
-                    var updateTarget = existingLookup[model.ModelId!];
-                    updateTarget.ModelValue = model.ModelValue!;
-                    updateTarget.ModelDescription = model.ModelDescription;
-                    toUpdate.Add(updateTarget);
-                    break;
-
-                default:
-                    throw new NotSupportedException($"Unsupported sync type, type={model.Type}");
-            }
-        }
+        var toUpdate = effectiveUpdateModels.Select(model =>
+        {
+            var updateTarget = existingLookup[model.ModelId!];
+            updateTarget.ModelValue = model.ModelValue!;
+            updateTarget.ModelDescription = model.ModelDescription;
+            return updateTarget;
+        }).ToList();
 
         if (toDelete.Count > 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantDescriptionsAsync(toDelete, false, cancellationToken).ConfigureAwait(false);
