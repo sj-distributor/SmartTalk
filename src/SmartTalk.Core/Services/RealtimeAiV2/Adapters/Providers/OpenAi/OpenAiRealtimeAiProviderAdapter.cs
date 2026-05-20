@@ -288,7 +288,15 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
                 case "response.done":
                     var functionCalls = ExtractFunctionCalls(root);
-                    return functionCalls != null ? Result(RealtimeAiWssEventType.FunctionCallSuggested, functionCalls) : Result(RealtimeAiWssEventType.ResponseTurnCompleted);
+                    // Usage is attached to BOTH event variants because both originate from
+                    // the same provider message. Consumers handle the variant they care
+                    // about and read Usage off the event independently.
+                    var usage = ExtractUsage(root);
+                    var doneEvent = functionCalls != null
+                        ? Result(RealtimeAiWssEventType.FunctionCallSuggested, functionCalls)
+                        : Result(RealtimeAiWssEventType.ResponseTurnCompleted);
+                    doneEvent.Usage = usage;
+                    return doneEvent;
 
                 case "error":
                     var errorCode = ExtractErrorCode(root);
@@ -365,6 +373,73 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
             return lastCodeProp.GetString();
 
         return null;
+    }
+
+    /// <summary>
+    /// Extracts the OpenAI token-usage breakdown from a <c>response.done</c> payload
+    /// (shape: <c>{ response: { usage: { input_tokens, output_tokens, total_tokens,
+    /// input_token_details: { cached_tokens, audio_tokens, text_tokens },
+    /// output_token_details: { audio_tokens, text_tokens } } } }</c>).
+    ///
+    /// <para>
+    /// Returns <c>null</c> when the message has no usage block (older provider snapshots),
+    /// or when the response object is missing. Individual sub-fields are returned as
+    /// <c>null</c> when absent — consumers must treat missing values as "not reported"
+    /// rather than zero, because zero is a meaningful answer (an empty AI turn).
+    /// </para>
+    ///
+    /// <para>
+    /// Public static (matches the other parser helpers in this codebase) so unit
+    /// tests can pin the schema interpretation directly without driving a full
+    /// ParseMessage path.
+    /// </para>
+    /// </summary>
+    public static RealtimeAiWssUsageData ExtractUsage(JsonElement root)
+    {
+        if (!root.TryGetProperty("response", out var response) ||
+            response.ValueKind != JsonValueKind.Object ||
+            !response.TryGetProperty("usage", out var usage) ||
+            usage.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return new RealtimeAiWssUsageData
+        {
+            TotalTokens = ReadOptionalInt(usage, "total_tokens"),
+            InputTokens = ReadOptionalInt(usage, "input_tokens"),
+            OutputTokens = ReadOptionalInt(usage, "output_tokens"),
+            CachedTokens = ReadOptionalInt(usage, "input_token_details", "cached_tokens"),
+            InputAudioTokens = ReadOptionalInt(usage, "input_token_details", "audio_tokens"),
+            InputTextTokens = ReadOptionalInt(usage, "input_token_details", "text_tokens"),
+            OutputAudioTokens = ReadOptionalInt(usage, "output_token_details", "audio_tokens"),
+            OutputTextTokens = ReadOptionalInt(usage, "output_token_details", "text_tokens")
+        };
+    }
+
+    /// <summary>
+    /// Reads a nullable integer at <paramref name="path"/> from <paramref name="parent"/>.
+    /// Returns null if any segment is missing, not an object on the way down, or
+    /// the final value is not a JSON number / integer-compatible value. Tolerates
+    /// the provider returning long / double for what we treat as int.
+    /// </summary>
+    private static int? ReadOptionalInt(JsonElement parent, params string[] path)
+    {
+        var current = parent;
+
+        for (var i = 0; i < path.Length - 1; i++)
+        {
+            if (current.ValueKind != JsonValueKind.Object ||
+                !current.TryGetProperty(path[i], out var next))
+                return null;
+
+            current = next;
+        }
+
+        if (current.ValueKind != JsonValueKind.Object ||
+            !current.TryGetProperty(path[^1], out var leaf) ||
+            leaf.ValueKind != JsonValueKind.Number)
+            return null;
+
+        return leaf.TryGetInt32(out var i32) ? i32 : (int?)null;
     }
 
     private static bool IsRecoverableError(string errorCode, string errorMessage)
