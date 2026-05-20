@@ -25,5 +25,16 @@ public enum AiSpeechAssistantSessionConfigType
     /// Unrecognised values are passed through verbatim — OpenAI will reject
     /// them server-side rather than the adapter silently substituting.
     /// </summary>
-    TranscriptionModel
+    TranscriptionModel,
+
+    /// <summary>
+    /// Optional per-assistant cap on the response output token count. Row
+    /// content is a JSON object with a single <c>value</c> property holding a
+    /// positive integer. Example: <c>{ "value": 1200 }</c>. Absent / inactive
+    /// row → no <c>max_response_output_tokens</c> field is sent, so OpenAI
+    /// uses its server-side default (effectively unlimited within the session
+    /// budget). Caps a single AI turn — useful when an assistant occasionally
+    /// monologues and delays the user's next prompt.
+    /// </summary>
+    MaxResponseOutputTokens
 }
