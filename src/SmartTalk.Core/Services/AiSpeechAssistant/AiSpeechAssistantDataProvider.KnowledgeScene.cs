@@ -18,6 +18,8 @@ public partial interface IAiSpeechAssistantDataProvider
 
     Task AddAiSpeechAssistantKnowledgeSceneRelationAsync(AiSpeechAssistantKnowledgeSceneRelation relation, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task AddAiSpeechAssistantKnowledgeSceneRelationsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, bool forceSave = true, CancellationToken cancellationToken = default);
+
     Task DeleteAiSpeechAssistantKnowledgeSceneRelationAsync(AiSpeechAssistantKnowledgeSceneRelation relation, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -78,6 +80,15 @@ public partial class AiSpeechAssistantDataProvider
     public async Task AddAiSpeechAssistantKnowledgeSceneRelationAsync(AiSpeechAssistantKnowledgeSceneRelation relation, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(relation, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddAiSpeechAssistantKnowledgeSceneRelationsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (relations.Count != 0)
+            await _repository.InsertAllAsync(relations, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
