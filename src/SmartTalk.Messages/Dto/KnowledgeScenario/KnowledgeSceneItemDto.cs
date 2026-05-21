@@ -8,6 +8,8 @@ public class KnowledgeSceneItemDto
 
     public int SceneId { get; set; }
 
+    public string SceneName { get; set; }
+
     public string Name { get; set; }
 
     public KnowledgeSceneItemType Type { get; set; }
