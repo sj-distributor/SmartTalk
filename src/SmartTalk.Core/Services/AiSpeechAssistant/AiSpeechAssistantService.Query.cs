@@ -499,8 +499,14 @@ public partial class AiSpeechAssistantService
 
         var knowledges = _mapper.Map<List<AiSpeechAssistantKnowledgeDto>>(await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantActiveKnowledgesAsync(assistantIds, cancellationToken).ConfigureAwait(false));
+        var sceneRelationMap = await BuildKnowledgeSceneRelationDtosAsync(knowledges.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
         
         var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+
+        knowledges.ForEach(x =>
+        {
+            x.SceneRelations = sceneRelationMap.TryGetValue(x.Id, out var relations) ? relations : [];
+        });
         
         foreach (var assistant in assistants)
         {

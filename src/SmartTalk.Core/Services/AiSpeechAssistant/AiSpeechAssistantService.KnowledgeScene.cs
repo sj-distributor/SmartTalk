@@ -1,33 +1,9 @@
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Requests.AiSpeechAssistant;
-
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
-
-public partial interface IAiSpeechAssistantService
-{
-    Task<GetAiSpeechAssistantKnowledgeSceneRelationsResponse> GetAiSpeechAssistantKnowledgeSceneRelationsAsync(GetAiSpeechAssistantKnowledgeSceneRelationsRequest request, CancellationToken cancellationToken);
-}
 
 public partial class AiSpeechAssistantService
 {
-    public async Task<GetAiSpeechAssistantKnowledgeSceneRelationsResponse> GetAiSpeechAssistantKnowledgeSceneRelationsAsync(GetAiSpeechAssistantKnowledgeSceneRelationsRequest request, CancellationToken cancellationToken)
-    {
-        if (request.KnowledgeId <= 0) throw new Exception("GetAiSpeechAssistantKnowledgeSceneRelations KnowledgeId is required.");
-
-        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: request.KnowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (knowledge == null)
-            throw new Exception($"GetAiSpeechAssistantKnowledgeSceneRelations Knowledge [{request.KnowledgeId}] does not exist.");
-
-        var relationDtos = await BuildKnowledgeSceneRelationDtosAsync([request.KnowledgeId], cancellationToken).ConfigureAwait(false);
-
-        return new GetAiSpeechAssistantKnowledgeSceneRelationsResponse
-        {
-            Data = relationDtos.TryGetValue(request.KnowledgeId, out var data) ? data : []
-        };
-    }
-
     private async Task<Dictionary<int, List<AiSpeechAssistantKnowledgeSceneRelationDto>>> BuildKnowledgeSceneRelationDtosAsync(List<int> knowledgeIds, CancellationToken cancellationToken)
     {
         var distinctKnowledgeIds = (knowledgeIds ?? []).Where(x => x > 0).Distinct().ToList();
