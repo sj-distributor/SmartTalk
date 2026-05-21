@@ -841,7 +841,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             SnapshotAt = DateTimeOffset.UtcNow
         };
 
-        await _knowledgeScenarioDataProvider.AddKnowledgeSceneHistoryAsync(historyEntity, false, cancellationToken).ConfigureAwait(false);
+        await _knowledgeScenarioDataProvider.AddKnowledgeSceneHistoryAsync(historyEntity, true, cancellationToken).ConfigureAwait(false);
 
         var historyItems = sceneItems.Select(item => new KnowledgeSceneHistoryItem
         {
@@ -851,7 +851,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             Type = item.Type,
             Content = item.Content,
             FileName = item.FileName,
-            CreatedAt = item.CreatedAt,
+            CreatedAt = item.CreatedAt == default ? scene.CreatedAt : item.CreatedAt,
             UpdatedAt = item.UpdatedAt
         }).ToList();
 

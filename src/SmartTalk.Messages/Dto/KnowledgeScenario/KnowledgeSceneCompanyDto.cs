@@ -10,5 +10,5 @@ public class KnowledgeSceneCompanyDto
 
     public bool IsApplied { get; set; }
 
-    public DateTimeOffset AuthorizedAt { get; set; }
+    public DateTimeOffset AuthorizedAt { get; set; } = DateTimeOffset.UtcNow;
 }
