@@ -348,7 +348,7 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
                 AgentId = agent.Id,
                 AgentName = agent.Name,
                 AssistantId = assistant.Id,
-                AssistantName = assistant.Name,
+                AssistantName = assistant.Name
             };
 
         if (!string.IsNullOrWhiteSpace(trimmedKeyword))

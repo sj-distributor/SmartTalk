@@ -363,7 +363,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                 new SaveKnowledgeSceneRelatedKnowledgesCommand
                 {
                     SceneId = seeded.SceneId,
-                    KnowledgeIds = new List<int> { seeded.SecondKnowledgeId }
+                    AssistantIds = new List<int> { seeded.SecondAssistantId }
                 });
 
             response.ShouldNotBeNull();
@@ -706,10 +706,10 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
 
         await unitOfWork.SaveChangesAsync();
 
-        return new RelationSaveSeedResult(scene.Id, firstKnowledge.Id, secondKnowledge.Id);
+        return new RelationSaveSeedResult(scene.Id, firstKnowledge.Id, firstKnowledge.AssistantId, secondKnowledge.Id, secondKnowledge.AssistantId);
     }
 
     private sealed record FolderCascadeSeedResult(int FolderId, string FolderName, int SceneId, int SceneItemId, int RelationId, int KnowledgeId);
 
-    private sealed record RelationSaveSeedResult(int SceneId, int FirstKnowledgeId, int SecondKnowledgeId);
+    private sealed record RelationSaveSeedResult(int SceneId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
 }

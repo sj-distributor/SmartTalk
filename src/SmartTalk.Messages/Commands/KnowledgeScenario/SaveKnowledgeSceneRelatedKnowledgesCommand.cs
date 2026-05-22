@@ -7,7 +7,7 @@ public class SaveKnowledgeSceneRelatedKnowledgesCommand : ICommand
 {
     public int SceneId { get; set; }
 
-    public List<int> KnowledgeIds { get; set; }
+    public List<int> AssistantIds { get; set; }
 }
 
 public class SaveKnowledgeSceneRelatedKnowledgesResponse : SmartTalkResponse<List<int>>
