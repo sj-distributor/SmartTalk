@@ -226,9 +226,6 @@ public partial class AiSpeechAssistantService
         foreach (var (knowledgeId, relationMap) in relationMapsByKnowledgeId)
             result[knowledgeId] = MapKnowledgeSceneItems(sceneItems, relationMap);
 
-        foreach (var knowledgeId in sceneRelationMap.Keys)
-            result.Add(knowledgeId, new List<KnowledgeSceneItemDto>());
-
         return result;
     }
 
