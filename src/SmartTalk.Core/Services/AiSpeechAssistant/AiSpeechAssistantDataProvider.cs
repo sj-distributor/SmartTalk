@@ -165,6 +165,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeDetail>  GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(int detailId, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledgeDetail>> GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgeAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -918,5 +920,13 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         var query = _repository.Query<AiSpeechAssistantKnowledgeDetail>().Where(x => knowledgeIds.Contains(x.KnowledgeId));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgeAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default)
+    {
+        if (knowledgeIds == null || !knowledgeIds.Any())
+            return new List<AiSpeechAssistantKnowledge>();
+
+        return await _repository.Query<AiSpeechAssistantKnowledge>().Where(k => knowledgeIds.Contains(k.Id)).ToListAsync(cancellationToken);
     }
 }
