@@ -1,5 +1,6 @@
 using System.Text;
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
 using SmartTalk.Messages.Dto.AutoTest;
@@ -17,6 +18,8 @@ public interface ICrmClient : IScopedDependency
 
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default);
 
+    Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByRestaurantNameAsync(string restaurantName, string token = null, CancellationToken cancellationToken = default);
+
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
 
     Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
@@ -24,8 +27,8 @@ public interface ICrmClient : IScopedDependency
 
 public class CrmClient : ICrmClient
 {
+    private const string CustomerByRestaurantNamePath = "/api/customer/get-customers-by-restaurant-name?restaurant_name={0}";
     private readonly CrmSetting _crmSetting;
-    private readonly Dictionary<string, string> _headers;
     private readonly ISmartTalkHttpClientFactory _httpClient;
 
     public CrmClient(ISmartTalkHttpClientFactory httpClient, CrmSetting crmSetting)
@@ -44,9 +47,9 @@ public class CrmClient : ICrmClient
             { "client_id", _crmSetting.ClientId },
             { "client_secret", _crmSetting.ClientSecret }
         };
-        
+
         var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
-        
+
         var headers = new Dictionary<string, string>
         {
             { "Accept", "application/json" }
@@ -57,10 +60,35 @@ public class CrmClient : ICrmClient
         return response?.AccessToken;
     }
 
-    public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId,
-        CancellationToken cancellationToken)
+    public Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken)
     {
-        var token = await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+        return GetCustomerContactsAsync(customerId, token: null, cancellationToken);
+    }
+
+    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default)
+    {
+        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "Authorization", $"Bearer {token}"}
+        };
+
+        var url = $"{_crmSetting.BaseUrl}/api/customer/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
+
+        var result = await _httpClient.GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
+
+        Log.Information("Found {Count} customers for phone {PhoneNumber}", result.Count, numberRequest.PhoneNumber);
+        return result;
+    }
+
+    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByRestaurantNameAsync(string restaurantName, string token = null, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(restaurantName))
+            return [];
+
+        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
 
         var headers = new Dictionary<string, string>
         {
@@ -68,27 +96,12 @@ public class CrmClient : ICrmClient
             { "Authorization", $"Bearer {token}" }
         };
 
-        return await _httpClient
-            .GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts",
-                headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-    
-    
-    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default)
-    {
-        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-        
-        var headers = new Dictionary<string, string>
-        {
-            { "Accept", "application/json" },
-            { "Authorization", $"Bearer {token}"}
-        };
-        
-        var url = $"{_crmSetting.BaseUrl}/api/customer/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
+        var url = $"{_crmSetting.BaseUrl}{string.Format(CustomerByRestaurantNamePath, Uri.EscapeDataString(restaurantName))}";
 
-        return await _httpClient
-            .GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        var result = await _httpClient.GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
+
+        Log.Information("Found {Count} customers for restaurant {RestaurantName}", result.Count, restaurantName);
+        return result;
     }
 
     public async Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
@@ -116,7 +129,12 @@ public class CrmClient : ICrmClient
             { "Authorization", $"Bearer {token}" }
         };
 
-        return await _httpClient.GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("Fetching contacts for customer {CustomerId}", customerId);
+
+        var contacts = await _httpClient.GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
+        Log.Information("Found {Count} contacts for customer {CustomerId}", contacts.Count, customerId);
+
+        return contacts;
     }
 
     public async Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default)

@@ -19,6 +19,8 @@ public interface ISalesClient : IScopedDependency
     Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
 
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
+
+    Task<string> GetSalesGroupByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
     
     Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
     
@@ -50,13 +52,11 @@ public class SalesClient : ISalesClient
     {
         if (request.CustomerNumbers == null || request.CustomerNumbers.Count == 0)
             throw new ArgumentException("CustomerNumbers cannot be null or empty.");
-        
+
         var queryString = new StringBuilder("?");
         
         foreach (var customerNumber in request.CustomerNumbers)
-        {
             queryString.Append("CustomerNumbers=").Append(Uri.EscapeDataString(customerNumber)).Append('&');
-        }
         
         var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAskInfoDetailListByCustomer" + queryString.ToString().TrimEnd('&');
 
@@ -109,6 +109,21 @@ public class SalesClient : ISalesClient
         return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesCustomerHabitSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<string> GetSalesGroupByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+            return string.Empty;
+
+        var url = $"{_salesSetting.BaseUrl}/api/external/table/query?tableId=d45f6888-4855-4114-8a9c-1ccc641e43ac"
+                  + $"&apiKey={Uri.EscapeDataString(_salesSetting.ApiKey)}"
+                  + "&field=phoneNumber&op=eq"
+                  + $"&value={Uri.EscapeDataString(phoneNumber)}";
+
+        var response = await _httpClientFactory.GetAsync<GetSalesGroupByPhoneNumberResponseDto>(url, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return response?.Rows?.FirstOrDefault()?.SalesGroup?.Trim() ?? string.Empty;
+    }
+
     public async Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken)
     {
         return await _httpClientFactory.PostAsJsonAsync<DeleteAiOrderResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/DeleteAiOrder", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -126,4 +141,5 @@ public class SalesClient : ISalesClient
 
         return await _httpClientFactory.GetAsync<GetAiOrderItemsByDeliveryDateResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+
 }
