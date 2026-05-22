@@ -576,7 +576,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (scene == null)
             throw new Exception($"SaveKnowledgeSceneRelatedKnowledges Scene [{command.SceneId}] does not exist.");
 
-        var targetKnowledgeIds = command.KnowledgeIds.Distinct().ToList();
+        var targetAssistantIds = (command.AssistantIds ?? []).Where(x => x > 0).Distinct().ToList();
+        var activeKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(targetAssistantIds, cancellationToken).ConfigureAwait(false);
+        var targetKnowledgeIds = activeKnowledges.Select(x => x.Id).Distinct().ToList();
         
         var currentRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
         var currentKnowledgeIds = currentRelations.Select(x => x.KnowledgeId).Distinct().ToHashSet();
