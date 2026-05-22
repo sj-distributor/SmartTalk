@@ -116,6 +116,8 @@ public partial class AiSpeechAssistantService
             : await HandleKnowledgeVersionAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
         latestKnowledge.Prompt ??= string.Empty;
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync([latestKnowledge], true, cancellationToken).ConfigureAwait(false);
+        await CopyKnowledgeSceneRelationsAsync(prevKnowledge?.Id, latestKnowledge.Id, cancellationToken).ConfigureAwait(false);
+        await RefreshKnowledgeScenePromptAsync(latestKnowledge, cancellationToken).ConfigureAwait(false);
 
         var relatedDtoMap = command.RelatedKnowledges?.ToDictionary(x => x.Id, x => x);
         var newRelationEntities = new List<AiSpeechAssistantKnowledgeCopyRelated>();
@@ -502,8 +504,11 @@ public partial class AiSpeechAssistantService
         if (currentKnowledge == null) throw new Exception($"Could not found the knowledge by knowledge id: {command.KnowledgeId}!");
 
         await UpdateKnowledgeStatusAsync(currentKnowledge, true, cancellationToken).ConfigureAwait(false);
+        await CopyKnowledgeSceneRelationsAsync(preKnowledge.Id, currentKnowledge.Id, cancellationToken).ConfigureAwait(false);
+        await RefreshKnowledgeScenePromptAsync(currentKnowledge, cancellationToken).ConfigureAwait(false);
 
         var knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(currentKnowledge);
+        knowledge.SceneItems = await BuildKnowledgeSceneItemsAsync(currentKnowledge.Id, cancellationToken).ConfigureAwait(false);
         
         var premise = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantPremiseByAssistantIdAsync(command.AssistantId, cancellationToken: cancellationToken);
 
@@ -1019,6 +1024,45 @@ public partial class AiSpeechAssistantService
     {
         knowledge.IsActive = isActive;
 
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task CopyKnowledgeSceneRelationsAsync(int? sourceKnowledgeId, int targetKnowledgeId, CancellationToken cancellationToken)
+    {
+        if (!sourceKnowledgeId.HasValue || sourceKnowledgeId.Value == targetKnowledgeId)
+            return;
+
+        var sourceRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(sourceKnowledgeId.Value, cancellationToken).ConfigureAwait(false);
+
+        if (sourceRelations.Count == 0)
+            return;
+
+        var targetRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(targetKnowledgeId, cancellationToken).ConfigureAwait(false);
+
+        var targetSceneIds = targetRelations.Select(x => x.SceneId).ToHashSet();
+        var relationsToAdd = sourceRelations
+            .Where(x => !targetSceneIds.Contains(x.SceneId))
+            .Select(x => new AiSpeechAssistantKnowledgeSceneRelation
+            {
+                KnowledgeId = targetKnowledgeId,
+                SceneId = x.SceneId,
+                CreatedAt = DateTimeOffset.UtcNow
+            })
+            .ToList();
+
+        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToAdd, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RefreshKnowledgeScenePromptAsync(AiSpeechAssistantKnowledge knowledge, CancellationToken cancellationToken)
+    {
+        var scenePrompt = await _aiSpeechAssistantKnowledgePromptService
+            .GenerateScenePromptAsync(knowledge.Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (string.Equals(knowledge.ScenePrompt ?? string.Empty, scenePrompt, StringComparison.Ordinal))
+            return;
+
+        knowledge.ScenePrompt = scenePrompt;
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
     

@@ -486,6 +486,8 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     {
         var caseId = Guid.NewGuid().ToString("N")[..8];
         int folderId = 0;
+        int sceneId = 0;
+        var promptService = CreatePromptServiceMock();
 
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
@@ -511,6 +513,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                         }
                     ]
                 });
+            sceneId = addResponse.Data.Id;
 
             var updateResponse = await mediator.SendAsync<UpdateKnowledgeSceneCommand, UpdateKnowledgeSceneResponse>(
                 new UpdateKnowledgeSceneCommand
@@ -535,6 +538,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             var historyResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
                 new GetKnowledgeSceneHistoryRequest { SceneId = addResponse.Data.Id });
             var oldVersion = historyResponse.Data.Scenes.First(x => x.Version == "1.0");
+            promptService.ClearReceivedCalls();
 
             var switchResponse = await mediator.SendAsync<SwitchKnowledgeSceneVersionCommand, SwitchKnowledgeSceneVersionResponse>(
                 new SwitchKnowledgeSceneVersionCommand
@@ -553,7 +557,11 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             latestHistoryResponse.Data.Count.ShouldBe(2);
             latestHistoryResponse.Data.Scenes.Count(x => x.IsActive).ShouldBe(1);
             latestHistoryResponse.Data.Scenes.Single(x => x.IsActive).Version.ShouldBe("1.0");
-        });
+        }, BuildPromptServiceRegistration(promptService));
+
+        await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(
+            Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId),
+            Arg.Any<CancellationToken>());
     }
 
     private static IAiSpeechAssistantKnowledgePromptService CreatePromptServiceMock()
