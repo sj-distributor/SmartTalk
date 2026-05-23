@@ -7,26 +7,26 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderService
 {
-    Task<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)> BuildOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken);
+    Task<(string GoalText, string Tip, List<PhoneOrderConversation> Conversations)> BuildOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
 {
-    public Task<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)> BuildOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
+    public Task<(string GoalText, string Tip, List<PhoneOrderConversation> Conversations)> BuildOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         if (phoneOrderInfo is not { Count: > 0 })
-            return Task.FromResult<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)>((string.Empty, string.Empty, []));
+            return Task.FromResult<(string GoalText, string Tip, List<PhoneOrderConversation> Conversations)>((string.Empty, string.Empty, []));
 
         Log.Information("OpenAI comparison phone order info: {@PhoneOrderInfo}", phoneOrderInfo);
 
         return OpenAiComparisonTranscriptionAsync(phoneOrderInfo, record);
     }
 
-    private Task<(string GoalText, string Tip, List<PhoneOrderConversationOpenAi> Conversations)> OpenAiComparisonTranscriptionAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record)
+    private Task<(string GoalText, string Tip, List<PhoneOrderConversation> Conversations)> OpenAiComparisonTranscriptionAsync(List<PhoneOrderOpenAiSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record)
     {
         var conversationIndex = 0;
         var goalTexts = new List<string>();
-        var conversations = new List<PhoneOrderConversationOpenAi>();
+        var conversations = new List<PhoneOrderConversation>();
         PhoneOrderRole? previousRole = null;
 
         foreach (var speakDetail in phoneOrderInfo)
@@ -60,7 +60,7 @@ public partial class PhoneOrderService
                     }
                     else
                     {
-                        conversations.Add(new PhoneOrderConversationOpenAi
+                        conversations.Add(new PhoneOrderConversation
                         {
                             RecordId = record.Id,
                             Question = originText,
@@ -83,7 +83,7 @@ public partial class PhoneOrderService
                     {
                         if (conversationIndex >= conversations.Count)
                         {
-                            conversations.Add(new PhoneOrderConversationOpenAi
+                            conversations.Add(new PhoneOrderConversation
                             {
                                 RecordId = record.Id,
                                 Question = string.Empty,
@@ -114,7 +114,7 @@ public partial class PhoneOrderService
         return Task.FromResult((goalTextsString, conversations.FirstOrDefault()?.Question ?? goalTextsString, conversations));
     }
 
-    private static string ProcessOpenAiComparisonConversation(List<PhoneOrderConversationOpenAi> conversations, string goalTextsString)
+    private static string ProcessOpenAiComparisonConversation(List<PhoneOrderConversation> conversations, string goalTextsString)
     {
         if (conversations == null || conversations.Count == 0) return goalTextsString;
 

@@ -41,20 +41,12 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderProcessJobService
 {
     Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
-
-    Task HandleReleasedOpenAiDiarizedComparisonAsync(string jobId, CancellationToken cancellationToken);
     
     Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderProcessJobService
 {
-    private static readonly HashSet<(int AgentId, int AssistantId)> OpenAiComparisonAgentPairs =
-    [
-        (32, 555),   // ELENAL / +12132216619
-        (27, 552),   // GLORIAZ / +12132056562
-        (396, 349)   // 106991粤語版 / +12132056897
-    ];
     private static readonly HashSet<string> QuantityLeadWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "a", "an", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
@@ -94,109 +86,79 @@ public partial class PhoneOrderProcessJobService
         if (record == null) return;
         
         Log.Information("Transcription results : {@results}", callBack.Results);
-        
+
         try
         {
             record.Status = PhoneOrderRecordStatus.Transcription;
             
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
-            
-            var speakInfos = StructureDiarizationResults(callBack.Results);
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-            
+
             await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
-            
-            await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
-            
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
 
-            if (ShouldRunOpenAiComparison(record))
-            {
-                _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(
-                    x => x.HandleReleasedOpenAiDiarizedComparisonAsync(jobId, cancellationToken),
-                    HangfireConstants.InternalHostingPhoneOrder);
-            }
-        }
-        catch (Exception e)
-        {
-            record.Status = PhoneOrderRecordStatus.Exception;
-            
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
-            
-            await _phoneOrderDataProvider.MarkRecordCompletedAsync(record.Id, cancellationToken).ConfigureAwait(false);
-
-            Log.Warning("Handle transcription callback failed: {@Exception}", e);
-        }
-    }
-
-    public async Task HandleReleasedOpenAiDiarizedComparisonAsync(string jobId, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(jobId)) return;
-
-        try
-        {
-            var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(jobId, cancellationToken).ConfigureAwait(false);
-
-            if (record == null || !ShouldRunOpenAiComparison(record)) return;
-
-            var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             var speakInfos = await TranscribePhoneOrderSegmentsByOpenAiAsync(audioContent, cancellationToken).ConfigureAwait(false);
-
             var normalizedSpeakInfos = NormalizeOpenAiDiarizedSpeakInfos(speakInfos);
 
             if (normalizedSpeakInfos.Count == 0)
             {
-                Log.Warning("OpenAI diarized comparison generated no valid segments. RecordId: {RecordId}, JobId: {JobId}", record.Id, jobId);
-                return;
+                Log.Warning("OpenAI diarized transcription generated no valid segments. RecordId: {RecordId}, JobId: {JobId}", record.Id, jobId);
             }
 
             var transcript = string.Join("\n", normalizedSpeakInfos
                 .Where(x => !string.IsNullOrWhiteSpace(x.Text))
                 .Select(x => $"{x.Speaker}: {x.Text}"));
 
-            var (goalText, _, conversations) = await _phoneOrderService
-                .BuildOpenAiComparisonConversationsAsync(normalizedSpeakInfos, record, cancellationToken)
-                .ConfigureAwait(false);
+            var (goalText, _, conversations) = normalizedSpeakInfos.Count == 0
+                ? (string.Empty, string.Empty, new List<PhoneOrderConversation>())
+                : await _phoneOrderService.BuildOpenAiComparisonConversationsAsync(normalizedSpeakInfos, record, cancellationToken).ConfigureAwait(false);
 
             var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken).ConfigureAwait(false);
-            
             var reportText = originalReport?.Report ?? record.TranscriptionText ?? string.Empty;
 
-            var optimizedConversations = conversations.Count == 0 ? conversations
+            var optimizedConversations = conversations.Count == 0
+                ? conversations
                 : await OptimizeOpenAiComparisonConversationsAsync(
-                        normalizedSpeakInfos,
-                        conversations,
-                        reportText,
-                        cancellationToken).ConfigureAwait(false);
+                    normalizedSpeakInfos,
+                    conversations,
+                    reportText,
+                    cancellationToken).ConfigureAwait(false);
 
             var persistableConversations = conversations.Count != 0
                 ? optimizedConversations
-                : [
-                    new PhoneOrderConversationOpenAi
+                :
+                [
+                    new PhoneOrderConversation
                     {
                         RecordId = record.Id,
-                        Question = !string.IsNullOrWhiteSpace(goalText) ? goalText : transcript,
+                        Question = !string.IsNullOrWhiteSpace(goalText)
+                            ? goalText
+                            : (!string.IsNullOrWhiteSpace(record.TranscriptionText) ? record.TranscriptionText : transcript),
                         Answer = string.Empty,
                         Order = 0,
                         CreatedDate = DateTimeOffset.Now
                     }
                 ];
 
-            await _phoneOrderDataProvider.DeletePhoneOrderOpenAiConversationsAsync(record.Id, cancellationToken).ConfigureAwait(false);
-            await _phoneOrderDataProvider.AddPhoneOrderOpenAiConversationsAsync(persistableConversations, true, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderDataProvider.DeletePhoneOrderConversationsAsync(record.Id, cancellationToken).ConfigureAwait(false);
+            await _phoneOrderDataProvider.AddPhoneOrderConversationsAsync(persistableConversations, true, cancellationToken).ConfigureAwait(false);
 
-            Log.Information(
-                "OpenAI diarized comparison conversations saved. RecordId: {RecordId}, JobId: {JobId}, ConversationCount: {ConversationCount}",
-                record.Id,
-                jobId,
-                persistableConversations.Count);
+            record.Tips = persistableConversations.FirstOrDefault()?.Question ?? string.Empty;
+            record.ConversationText = string.Join("\n", persistableConversations.Select(x =>
+                $"Restaurant: {x.Question ?? string.Empty}\nClient:{x.Answer ?? string.Empty}"));
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
         }
         catch (Exception e)
         {
-            Log.Warning("Handle OpenAI diarized comparison failed for JobId {JobId}: {@Exception}", jobId, e);
+            record.Status = PhoneOrderRecordStatus.Exception;
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken)
+                .ConfigureAwait(false);
+
+            Log.Warning("Handle transcription callback failed: {@Exception}", e);
         }
     }
 
@@ -471,7 +433,7 @@ public partial class PhoneOrderProcessJobService
         return mergedSpeakInfos;
     }
 
-    private async Task<List<PhoneOrderConversationOpenAi>> OptimizeOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> speakInfos, List<PhoneOrderConversationOpenAi> draftConversations, string reportText, CancellationToken cancellationToken)
+    private async Task<List<PhoneOrderConversation>> OptimizeOpenAiComparisonConversationsAsync(List<PhoneOrderOpenAiSpeakInfoDto> speakInfos, List<PhoneOrderConversation> draftConversations, string reportText, CancellationToken cancellationToken)
     {
         if (draftConversations is not { Count: > 0 })
             return draftConversations;
@@ -602,9 +564,7 @@ public partial class PhoneOrderProcessJobService
     {
         Log.Information("Starting OpenAI comparison diarized transcription. FileSize: {FileSize}", audioContent?.Length ?? 0);
 
-        var responseText = await _openaiClient
-            .TranscribeDiarizedAudioAsync(audioContent, "recording.wav", cancellationToken)
-            .ConfigureAwait(false);
+        var responseText = await _openaiClient.TranscribeDiarizedAudioAsync(audioContent, "recording.wav", cancellationToken).ConfigureAwait(false);
 
         Log.Information("OpenAI comparison diarized transcription response received. BodyPreview: {BodyPreview}", BuildResponsePreview(responseText));
 
@@ -621,8 +581,7 @@ public partial class PhoneOrderProcessJobService
         if (segments == null || segments.Count == 0)
         {
             Log.Warning(
-                "OpenAI comparison diarized transcription returned no segments. PayloadPreview: {PayloadPreview}",
-                BuildResponsePreview(responseText));
+                "OpenAI comparison diarized transcription returned no segments. PayloadPreview: {PayloadPreview}", BuildResponsePreview(responseText));
             return [];
         }
 
@@ -636,20 +595,12 @@ public partial class PhoneOrderProcessJobService
                 Role = TryParseOpenAiComparisonRole(x.Value<string>("role"), out var role) ? role : null,
                 RoleText = x.Value<string>("role")?.Trim() ?? string.Empty,
                 Text = x.Value<string>("text")?.Trim() ?? string.Empty
-            })
-            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+            }).Where(x => !string.IsNullOrWhiteSpace(x.Text))
             .ToList();
 
         Log.Information("OpenAI comparison diarized transcription parsed segments: {@SpeakInfos}", speakInfos);
 
         return speakInfos;
-    }
-
-    private bool ShouldRunOpenAiComparison(PhoneOrderRecord record)
-    {
-        return record != null &&
-               record.AssistantId.HasValue &&
-               OpenAiComparisonAgentPairs.Contains((record.AgentId, record.AssistantId.Value));
     }
 
     private static string BuildResponsePreview(string responseText, int maxLength = 1200)
@@ -659,25 +610,17 @@ public partial class PhoneOrderProcessJobService
 
         var normalized = responseText.Replace("\r", " ").Replace("\n", " ").Trim();
 
-        return normalized.Length <= maxLength
-            ? normalized
-            : normalized[..maxLength] + "...";
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength] + "...";
     }
 
-    private static bool ShouldSmoothIntermediateSegment(
-        PhoneOrderOpenAiSpeakInfoDto previous,
-        PhoneOrderOpenAiSpeakInfoDto current,
-        PhoneOrderOpenAiSpeakInfoDto next)
+    private static bool ShouldSmoothIntermediateSegment(PhoneOrderOpenAiSpeakInfoDto previous, PhoneOrderOpenAiSpeakInfoDto current, PhoneOrderOpenAiSpeakInfoDto next)
     {
         var duration = current.EndTime - current.StartTime;
         var previousGap = current.StartTime - previous.EndTime;
         var nextGap = next.StartTime - current.EndTime;
         var wordCount = current.Text?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ?? 0;
 
-        return duration <= 1.2 &&
-               previousGap <= 0.6 &&
-               nextGap <= 0.6 &&
-               (wordCount <= 4 || (current.Text?.Length ?? 0) <= 24);
+        return duration <= 1.2 && previousGap <= 0.6 && nextGap <= 0.6 && (wordCount <= 4 || (current.Text?.Length ?? 0) <= 24);
     }
 
     private static string DetermineRestaurantSpeaker(List<PhoneOrderOpenAiSpeakInfoDto> speakInfos)
@@ -743,10 +686,7 @@ public partial class PhoneOrderProcessJobService
             if (ShouldStitchFragmentedSegment(lastSpeakInfo, speakInfo, gap))
             {
                 Log.Information(
-                    "Stitch fragmented OpenAI diarized segments. Previous: {PreviousText}, Current: {CurrentText}, Gap: {Gap}",
-                    lastSpeakInfo.Text,
-                    speakInfo.Text,
-                    gap);
+                    "Stitch fragmented OpenAI diarized segments. Previous: {PreviousText}, Current: {CurrentText}, Gap: {Gap}", lastSpeakInfo.Text, speakInfo.Text, gap);
 
                 lastSpeakInfo.EndTime = Math.Max(lastSpeakInfo.EndTime, speakInfo.EndTime);
                 lastSpeakInfo.Text = JoinSegmentText(lastSpeakInfo.Text, speakInfo.Text);
@@ -759,10 +699,7 @@ public partial class PhoneOrderProcessJobService
         return stitchedSpeakInfos;
     }
 
-    private static bool ShouldStitchFragmentedSegment(
-        PhoneOrderOpenAiSpeakInfoDto previous,
-        PhoneOrderOpenAiSpeakInfoDto current,
-        double gap)
+    private static bool ShouldStitchFragmentedSegment(PhoneOrderOpenAiSpeakInfoDto previous, PhoneOrderOpenAiSpeakInfoDto current, double gap)
     {
         if (!string.Equals(previous.Speaker, current.Speaker, StringComparison.OrdinalIgnoreCase))
             return false;
