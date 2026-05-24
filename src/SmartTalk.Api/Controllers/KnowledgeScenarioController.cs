@@ -95,6 +95,15 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
+    [Route("scene/delete"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(DeleteKnowledgeSceneResponse))]
+    public async Task<IActionResult> DeleteKnowledgeSceneAsync([FromBody] DeleteKnowledgeSceneCommand command)
+    {
+        var response = await _mediator.SendAsync<DeleteKnowledgeSceneCommand, DeleteKnowledgeSceneResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
     [Route("scene/history/list"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneHistoryResponse))]
     public async Task<IActionResult> GetKnowledgeSceneHistoryAsync([FromQuery] GetKnowledgeSceneHistoryRequest request)
