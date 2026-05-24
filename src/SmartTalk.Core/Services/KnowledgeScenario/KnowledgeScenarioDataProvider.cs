@@ -46,6 +46,10 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task UpdateKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task DeleteKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeleteKnowledgeSceneHistoryItemsAsync(List<KnowledgeSceneHistoryItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
+
     Task DeleteKnowledgeScenesAsync(List<KnowledgeScene> scenes, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneAndNamesAsync(int sceneId, List<string> names, CancellationToken cancellationToken = default);
@@ -240,6 +244,24 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
     {
         if (histories.Count != 0)
             await _repository.UpdateAllAsync(histories, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (histories.Count != 0)
+            await _repository.DeleteAllAsync(histories, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteKnowledgeSceneHistoryItemsAsync(List<KnowledgeSceneHistoryItem> items, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (items.Count != 0)
+            await _repository.DeleteAllAsync(items, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

@@ -323,6 +323,43 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     }
 
     [Fact]
+    public async Task ShouldDeleteKnowledgeScene()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        SceneCascadeSeedResult seeded = null!;
+        var promptService = CreatePromptServiceMock();
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            seeded = await SeedSceneCascadeAsync(repository, unitOfWork, caseId);
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var response = await mediator.SendAsync<DeleteKnowledgeSceneCommand, DeleteKnowledgeSceneResponse>(
+                new DeleteKnowledgeSceneCommand { Id = seeded.SceneId });
+
+            response.Data.ShouldNotBeNull();
+            response.Data.Id.ShouldBe(seeded.SceneId);
+            response.Data.Name.ShouldBe(seeded.SceneName);
+            response.Data.SceneItems.Count.ShouldBe(1);
+            response.Data.SceneItems.Single().Id.ShouldBe(seeded.SceneItemId);
+        }, BuildPromptServiceRegistration(promptService));
+
+        await Run<IRepository>(async repository =>
+        {
+            (await repository.Query<KnowledgeScene>().AnyAsync(x => x.Id == seeded.SceneId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneItem>().AnyAsync(x => x.Id == seeded.SceneItemId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneHistory>().AnyAsync(x => x.Id == seeded.HistoryId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneHistoryItem>().AnyAsync(x => x.Id == seeded.HistoryItemId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneCompany>().AnyAsync(x => x.Id == seeded.SceneCompanyId)).ShouldBeFalse();
+            (await repository.Query<AiSpeechAssistantKnowledgeSceneRelation>().AnyAsync(x => x.Id == seeded.RelationId)).ShouldBeFalse();
+        });
+
+        await promptService.Received(1).RefreshScenePromptsAsync(Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == seeded.KnowledgeId), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ShouldGetKnowledgeSceneRelatedKnowledges()
     {
         var caseId = Guid.NewGuid().ToString("N")[..8];
@@ -687,6 +724,63 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         return new FolderCascadeSeedResult(folder.Id, folder.Name, scene.Id, item.Id, relation.Id, knowledge.Id);
     }
 
+    private static async Task<SceneCascadeSeedResult> SeedSceneCascadeAsync(IRepository repository, IUnitOfWork unitOfWork, string suffix)
+    {
+        var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{suffix}");
+        var scene = await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{suffix}", $"Scene Desc {suffix}", KnowledgeSceneStatus.Published);
+        var item = await CreateSceneItemAsync(repository, unitOfWork, scene.Id, $"Item-{suffix}", KnowledgeSceneItemType.Text, $"Content {suffix}");
+        var knowledge = await CreateActiveKnowledgeAsync(repository, unitOfWork, $"Knowledge-{suffix}");
+
+        var history = new KnowledgeSceneHistory
+        {
+            SceneId = scene.Id,
+            FolderId = folder.Id,
+            Name = scene.Name,
+            Description = scene.Description,
+            Version = scene.Version,
+            Status = scene.Status,
+            IsActive = true,
+            CreatedAt = scene.CreatedAt,
+            UpdatedAt = scene.UpdatedAt,
+            SnapshotAt = DateTimeOffset.UtcNow
+        };
+        await repository.InsertAsync(history);
+        await unitOfWork.SaveChangesAsync();
+
+        var historyItem = new KnowledgeSceneHistoryItem
+        {
+            HistoryId = history.Id,
+            SceneItemId = item.Id,
+            Name = item.Name,
+            Type = item.Type,
+            Content = item.Content,
+            FileName = item.FileName,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt
+        };
+        await repository.InsertAsync(historyItem);
+
+        var sceneCompany = new KnowledgeSceneCompany
+        {
+            SceneId = scene.Id,
+            CompanyId = 1000 + scene.Id,
+            IsApplied = true,
+            AuthorizedAt = DateTimeOffset.UtcNow
+        };
+        await repository.InsertAsync(sceneCompany);
+
+        var relation = new AiSpeechAssistantKnowledgeSceneRelation
+        {
+            KnowledgeId = knowledge.Id,
+            SceneId = scene.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        await repository.InsertAsync(relation);
+        await unitOfWork.SaveChangesAsync();
+
+        return new SceneCascadeSeedResult(scene.Id, scene.Name, item.Id, history.Id, historyItem.Id, sceneCompany.Id, relation.Id, knowledge.Id);
+    }
+
     private static async Task<RelationSaveSeedResult> SeedSceneRelationAsync(IRepository repository, IUnitOfWork unitOfWork, string suffix, bool includeSecondRelation = true)
     {
         var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{suffix}");
@@ -718,6 +812,8 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     }
 
     private sealed record FolderCascadeSeedResult(int FolderId, string FolderName, int SceneId, int SceneItemId, int RelationId, int KnowledgeId);
+
+    private sealed record SceneCascadeSeedResult(int SceneId, string SceneName, int SceneItemId, int HistoryId, int HistoryItemId, int SceneCompanyId, int RelationId, int KnowledgeId);
 
     private sealed record RelationSaveSeedResult(int SceneId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
 }
