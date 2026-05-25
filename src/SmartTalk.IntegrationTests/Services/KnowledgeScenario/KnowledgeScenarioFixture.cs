@@ -6,7 +6,6 @@ using Shouldly;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
-using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.IntegrationTests.TestBaseClasses;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
@@ -354,7 +353,6 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             (await repository.Query<KnowledgeSceneHistory>().AnyAsync(x => x.Id == seeded.HistoryId)).ShouldBeFalse();
             (await repository.Query<KnowledgeSceneHistoryItem>().AnyAsync(x => x.Id == seeded.HistoryItemId)).ShouldBeFalse();
             (await repository.Query<KnowledgeSceneCompany>().AnyAsync(x => x.Id == seeded.SceneCompanyId)).ShouldBeFalse();
-            (await repository.Query<KnowledgeSceneCompany>().AnyAsync(x => x.Id == seeded.SceneStoreApplicationId)).ShouldBeFalse();
             (await repository.Query<AiSpeechAssistantKnowledgeSceneRelation>().AnyAsync(x => x.Id == seeded.RelationId)).ShouldBeFalse();
         });
 
@@ -381,69 +379,6 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             response.Data.Count.ShouldBe(2);
             response.Data[0].ShouldBe(seeded.SecondKnowledgeId);
             response.Data[1].ShouldBe(seeded.FirstKnowledgeId);
-        });
-    }
-
-    [Fact]
-    public async Task ShouldApplyKnowledgeScenePerStore()
-    {
-        var caseId = Guid.NewGuid().ToString("N")[..8];
-        int sceneId = 0;
-        Company company = null!;
-        CompanyStore firstStore = null!;
-        CompanyStore secondStore = null!;
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}");
-            sceneId = (await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{caseId}", "desc", KnowledgeSceneStatus.Published)).Id;
-            (company, firstStore, secondStore) = await CreateCompanyWithStoresAsync(repository, unitOfWork, caseId);
-
-            await repository.InsertAsync(new KnowledgeSceneCompany
-            {
-                SceneId = sceneId,
-                CompanyId = company.Id,
-                AuthorizedAt = DateTimeOffset.UtcNow
-            });
-            await unitOfWork.SaveChangesAsync();
-        });
-
-        await Run<IMediator>(async mediator =>
-        {
-            var applyResponse = await mediator.SendAsync<UpdateKnowledgeSceneCompanyCommand, UpdateKnowledgeSceneCompanyResponse>(
-                new UpdateKnowledgeSceneCompanyCommand
-                {
-                    SceneId = sceneId,
-                    CompanyId = company.Id,
-                    StoreId = firstStore.Id,
-                    IsApplied = true
-                });
-
-            applyResponse.Data.ShouldNotBeNull();
-            applyResponse.Data.StoreId.ShouldBe(firstStore.Id);
-            applyResponse.Data.IsApplied.ShouldBeTrue();
-
-            var firstStoreMarket = await mediator.RequestAsync<GetKnowledgeSceneMarketRequest, GetKnowledgeSceneMarketResponse>(
-                new GetKnowledgeSceneMarketRequest
-                {
-                    CompanyId = company.Id,
-                    StoreId = firstStore.Id,
-                    MarketType = KnowledgeSceneMarketType.MyTemplates
-                });
-
-            firstStoreMarket.Data.Scenes.Count.ShouldBe(1);
-            firstStoreMarket.Data.Scenes.Single().Id.ShouldBe(sceneId);
-            firstStoreMarket.Data.Scenes.Single().IsApplied.ShouldBeTrue();
-
-            var secondStoreMarket = await mediator.RequestAsync<GetKnowledgeSceneMarketRequest, GetKnowledgeSceneMarketResponse>(
-                new GetKnowledgeSceneMarketRequest
-                {
-                    CompanyId = company.Id,
-                    StoreId = secondStore.Id,
-                    MarketType = KnowledgeSceneMarketType.MyTemplates
-                });
-
-            secondStoreMarket.Data.Scenes.ShouldBeEmpty();
         });
     }
 
@@ -829,21 +764,10 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         {
             SceneId = scene.Id,
             CompanyId = 1000 + scene.Id,
+            IsApplied = true,
             AuthorizedAt = DateTimeOffset.UtcNow
         };
         await repository.InsertAsync(sceneCompany);
-        await unitOfWork.SaveChangesAsync();
-
-        var sceneStoreApplication = new KnowledgeSceneCompany
-        {
-            SceneId = scene.Id,
-            CompanyId = sceneCompany.CompanyId,
-            StoreId = 2000 + scene.Id,
-            IsApplied = true,
-            AppliedAt = DateTimeOffset.UtcNow,
-            AuthorizedAt = sceneCompany.AuthorizedAt
-        };
-        await repository.InsertAsync(sceneStoreApplication);
 
         var relation = new AiSpeechAssistantKnowledgeSceneRelation
         {
@@ -854,7 +778,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         await repository.InsertAsync(relation);
         await unitOfWork.SaveChangesAsync();
 
-        return new SceneCascadeSeedResult(scene.Id, scene.Name, item.Id, history.Id, historyItem.Id, sceneCompany.Id, sceneStoreApplication.Id, relation.Id, knowledge.Id);
+        return new SceneCascadeSeedResult(scene.Id, scene.Name, item.Id, history.Id, historyItem.Id, sceneCompany.Id, relation.Id, knowledge.Id);
     }
 
     private static async Task<RelationSaveSeedResult> SeedSceneRelationAsync(IRepository repository, IUnitOfWork unitOfWork, string suffix, bool includeSecondRelation = true)
@@ -889,65 +813,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
 
     private sealed record FolderCascadeSeedResult(int FolderId, string FolderName, int SceneId, int SceneItemId, int RelationId, int KnowledgeId);
 
-    private static async Task<(Company Company, CompanyStore FirstStore, CompanyStore SecondStore)> CreateCompanyWithStoresAsync(
-        IRepository repository,
-        IUnitOfWork unitOfWork,
-        string suffix)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var company = new Company
-        {
-            Name = $"company-{suffix}",
-            Description = $"company description {suffix}",
-            Status = true,
-            CreatedBy = 1,
-            CreatedDate = now,
-            LastModifiedBy = 1,
-            LastModifiedDate = now
-        };
-        await repository.InsertAsync(company);
-        await unitOfWork.SaveChangesAsync();
-
-        var firstStore = CreateStore(company.Id, $"first-{suffix}", now);
-        var secondStore = CreateStore(company.Id, $"second-{suffix}", now);
-        await repository.InsertAsync(firstStore);
-        await repository.InsertAsync(secondStore);
-        await unitOfWork.SaveChangesAsync();
-
-        return (company, firstStore, secondStore);
-    }
-
-    private static CompanyStore CreateStore(int companyId, string suffix, DateTimeOffset now)
-    {
-        return new CompanyStore
-        {
-            CompanyId = companyId,
-            Names = $"store-{suffix}",
-            Description = $"store description {suffix}",
-            Status = true,
-            PhoneNums = $"+1555{suffix[..Math.Min(6, suffix.Length)]}",
-            Logo = $"logo-{suffix}.png",
-            Address = $"address-{suffix}",
-            Latitude = "22.2800",
-            Longitude = "114.1600",
-            Link = $"https://store-{suffix}.example.com",
-            AppId = $"app-{suffix}",
-            AppSecret = $"secret-{suffix}",
-            TimePeriod = "09:00-18:00",
-            PosName = $"pos-{suffix}",
-            PosId = $"pos-id-{suffix}",
-            IsLink = true,
-            Timezone = "Pacific Standard Time",
-            IsManualReview = false,
-            IsTaskEnabled = true,
-            CreatedBy = 1,
-            CreatedDate = now,
-            LastModifiedBy = 1,
-            LastModifiedDate = now
-        };
-    }
-
-    private sealed record SceneCascadeSeedResult(int SceneId, string SceneName, int SceneItemId, int HistoryId, int HistoryItemId, int SceneCompanyId, int SceneStoreApplicationId, int RelationId, int KnowledgeId);
+    private sealed record SceneCascadeSeedResult(int SceneId, string SceneName, int SceneItemId, int HistoryId, int HistoryItemId, int SceneCompanyId, int RelationId, int KnowledgeId);
 
     private sealed record RelationSaveSeedResult(int SceneId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
 }
