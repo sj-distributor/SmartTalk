@@ -10,6 +10,8 @@ public class UpdateKnowledgeSceneCompanyCommand : ICommand
 
     public int CompanyId { get; set; }
 
+    public int StoreId { get; set; }
+
     public bool IsApplied { get; set; }
 }
 
