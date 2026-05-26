@@ -826,10 +826,34 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         else
             await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneCompanyAsync(sceneStore, true, cancellationToken).ConfigureAwait(false);
 
+        if (!command.IsApplied)
+            await RemoveSceneRelationsFromStoreKnowledgeAsync(command.SceneId, command.StoreId, cancellationToken).ConfigureAwait(false);
+
         return new UpdateKnowledgeSceneCompanyResponse
         {
             Data = _mapper.Map<KnowledgeSceneCompanyDto>(sceneStore)
         };
+    }
+
+    private async Task RemoveSceneRelationsFromStoreKnowledgeAsync(int sceneId, int storeId, CancellationToken cancellationToken)
+    { 
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken).ConfigureAwait(false);
+        var assistantIds = assistants.Select(x => x.Id).Distinct().ToList();
+        if (assistantIds.Count == 0)
+            return;
+
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        var knowledgeIds = knowledges.Select(x => x.Id).Distinct().ToList();
+        if (knowledgeIds.Count == 0)
+            return;
+
+        var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(sceneId, cancellationToken).ConfigureAwait(false);
+        var toDelete = relations.Where(x => knowledgeIds.Contains(x.KnowledgeId)).ToList();
+        if (toDelete.Count == 0)
+            return;
+
+        await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(toDelete, true, cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<UpdateKnowledgeSceneHistoryResponse> UpdateKnowledgeSceneHistoryAsync(UpdateKnowledgeSceneHistoryCommand command, CancellationToken cancellationToken)
