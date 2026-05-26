@@ -7,6 +7,8 @@ public class SaveKnowledgeSceneRelatedKnowledgesCommand : ICommand
 {
     public int SceneId { get; set; }
 
+    public int StoreId { get; set; }
+
     public List<int> AssistantIds { get; set; }
 }
 
