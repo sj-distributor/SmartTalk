@@ -343,6 +343,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         {
             var knowledge = _mapper.Map<KnowledgeSceneItem>(item);
             knowledge.SceneId = scene.Id;
+            knowledge.UpdatedAt ??= knowledge.CreatedAt;
             return knowledge;
         }).ToList();
 
@@ -414,6 +415,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             {
                 var knowledge = _mapper.Map<KnowledgeSceneItem>(item);
                 knowledge.SceneId = scene.Id;
+                knowledge.UpdatedAt ??= knowledge.CreatedAt;
                 itemsToAdd.Add(knowledge);
             }
         }
@@ -545,48 +547,97 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (request.CompanyId <= 0) throw new Exception("GetKnowledgeSceneMarket CompanyId is required.");
         if (request.StoreId <= 0) throw new Exception("GetKnowledgeSceneMarket StoreId is required.");
 
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (store == null || store.CompanyId != request.CompanyId)
-            throw new Exception($"Store [{request.StoreId}] does not belong to Company [{request.CompanyId}].");
+        await EnsureStoreInCompanyAsync(request.CompanyId, request.StoreId, cancellationToken).ConfigureAwait(false);
 
-        var companySceneRows = await _knowledgeScenarioDataProvider
-            .GetKnowledgeSceneCompanyStoreApplicationsAsync(request.CompanyId, request.StoreId, cancellationToken)
-            .ConfigureAwait(false);
+        var (sceneCompanies, sceneStoreApplications) =
+            await LoadMarketSceneRowsAsync(request.CompanyId, request.StoreId, cancellationToken).ConfigureAwait(false);
 
-        var sceneCompanies = companySceneRows.Where(x => x.StoreId == null).ToList();
-        var sceneStoreApplications = companySceneRows.Where(x => x.StoreId == request.StoreId).ToList();
-
-        Log.Information("GetKnowledgeSceneMarket companySceneRows {@CompanySceneRows}, sceneCompanies {@SceneCompanies}, sceneStoreApplications {@SceneStoreApplications}",
-            companySceneRows.Count, sceneCompanies.Count, sceneStoreApplications.Count);
-        
         if (sceneCompanies.Count == 0)
-            return new GetKnowledgeSceneMarketResponse { Data = new GetKnowledgeSceneMarketResponseData() { Scenes = new List<KnowledgeSceneDto>() } };
+            return EmptyMarketResponse();
 
-        var sceneIds = sceneCompanies.Select(x => x.SceneId).Distinct().ToList();
-        var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("GetKnowledgeSceneMarket ScenIds {@SceneIds}", sceneIds);
+        var scenes = await LoadAuthorizedScenesAsync(sceneCompanies, cancellationToken).ConfigureAwait(false);
         if (scenes.Count == 0)
-            return new GetKnowledgeSceneMarketResponse { Data = new GetKnowledgeSceneMarketResponseData() { Scenes = new List<KnowledgeSceneDto>() } };
+            return EmptyMarketResponse();
 
         var keyword = request.Keyword?.Trim();
-        var filteredScenes = scenes
-            .Where(x => string.IsNullOrWhiteSpace(keyword) || x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(x => x.IsActive)
-            .ToList();
+        var visibleScenes = FilterMarketScenes(scenes, sceneStoreApplications, keyword, request.MarketType);
 
-        filteredScenes = request.MarketType == KnowledgeSceneMarketType.MyTemplates
-            ? filteredScenes.Where(x => sceneStoreApplications.Any(c => c.SceneId == x.Id && c.IsApplied)).ToList()
-            : filteredScenes.ToList();
+        return BuildMarketResponse(visibleScenes, sceneStoreApplications);
+    }
 
+    private static GetKnowledgeSceneMarketResponse EmptyMarketResponse()
+    {
         return new GetKnowledgeSceneMarketResponse
         {
             Data = new GetKnowledgeSceneMarketResponseData
             {
-                Scenes = filteredScenes.Select(scene =>
+                Scenes = new List<KnowledgeSceneDto>()
+            }
+        };
+    }
+
+    private async Task EnsureStoreInCompanyAsync(int companyId, int storeId, CancellationToken cancellationToken)
+    {
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null || store.CompanyId != companyId)
+            throw new Exception($"Store [{storeId}] does not belong to Company [{companyId}].");
+    }
+
+    private async Task<(List<KnowledgeSceneCompany> SceneCompanies, List<KnowledgeSceneCompany> SceneStoreApplications)>
+        LoadMarketSceneRowsAsync(int companyId, int storeId, CancellationToken cancellationToken)
+    {
+        var rows = await _knowledgeScenarioDataProvider
+            .GetKnowledgeSceneCompanyStoreApplicationsAsync(companyId, storeId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var sceneCompanies = rows.Where(x => x.StoreId == null).ToList();
+        var sceneStoreApplications = rows.Where(x => x.StoreId == storeId).ToList();
+
+        Log.Information("GetKnowledgeSceneMarket rows loaded. Total={Total}, CompanyAuthCount={CompanyAuthCount}, StoreApplyCount={StoreApplyCount}",
+            rows.Count, sceneCompanies.Count, sceneStoreApplications.Count);
+
+        return (sceneCompanies, sceneStoreApplications);
+    }
+
+    private async Task<List<KnowledgeScene>> LoadAuthorizedScenesAsync(List<KnowledgeSceneCompany> sceneCompanies, CancellationToken cancellationToken)
+    {
+        var sceneIds = sceneCompanies.Select(x => x.SceneId).Distinct().ToList();
+        Log.Information("GetKnowledgeSceneMarket authorized scene ids {@SceneIds}", sceneIds);
+        return await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static List<KnowledgeScene> FilterMarketScenes(List<KnowledgeScene> scenes, List<KnowledgeSceneCompany> storeApplications, string keyword, KnowledgeSceneMarketType marketType)
+    {
+        var list = scenes
+            .Where(x => string.IsNullOrWhiteSpace(keyword) || x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.IsActive)
+            .ToList();
+        
+        if (marketType == KnowledgeSceneMarketType.MyTemplates)
+        {
+            return list
+                .Where(x => IsApplied(storeApplications, x.Id))
+                .ToList();
+        }
+        
+        return list
+            .Where(x => x.Status == KnowledgeSceneStatus.Published || IsApplied(storeApplications, x.Id))
+            .ToList();
+    }
+
+    private static bool IsApplied(List<KnowledgeSceneCompany> storeApplications, int sceneId)
+        => storeApplications.Any(x => x.SceneId == sceneId && x.IsApplied);
+
+    private GetKnowledgeSceneMarketResponse BuildMarketResponse(List<KnowledgeScene> scenes, List<KnowledgeSceneCompany> storeApplications)
+    {
+        return new GetKnowledgeSceneMarketResponse
+        {
+            Data = new GetKnowledgeSceneMarketResponseData
+            {
+                Scenes = scenes.Select(scene =>
                 {
                     var dto = _mapper.Map<KnowledgeSceneDto>(scene);
-                    dto.IsApplied = sceneStoreApplications.Any(x => x.SceneId == scene.Id && x.IsApplied);
+                    dto.IsApplied = IsApplied(storeApplications, scene.Id);
                     return dto;
                 }).ToList()
             }
