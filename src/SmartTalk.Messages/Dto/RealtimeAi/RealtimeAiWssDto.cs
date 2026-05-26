@@ -46,12 +46,54 @@ public class RealtimeAiFunctionCallResult
 public class ParsedRealtimeAiProviderEvent
 {
     public RealtimeAiWssEventType Type { get; set; }
-    
+
     public object Data { get; set; }
-    
+
     public string RawJson { get; set; }
-    
+
     public string ItemId { get; set; }
+
+    /// <summary>
+    /// Token usage for the AI turn, populated by the provider adapter when the
+    /// provider emits usage data alongside the turn-completion event (currently
+    /// OpenAI's <c>response.done.response.usage</c>). <c>null</c> when the
+    /// underlying message has no usage block (older provider snapshots) or when
+    /// the event type does not carry usage. Sits on the event rather than on
+    /// <see cref="Data"/> so it can coexist with function-call payloads.
+    /// </summary>
+    public RealtimeAiWssUsageData Usage { get; set; }
+}
+
+/// <summary>
+/// Per-turn token-usage breakdown reported by the AI provider on turn completion.
+/// All fields nullable because providers may omit individual sub-counts; consumers
+/// should treat missing values as "not reported" rather than zero.
+/// </summary>
+public class RealtimeAiWssUsageData
+{
+    /// <summary>Total tokens consumed for this turn (input + output).</summary>
+    public int? TotalTokens { get; set; }
+
+    /// <summary>Tokens consumed from the prompt / conversation history.</summary>
+    public int? InputTokens { get; set; }
+
+    /// <summary>Tokens produced by the AI in this turn.</summary>
+    public int? OutputTokens { get; set; }
+
+    /// <summary>Subset of input tokens served from the provider's prompt cache.</summary>
+    public int? CachedTokens { get; set; }
+
+    /// <summary>Subset of input tokens classified as audio (rather than text).</summary>
+    public int? InputAudioTokens { get; set; }
+
+    /// <summary>Subset of input tokens classified as text.</summary>
+    public int? InputTextTokens { get; set; }
+
+    /// <summary>Subset of output tokens classified as audio (rather than text).</summary>
+    public int? OutputAudioTokens { get; set; }
+
+    /// <summary>Subset of output tokens classified as text.</summary>
+    public int? OutputTextTokens { get; set; }
 }
 
 public class RealtimeAiErrorData
