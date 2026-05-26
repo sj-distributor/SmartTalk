@@ -17,6 +17,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -576,7 +577,7 @@ public partial class PhoneOrderService
 
         if (match.Success) time = match.Groups[1].Value;
 
-        return TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)), TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles"));
+        return TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)), PstTimeZone.Get());
     }
 
     private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, string lastModifiedByName, CancellationToken cancellationToken)
@@ -626,7 +627,7 @@ public partial class PhoneOrderService
     {
         if (!inputDate.HasValue) return (null, null);
 
-        var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstTimeZone = PstTimeZone.Get();
 
         var pstDate = new DateTime(inputDate.Value.Year, inputDate.Value.Month, inputDate.Value.Day, 0, 0, 0);
         var pstStart = new DateTimeOffset(pstDate, pstTimeZone.GetUtcOffset(pstDate));
@@ -810,7 +811,7 @@ public partial class PhoneOrderService
     {
         if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
 
-        var tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"); // PT, 含 DST
+        var tz = PstTimeZone.Get(); // PT, 含 DST
 
         var startLocal = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
@@ -889,7 +890,7 @@ public partial class PhoneOrderService
     
     private string ConvertUtcToPst(DateTimeOffset utcTime)
     {
-        var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstTimeZone = PstTimeZone.Get();
         
         var pstTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime.UtcDateTime, pstTimeZone);
         

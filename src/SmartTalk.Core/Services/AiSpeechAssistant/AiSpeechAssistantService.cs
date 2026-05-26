@@ -262,7 +262,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
         var finalPrompt = knowledge.Prompt
@@ -1292,7 +1292,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var utcNow = DateTimeOffset.UtcNow;
 
-        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstZone = PstTimeZone.Get();
 
         var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
         
