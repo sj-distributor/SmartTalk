@@ -383,11 +383,11 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         var query =
             from store in _repository.QueryNoTracking<CompanyStore>()
             join posAgent in _repository.QueryNoTracking<PosAgent>() on store.Id equals posAgent.StoreId
-            join agent in _repository.QueryNoTracking<Agent>() on posAgent.AgentId equals agent.Id
+            join agent in _repository.QueryNoTracking<Agent>() on posAgent.AgentId equals agent.Id 
             join agentAssistant in _repository.QueryNoTracking<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             join knowledge in _repository.QueryNoTracking<AiSpeechAssistantKnowledge>() on assistant.Id equals knowledge.AssistantId
-            where store.Id == storeId && knowledge.IsActive
+            where store.Id == storeId && knowledge.IsActive && agent.IsDisplay && agent.IsSurface
             select new AgentKnowledgeDto
             {
                 StoreId = store.Id,
