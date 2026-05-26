@@ -6,6 +6,8 @@ namespace SmartTalk.Messages.Requests.KnowledgeScenario;
 public class GetKnowledgeSceneRelatedKnowledgesRequest : IRequest
 {
     public int SceneId { get; set; }
+
+    public int StoreId { get; set; }
 }
 
 public class GetKnowledgeSceneRelatedKnowledgesResponse : SmartTalkResponse<List<int>>

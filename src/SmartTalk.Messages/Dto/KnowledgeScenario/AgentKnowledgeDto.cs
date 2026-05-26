@@ -1,4 +1,4 @@
-namespace SmartTalk.Core.Services.KnowledgeScenario;
+namespace SmartTalk.Messages.Dto.KnowledgeScenario;
 
 public class AgentKnowledgeDto
 {

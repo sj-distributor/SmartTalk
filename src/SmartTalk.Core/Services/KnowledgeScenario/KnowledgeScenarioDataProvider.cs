@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
 
