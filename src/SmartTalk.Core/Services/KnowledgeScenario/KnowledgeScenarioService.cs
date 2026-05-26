@@ -1143,10 +1143,10 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     
     public async Task<GetAgentKnowledgeResponse> GetAgentKnowledgeAsync(GetAgentKnowledgeRequest request, CancellationToken cancellationToken)
     {
-        if (request.CompanyId <= 0)
-            throw new Exception("CompanyId is required.");
+        if (request.StoreId <= 0)
+            throw new Exception("StoreId is required.");
 
-        var sources = await _knowledgeScenarioDataProvider.GetAgentKnowledgeAsync(request.CompanyId, request.Keyword, cancellationToken).ConfigureAwait(false);
+        var sources = await _knowledgeScenarioDataProvider.GetAgentKnowledgeAsync(request.StoreId, request.Keyword, cancellationToken).ConfigureAwait(false);
 
         var result = sources
             .GroupBy(x => new { x.AgentId, x.AgentName })

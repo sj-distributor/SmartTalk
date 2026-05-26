@@ -5,7 +5,7 @@ namespace SmartTalk.Messages.Requests.KnowledgeScenario;
 
 public class GetAgentKnowledgeRequest : IRequest
 {
-    public int CompanyId { get; set; }
+    public int StoreId { get; set; }
 
     public string Keyword { get; set; }
 }

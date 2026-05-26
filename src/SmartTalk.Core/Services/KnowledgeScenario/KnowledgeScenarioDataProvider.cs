@@ -70,7 +70,7 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task DeleteKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default);
+    Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int storeId, string keyword, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -373,10 +373,10 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default)
+    public async Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int storeId, string keyword, CancellationToken cancellationToken = default)
     {
-        if (companyId <= 0)
-            throw new Exception("CompanyId is required.");
+        if (storeId <= 0)
+            throw new Exception("StoreId is required.");
 
         var trimmedKeyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim();
 
@@ -387,7 +387,7 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             join agentAssistant in _repository.QueryNoTracking<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             join knowledge in _repository.QueryNoTracking<AiSpeechAssistantKnowledge>() on assistant.Id equals knowledge.AssistantId
-            where store.CompanyId == companyId && knowledge.IsActive
+            where store.Id == storeId && knowledge.IsActive
             select new AgentKnowledgeDto
             {
                 StoreId = store.Id,
