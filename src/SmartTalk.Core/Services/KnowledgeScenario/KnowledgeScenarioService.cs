@@ -12,7 +12,6 @@ using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
@@ -663,6 +662,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     public async Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken)
     {
         if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges SceneId is required.");
+        if (request.StoreId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges StoreId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
 
@@ -670,7 +670,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             throw new Exception($"GetKnowledgeSceneRelatedKnowledges Scene [{request.SceneId}] does not exist.");
 
         var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
-        var data = await BuildRelatedAssistantIdsAsync(relations, cancellationToken);
+        var data = await BuildRelatedAssistantIdsByStoreAsync(relations, request.StoreId, cancellationToken).ConfigureAwait(false);
         Log.Information("GetKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, RelationCount={RelationCount}, ActiveKnowledgeCount={KnowledgeCount}",
             request.SceneId, relations.Count, data.Count);
   
@@ -937,21 +937,20 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         };
     }
 
-    private async Task<List<int>> BuildRelatedAssistantIdsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, CancellationToken cancellationToken)
+    private async Task<List<int>> BuildRelatedAssistantIdsByStoreAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, int storeId, CancellationToken cancellationToken)
     {
-        if (relations == null || !relations.Any())
+        if (relations == null || relations.Count == 0)
             return new List<int>();
 
-        var knowledgeIds = relations.Select(x => x.KnowledgeId).ToList();
+        var storeAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken).ConfigureAwait(false);
+        var storeAssistantIdSet = storeAssistants.Select(x => x.Id).ToHashSet();
+        if (storeAssistantIdSet.Count == 0)
+            return new List<int>();
 
-        var knowledgeList = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeIds, cancellationToken);
+        var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
+        var knowledgeList = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
 
-        var assistantIds = knowledgeList
-            .Select(k => k.AssistantId)
-            .Distinct()
-            .ToList();
-
-        return assistantIds;
+        return knowledgeList.Where(k => storeAssistantIdSet.Contains(k.AssistantId)).Select(k => k.AssistantId).Distinct().ToList();
     }
 
     private async Task<string> GetNextSceneVersionAsync(int sceneId, string currentVersion, CancellationToken cancellationToken)
