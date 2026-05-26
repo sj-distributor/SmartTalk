@@ -683,25 +683,37 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     public async Task<SaveKnowledgeSceneRelatedKnowledgesResponse> SaveKnowledgeSceneRelatedKnowledgesAsync(SaveKnowledgeSceneRelatedKnowledgesCommand command, CancellationToken cancellationToken)
     {
         if (command.SceneId <= 0) throw new Exception("SaveKnowledgeSceneRelatedKnowledges SceneId is required.");
+        if (command.StoreId <= 0) throw new Exception("SaveKnowledgeSceneRelatedKnowledges StoreId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
 
         if (scene == null)
             throw new Exception($"SaveKnowledgeSceneRelatedKnowledges Scene [{command.SceneId}] does not exist.");
 
-        var targetAssistantIds = (command.AssistantIds ?? []).Where(x => x > 0).Distinct().ToList();
-        var activeKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(targetAssistantIds, cancellationToken).ConfigureAwait(false);
-        var targetKnowledgeIds = activeKnowledges.Select(x => x.Id).Distinct().ToList();
+        var storeAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(command.StoreId, cancellationToken).ConfigureAwait(false);
+        var storeAssistantIdSet = storeAssistants.Select(x => x.Id).ToHashSet();
+
+        var targetAssistantIdSet = (command.AssistantIds ?? []).Where(x => x > 0).ToHashSet();
+        var invalidAssistantIds = targetAssistantIdSet.Where(x => !storeAssistantIdSet.Contains(x)).ToList();
+        if (invalidAssistantIds.Count != 0)
+            throw new Exception($"SaveKnowledgeSceneRelatedKnowledges Assistants [{string.Join(", ", invalidAssistantIds)}] do not belong to Store [{command.StoreId}].");
         
+        var storeKnowledges = storeAssistantIdSet.Count == 0 ? [] : await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(storeAssistantIdSet.ToList(), cancellationToken).ConfigureAwait(false);
+        var storeKnowledgeIdSet = storeKnowledges.Select(x => x.Id).ToHashSet();
+
+        var targetKnowledgeIds = storeKnowledges.Where(k => targetAssistantIdSet.Contains(k.AssistantId)).Select(k => k.Id).Distinct().ToList();
+
         var currentRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
-        var currentKnowledgeIds = currentRelations.Select(x => x.KnowledgeId).Distinct().ToHashSet();
+        var currentStoreRelations = currentRelations.Where(x => storeKnowledgeIdSet.Contains(x.KnowledgeId)).ToList();
+
+        var currentKnowledgeIdSet = currentStoreRelations.Select(x => x.KnowledgeId).ToHashSet();
         var targetKnowledgeIdSet = targetKnowledgeIds.ToHashSet();
 
-        var relationsToDelete = currentRelations.Where(x => !targetKnowledgeIdSet.Contains(x.KnowledgeId)).ToList();
-        var knowledgeIdsToAdd = targetKnowledgeIds.Where(x => !currentKnowledgeIds.Contains(x)).ToList(); 
+        var relationsToDelete = currentStoreRelations.Where(x => !targetKnowledgeIdSet.Contains(x.KnowledgeId)).ToList();
+        var knowledgeIdsToAdd = targetKnowledgeIds.Where(x => !currentKnowledgeIdSet.Contains(x)).ToList();
         
-        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync diff built. SceneId={SceneId}, CurrentCount={CurrentCount}, TargetCount={TargetCount}, DeleteCount={DeleteCount}, AddCount={AddCount}",
-            command.SceneId, currentKnowledgeIds.Count, targetKnowledgeIds.Count, relationsToDelete.Count, knowledgeIdsToAdd.Count);
+        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync diff built. SceneId={SceneId}, StoreId={StoreId}, CurrentStoreCount={CurrentCount}, TargetCount={TargetCount}, DeleteCount={DeleteCount}, AddCount={AddCount}",
+            command.SceneId, command.StoreId, currentKnowledgeIdSet.Count, targetKnowledgeIds.Count, relationsToDelete.Count, knowledgeIdsToAdd.Count);
 
         if (relationsToDelete.Count != 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToDelete, true, cancellationToken).ConfigureAwait(false);
@@ -717,7 +729,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToAdd, true, cancellationToken).ConfigureAwait(false);
         }
 
-        var affectedKnowledgeIds = currentKnowledgeIds.Union(targetKnowledgeIdSet).ToList();
+        var affectedKnowledgeIds = currentKnowledgeIdSet.Union(targetKnowledgeIdSet).ToList();
 
         if (affectedKnowledgeIds.Count != 0)
         {
@@ -726,12 +738,12 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         }
 
         var latestRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
-        var data = latestRelations.OrderByDescending(x => x.CreatedAt).Select(x => x.KnowledgeId).ToList();
-        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, SavedKnowledgeCount={KnowledgeCount}", command.SceneId, data.Count);
+        var latestStoreKnowledgeIds = latestRelations.Where(x => storeKnowledgeIdSet.Contains(x.KnowledgeId)).OrderByDescending(x => x.CreatedAt).Select(x => x.KnowledgeId).ToList();
+        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, StoreId={StoreId}, SavedKnowledgeCount={KnowledgeCount}", command.SceneId, command.StoreId, latestStoreKnowledgeIds.Count);
 
         return new SaveKnowledgeSceneRelatedKnowledgesResponse
         {
-            Data = data
+            Data = latestStoreKnowledgeIds
         };
     }
 
