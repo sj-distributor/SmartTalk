@@ -73,6 +73,37 @@ public class InactivityTimerManagerTests : IDisposable
         secondTcs.Task.IsCompleted.ShouldBeTrue();
         firstCallbackInvoked.ShouldBeFalse();
     }
+    
+    [Fact]
+    public async Task StartTimer_OldTimerFinishes_ShouldNotRemoveOrphanNewTimer()
+    {
+        var firstStarted = new TaskCompletionSource<bool>();
+        var releaseFirst = new TaskCompletionSource<bool>();
+        var secondCallbackInvoked = false;
+
+        _sut.StartTimer(SessionId, TimeSpan.FromMilliseconds(20), async () =>
+        {
+            firstStarted.TrySetResult(true);
+            await releaseFirst.Task;
+        });
+
+        var firstStartedTask = await Task.WhenAny(firstStarted.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+        firstStartedTask.ShouldBe(firstStarted.Task, "First callback should start");
+
+        _sut.StartTimer(SessionId, TimeSpan.FromMilliseconds(120), () =>
+        {
+            secondCallbackInvoked = true;
+            return Task.CompletedTask;
+        });
+
+        releaseFirst.TrySetResult(true);
+        await Task.Delay(50);
+
+        _sut.StopTimer(SessionId);
+        await Task.Delay(180);
+
+        secondCallbackInvoked.ShouldBeFalse("Second timer should remain cancellable after old timer finishes");
+    }
 
     [Fact]
     public async Task StartTimer_MultipleSessions_ShouldWorkIndependently()
