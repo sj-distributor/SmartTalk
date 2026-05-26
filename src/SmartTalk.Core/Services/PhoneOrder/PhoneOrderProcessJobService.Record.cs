@@ -483,14 +483,23 @@ public partial class PhoneOrderProcessJobService
                                   9. If Chinese was transcribed as pinyin, rewrite it into proper Chinese characters.
                                   10. If a product name is clearly inconsistent, duplicated incorrectly, or does not make sense in context, rewrite it to the most plausible product mentioned elsewhere in the transcript or report.
                                   11. Do not translate fluent English into Chinese. Only normalize obvious pinyin-Chinese or transcription errors.
-                                  12. Do not invent new products, quantities, prices, addresses, or requests that are not supported by the transcript or report.
-                                  13. If something is uncertain, keep the original wording instead of guessing.
-                                  14. Return valid JSON only.
+                                  12. When the opening greeting is the standard service-side phrase like "你好，这里是OME，请问有什么可以帮到你？", normalize the brand name to "OME". Variants like "omi", "lme" and other similar mistakes should be corrected to "OME" when the context clearly indicates the same greeting.
+                                  13. Preserve all spoken content. Do not compress, summarize, merge away, or simplify repeated wording. If a sentence repeats part of itself, keep the repetition in the cleaned transcript.
+                                  14. Do not merge adjacent repeated clauses.
+                                  15. Do not delete spoken repetition or filler repetition if it was actually said.
+                                  16. Do not compress two similar or near-duplicate spoken sentences into one sentence.
+                                  17. Do not invent, infer, or supplement customer utterances that are not actually supported by the transcript or report. The principle is: do not miss content, and do not add content.
+                                  18. Do not invent new products, quantities, prices, addresses, or requests that are not supported by the transcript or report.
+                                  19. If something is uncertain, keep the original wording instead of guessing.
+                                  20. Return valid JSON only.
 
                                   Example corrections:
                                   - "一香鸡腿肉" can become "一箱鸡胸肉" if the full call context clearly supports it.
                                   - "Bao qian, wo zhe bian mei you ji xiong rou de chi cun zi xun." should become "抱歉，我这边没有鸡胸肉的尺寸资讯。"
                                   - If the transcript contains both "流通果" and "牛筒骨" and context shows they refer to the same requested item, normalize them to "牛筒骨".
+                                  - "你好，这里是omi，请问有什么可以帮到你？" should become "你好，这里是OME，请问有什么可以帮到你？" when it is clearly the standard opening greeting.
+                                  - "最近厨房说我们餐厅的工作量有点大，最近厨房说虾处理起来太花时间了。" must keep both clauses fully, and must not be simplified into a shorter summary.
+                                  - Do not add extra customer wording that was not actually spoken, even if you think it would make the dialogue sound more complete.
                                   """),
             new UserChatMessage(
                 "Diarized turns JSON:\n" +
