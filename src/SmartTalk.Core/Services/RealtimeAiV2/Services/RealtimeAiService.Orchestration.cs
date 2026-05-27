@@ -67,11 +67,8 @@ public partial class RealtimeAiService
         {
             var parsed = _ctx.ClientAdapter.ParseMessage(rawMessage);
 
-            // Twilio populates this on every media frame; web / default clients leave it
-            // null and we keep whatever value the previous Twilio frame deposited. The
-            // value drives Phase 10.3's audio_end_ms truncate calculation, so updating
-            // before the dispatch switch is intentional — even messages we don't act on
-            // (e.g. video frames) advance the stream clock.
+            // Advance the stream clock for every frame that carries a timestamp, including
+            // those we don't dispatch (e.g. video).
             if (parsed.Timestamp.HasValue)
                 _ctx.LatestMediaTimestamp = parsed.Timestamp.Value;
 

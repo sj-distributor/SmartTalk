@@ -6,18 +6,10 @@ using Xunit;
 namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 /// <summary>
-/// Pins that the Twilio client adapter surfaces <c>media.timestamp</c> on
-/// <see cref="SmartTalk.Core.Services.RealtimeAiV2.Adapters.ParsedClientMessage.Timestamp"/>.
-///
-/// <para>
-/// Phase 10.3 will use the running <c>_ctx.LatestMediaTimestamp</c> minus the per-turn
-/// <c>_ctx.ResponseStartTimestampTwilio</c> snapshot to compute <c>audio_end_ms</c> for
-/// the OpenAI <c>conversation.item.truncate</c> sent at user barge-in time. If the
-/// adapter ever stopped extracting <c>media.timestamp</c>, barge-in would still fire
-/// (the Twilio <c>clear</c> event already stops playback), but the conversation
-/// history sent to OpenAI for the next turn would carry the un-truncated assistant
-/// utterance and confuse subsequent prompt context.
-/// </para>
+/// Pins that the Twilio adapter surfaces <c>media.timestamp</c> on
+/// <see cref="ParsedClientMessage.Timestamp"/> — the input to the barge-in elapsed-time
+/// calculation. Losing this field would silently un-truncate OpenAI's conversation
+/// history.
 /// </summary>
 public class TwilioRealtimeAiClientAdapterMediaTimestampTests
 {
@@ -26,8 +18,7 @@ public class TwilioRealtimeAiClientAdapterMediaTimestampTests
     [Fact]
     public void ParseMessage_MediaWithStringTimestamp_PopulatesTimestamp()
     {
-        // Canonical Twilio shape per Media Streams docs: timestamp is a string of
-        // milliseconds since the stream started.
+        // Canonical Twilio shape: timestamp is a string of ms since stream start.
         const string raw = """
             {
               "event": "media",
@@ -45,9 +36,7 @@ public class TwilioRealtimeAiClientAdapterMediaTimestampTests
     [Fact]
     public void ParseMessage_MediaWithNumericTimestamp_PopulatesTimestamp()
     {
-        // Real-world payloads occasionally surface the numeric form (older preview
-        // snapshots, future protocol revisions). Accept both rather than silently
-        // dropping one variant — the audio payload is too critical to lose.
+        // Numeric form occasionally appears in real payloads — accept it as well as the doc'd string form.
         const string raw = """
             {
               "event": "media",
@@ -65,8 +54,7 @@ public class TwilioRealtimeAiClientAdapterMediaTimestampTests
     [Fact]
     public void ParseMessage_MediaWithoutTimestamp_LeavesTimestampNull()
     {
-        // Some Twilio snapshots / connect-flow setups don't include timestamp.
-        // The adapter must not synthesise one (would break Phase 10.3 elapsed math).
+        // Adapter must not synthesise a timestamp when absent — would break elapsed math.
         const string raw = """
             {
               "event": "media",
@@ -84,8 +72,7 @@ public class TwilioRealtimeAiClientAdapterMediaTimestampTests
     [Fact]
     public void ParseMessage_MediaWithNonNumericStringTimestamp_LeavesTimestampNull()
     {
-        // Malformed timestamp string must not drop the audio frame. The payload is
-        // delivered (Type = Audio, Payload is populated); only Timestamp is null.
+        // Malformed timestamp must not drop the audio frame — payload is delivered, only Timestamp is null.
         const string raw = """
             {
               "event": "media",
@@ -104,9 +91,7 @@ public class TwilioRealtimeAiClientAdapterMediaTimestampTests
     [Fact]
     public void ParseMessage_StartEvent_LeavesTimestampNull()
     {
-        // Lifecycle events don't carry timestamp; the field must stay null so the
-        // service doesn't accidentally clobber LatestMediaTimestamp with zero between
-        // genuine media frames.
+        // Lifecycle events have no timestamp — must stay null so they don't clobber the running clock.
         const string raw = """
             {
               "event": "start",
@@ -123,8 +108,7 @@ public class TwilioRealtimeAiClientAdapterMediaTimestampTests
     [Fact]
     public void ParseMessage_VideoMediaWithTimestamp_PopulatesTimestamp()
     {
-        // Image frames also advance the stream clock. They go to a different handler
-        // but must still update LatestMediaTimestamp via the parser surface.
+        // Video frames advance the stream clock too — different handler, same parser surface.
         const string raw = """
             {
               "event": "media",

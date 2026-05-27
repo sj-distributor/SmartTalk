@@ -18,11 +18,8 @@ public class ParsedClientMessage
     public Dictionary<string, string> Metadata { get; set; }
 
     /// <summary>
-    /// Optional millisecond timestamp the client emitted alongside this message.
-    /// Currently populated only by <see cref="Clients.Twilio.TwilioRealtimeAiClientAdapter"/>
-    /// from the <c>media.timestamp</c> field; web / default clients leave it null.
-    /// Phase 10.3 reads this on user-speech-detected to compute the OpenAI
-    /// <c>conversation.item.truncate audio_end_ms</c> for the in-flight assistant turn.
+    /// Optional millisecond timestamp from the client. Populated by Twilio from
+    /// <c>media.timestamp</c>; web / default clients leave it null.
     /// </summary>
     public long? Timestamp { get; set; }
 }

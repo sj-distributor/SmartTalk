@@ -230,13 +230,6 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return JsonSerializer.Serialize(message);
     }
     
-    /// <summary>
-    /// Builds the OpenAI GA <c>conversation.item.truncate</c> event. Per the GA contract
-    /// this truncates the assistant message's audio in OpenAI's conversation history at
-    /// the given offset so subsequent turns reference only what the user actually heard.
-    /// Returns null when <paramref name="itemId"/> is missing — sending the event without
-    /// an item id would be rejected by the GA server.
-    /// </summary>
     public string BuildTruncateMessage(string itemId, long audioEndMs)
     {
         if (string.IsNullOrEmpty(itemId))
@@ -250,9 +243,6 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
             type = "conversation.item.truncate",
             item_id = itemId,
             content_index = 0,
-            // OpenAI rejects negative offsets; the service-side caller already clamps via
-            // Math.Max(0, ...) but we guard here too so a faulty consumer cannot ship a
-            // bad payload.
             audio_end_ms = Math.Max(0L, audioEndMs)
         });
     }
