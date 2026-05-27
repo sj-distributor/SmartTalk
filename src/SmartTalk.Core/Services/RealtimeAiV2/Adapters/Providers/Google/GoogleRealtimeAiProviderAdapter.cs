@@ -99,21 +99,14 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return JsonSerializer.Serialize(message);
     }
     
-    public object BuildInterruptMessage(string lastAssistantItemIdToInterrupt)
-    {
-        if (!string.IsNullOrEmpty(lastAssistantItemIdToInterrupt))
-        {
-            var message = new
-            {
-                type = "conversation.interrupt",
-                item_id_to_interrupt = lastAssistantItemIdToInterrupt
-            };
-            return message;
-        }
-
-        Log.Warning("[RealtimeAi] Cannot build interrupt message, missing item ID");
-        return null;
-    }
+    /// <summary>
+    /// Google's Live API relies on its own server-side VAD to handle user barge-in;
+    /// there is no client-sent equivalent of OpenAI's <c>conversation.item.truncate</c>.
+    /// Returns null so the V2 service skips <c>SendToProviderAsync</c> without warning,
+    /// while still letting Twilio receive the <c>clear</c> frame that actually stops
+    /// playback. The signature is preserved for cross-provider symmetry with OpenAI.
+    /// </summary>
+    public string BuildTruncateMessage(string itemId, long audioEndMs) => null;
 
     public string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output)
     {

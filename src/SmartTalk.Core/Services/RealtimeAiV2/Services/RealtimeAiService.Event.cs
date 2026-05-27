@@ -128,7 +128,55 @@ public partial class RealtimeAiService
         if (_ctx.Options.IdleFollowUp != null)
             _inactivityTimerManager.StopTimer(_ctx.SessionId);
 
+        // Client `clear` frame goes FIRST — it's the time-critical signal that the
+        // user is waiting on (stops Twilio playback the user can still hear). The
+        // provider truncate is a history-correction follow-up that doesn't affect
+        // what the user perceives in the moment.
         await SendToClientAsync(_ctx.ClientAdapter.BuildSpeechDetectedMessage(_ctx.SessionId)).ConfigureAwait(false);
+
+        // Phase 10.3 barge-in: tell the provider exactly where the user heard the AI
+        // cut off so the conversation history reflects only what the user actually
+        // experienced. Skipped silently when any of the tracking values is missing
+        // (cold session, web client without timestamps, etc.).
+        await SendBargeInTruncateIfApplicableAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds and sends a provider truncate event when all three tracking values are
+    /// populated:
+    /// <list type="bullet">
+    ///   <item><see cref="RealtimeAiSessionContext.LastAssistantItemId"/> (Phase 10.1)</item>
+    ///   <item><see cref="RealtimeAiSessionContext.LatestMediaTimestamp"/> (Phase 10.2 running clock)</item>
+    ///   <item><see cref="RealtimeAiSessionContext.ResponseStartTimestampTwilio"/> (Phase 10.2 per-turn anchor)</item>
+    /// </list>
+    /// If any is missing, skip silently — the existing Twilio <c>clear</c> frame still
+    /// stops playback immediately; we just lose the OpenAI history precision (an
+    /// acceptable degraded mode). After sending, the interrupt window for this turn
+    /// is consumed; clear the per-turn fields so a subsequent speech-detected event
+    /// can't re-truncate the same already-truncated item (which OpenAI would reject).
+    /// <see cref="RealtimeAiSessionContext.LatestMediaTimestamp"/> deliberately keeps
+    /// its value because it's the running stream clock.
+    /// </summary>
+    private async Task SendBargeInTruncateIfApplicableAsync()
+    {
+        var itemId = _ctx.LastAssistantItemId;
+        var clock = _ctx.LatestMediaTimestamp;
+        var anchor = _ctx.ResponseStartTimestampTwilio;
+
+        if (string.IsNullOrEmpty(itemId) || !clock.HasValue || !anchor.HasValue) return;
+
+        var elapsedMs = Math.Max(0L, clock.Value - anchor.Value);
+
+        var truncateMessage = _ctx.ProviderAdapter.BuildTruncateMessage(itemId, elapsedMs);
+
+        if (truncateMessage != null)
+        {
+            await SendToProviderAsync(truncateMessage).ConfigureAwait(false);
+            Log.Information("[RealtimeAi] Barge-in truncate sent, SessionId: {SessionId}, ItemId: {ItemId}, AudioEndMs: {AudioEndMs}", _ctx.SessionId, itemId, elapsedMs);
+        }
+
+        _ctx.LastAssistantItemId = null;
+        _ctx.ResponseStartTimestampTwilio = null;
     }
 
     private async Task OnAiTurnCompletedAsync()
