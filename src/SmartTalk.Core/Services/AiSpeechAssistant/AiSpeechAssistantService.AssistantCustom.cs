@@ -1574,6 +1574,13 @@ public partial class AiSpeechAssistantService
         }
         
         await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, command.IsSyncUpdate, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
+        
+        var oldToNewKnowledgeIdMap = new Dictionary<int, int>();
+        for (var i = 0; i < effectiveCopyToKnowledges.Count && i < newCopeToKnowledges.Count; i++) oldToNewKnowledgeIdMap[effectiveCopyToKnowledges[i].Id] = newCopeToKnowledges[i].Id;
+
+        await MigrateKnowledgeSceneRelationsAsync(oldToNewKnowledgeIdMap, cancellationToken).ConfigureAwait(false);
+        if (oldToNewKnowledgeIdMap.Count != 0)
+            await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(oldToNewKnowledgeIdMap.Values.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
 
         var knowledgeOldJsons = BuildKnowledgeOldJsons(copyToKnowledges, relatedLookup);
         
