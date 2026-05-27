@@ -73,7 +73,7 @@ public class InactivityTimerManagerTests : IDisposable
         secondTcs.Task.IsCompleted.ShouldBeTrue();
         firstCallbackInvoked.ShouldBeFalse();
     }
-
+    
     [Fact]
     public async Task StartTimer_OldTimerFinishes_ShouldNotRemoveOrphanNewTimer()
     {
@@ -130,6 +130,91 @@ public class InactivityTimerManagerTests : IDisposable
 
         tcs1.Task.IsCompleted.ShouldBeFalse("Stopped session should not fire");
         tcs2.Task.IsCompleted.ShouldBeTrue("Other session should fire independently");
+    }
+
+    [Fact]
+    public async Task StartTimer_PreviousTimerFinally_ShouldNotRemoveNewTimer()
+    {
+        var firstCallbackStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstCallback = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondCallbackInvoked = false;
+
+        _sut.StartTimer(SessionId, TimeSpan.FromMilliseconds(20), async () =>
+        {
+            firstCallbackStarted.TrySetResult(true);
+            await releaseFirstCallback.Task.ConfigureAwait(false);
+        });
+
+        var firstStarted = await Task.WhenAny(firstCallbackStarted.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+        firstStarted.ShouldBe(firstCallbackStarted.Task, "First callback should start");
+
+        _sut.StartTimer(SessionId, TimeSpan.FromSeconds(5), () =>
+        {
+            secondCallbackInvoked = true;
+            return Task.CompletedTask;
+        });
+
+        releaseFirstCallback.TrySetResult(true);
+        await Task.Delay(100); // Allow previous timer finally block to execute
+
+        _sut.IsTimerRunning(SessionId).ShouldBeTrue("New timer should remain registered");
+
+        _sut.StopTimer(SessionId);
+        await Task.Delay(100);
+
+        secondCallbackInvoked.ShouldBeFalse("Stopped replacement timer should not fire");
+    }
+
+    [Fact]
+    public async Task StartTimer_RapidSequentialStartStopCycles_NoSpuriousCallback()
+    {
+        // Real-world production pattern: every AI turn completion calls StartTimer; every
+        // user-speech-detected event calls StopTimer; conversation oscillates rapidly.
+        //
+        // Background (the bug this fix protects against): each StopTimer cancels the entry's
+        // CTS, the cancelled RunTimerAsync hits its finally block which (pre-fix) did
+        // unconditional `_timers.TryRemove(sessionId)`. If a new StartTimer raced in between
+        // the StopTimer and the cancelled finally, the finally clobbered the *new* timer's
+        // dict registration. The new timer's Task.Delay then ran with a never-cancelled CTS,
+        // IsTimerRunning returned false (so subsequent StopTimer calls became no-ops for it),
+        // and after timeout the callback fired — in production scheduling a Hangfire
+        // HangupCallAsync job and disconnecting the user mid-conversation.
+        //
+        // Post-fix: the finally uses ICollection.Remove with key+value match, so an old
+        // cancelled timer's finally cannot clobber a new timer's registration.
+        //
+        // What THIS test pins: the broader invariant — under rapid Start/Stop pairing
+        // (the production AI-turn / user-speech alternation), NO callback should ever
+        // fire and the dict must end up empty. It catches a class of regressions:
+        // StopTimer failing to cancel its CTS, StartTimer failing to replace the old
+        // entry, leaked entries from any future race. It does NOT, on its own,
+        // deterministically reproduce the specific finally-vs-StartTimer race window
+        // — tight synchronous loops let each cancelled finally complete before the
+        // next iteration adds a fresh entry, so the racy clobber rarely lands.
+        //
+        // The deterministic regression guard for the specific race is
+        // `StartTimer_PreviousTimerFinally_ShouldNotRemoveNewTimer` above, which uses
+        // TaskCompletionSource-controlled callback blocking to interleave a second
+        // StartTimer with a still-suspended finally and asserts the new entry survives.
+
+        var callbackCount = 0;
+
+        for (var i = 0; i < 50; i++)
+        {
+            _sut.StartTimer(SessionId, TimeSpan.FromMilliseconds(20), () =>
+            {
+                Interlocked.Increment(ref callbackCount);
+                return Task.CompletedTask;
+            });
+            _sut.StopTimer(SessionId);
+        }
+
+        // Wait far longer than the 20ms timeout. Any leaked / un-cancelled entry would
+        // have fired its callback by now. With the fix this stays at zero.
+        await Task.Delay(500);
+
+        callbackCount.ShouldBe(0, "No callback should fire when every StartTimer is followed by StopTimer, no matter how rapid the cycles");
+        _sut.IsTimerRunning(SessionId).ShouldBeFalse("Dict must be empty after the final StopTimer");
     }
 
     [Fact]

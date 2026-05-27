@@ -67,11 +67,11 @@ public class InactivityTimerManager : IInactivityTimerManager
         try
         {
             await Task.Delay(entry.Timeout, entry.Cts.Token).ConfigureAwait(false);
-
+            
             // The timer may have been replaced for the same sessionId while this task
             // was waiting. Only the current active entry is allowed to invoke callback.
             if (!_timers.TryGetValue(sessionId, out var activeEntry) || !ReferenceEquals(activeEntry, entry)) return;
-
+            
             await entry.OnTimeout().ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
