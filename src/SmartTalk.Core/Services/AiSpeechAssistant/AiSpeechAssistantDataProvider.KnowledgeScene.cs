@@ -1,13 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
+using SmartTalk.Core.Domain.Pos;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
 public partial interface IAiSpeechAssistantDataProvider
 {
-    Task<KnowledgeScene> GetKnowledgeSceneByIdAsync(int id, CancellationToken cancellationToken = default);
-
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsAsync(int knowledgeId, CancellationToken cancellationToken = default);
 
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
@@ -16,26 +15,19 @@ public partial interface IAiSpeechAssistantDataProvider
 
     Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
 
-    Task AddAiSpeechAssistantKnowledgeSceneRelationAsync(AiSpeechAssistantKnowledgeSceneRelation relation, bool forceSave = true, CancellationToken cancellationToken = default);
-
     Task AddAiSpeechAssistantKnowledgeSceneRelationsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task DeleteAiSpeechAssistantKnowledgeSceneRelationAsync(AiSpeechAssistantKnowledgeSceneRelation relation, bool forceSave = true, CancellationToken cancellationToken = default);
-
     Task DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetStoreKnowledgeSceneRelationsBySceneIdAsync(int storeId, int sceneId, CancellationToken cancellationToken = default);
+
+    Task<List<int>> GetStoreActiveKnowledgeIdsByAssistantIdsAsync(int storeId, List<int> assistantIds, CancellationToken cancellationToken = default);
 
     Task<List<KnowledgeScene>> GetKnowledgeScenesByIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider
 {
-    public async Task<KnowledgeScene> GetKnowledgeSceneByIdAsync(int id, CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<KnowledgeScene>()
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
     public async Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetAiSpeechAssistantKnowledgeSceneRelationsAsync(int knowledgeId, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
@@ -77,14 +69,6 @@ public partial class AiSpeechAssistantDataProvider
             .ConfigureAwait(false);
     }
 
-    public async Task AddAiSpeechAssistantKnowledgeSceneRelationAsync(AiSpeechAssistantKnowledgeSceneRelation relation, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.InsertAsync(relation, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task AddAiSpeechAssistantKnowledgeSceneRelationsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         if (relations.Count != 0)
@@ -93,15 +77,7 @@ public partial class AiSpeechAssistantDataProvider
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    public async Task DeleteAiSpeechAssistantKnowledgeSceneRelationAsync(AiSpeechAssistantKnowledgeSceneRelation relation, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.DeleteAsync(relation, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
+    
     public async Task DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         if (relations.Count != 0)
@@ -109,6 +85,33 @@ public partial class AiSpeechAssistantDataProvider
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeSceneRelation>> GetStoreKnowledgeSceneRelationsBySceneIdAsync(int storeId, int sceneId, CancellationToken cancellationToken = default)
+    {
+        var query =
+            from relation in _repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
+            join knowledge in _repository.Query<AiSpeechAssistantKnowledge>() on relation.KnowledgeId equals knowledge.Id
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on knowledge.AssistantId equals assistant.Id
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId
+            join posAgent in _repository.Query<PosAgent>() on agentAssistant.AgentId equals posAgent.AgentId
+            where relation.SceneId == sceneId && posAgent.StoreId == storeId
+            select relation;
+
+        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetStoreActiveKnowledgeIdsByAssistantIdsAsync(int storeId, List<int> assistantIds, CancellationToken cancellationToken = default)
+    {
+        var query =
+            from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId
+            join posAgent in _repository.Query<PosAgent>() on agentAssistant.AgentId equals posAgent.AgentId
+            join knowledge in _repository.Query<AiSpeechAssistantKnowledge>() on assistant.Id equals knowledge.AssistantId
+            where posAgent.StoreId == storeId && assistantIds.Contains(assistant.Id) && knowledge.IsActive
+            select knowledge.Id;
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<KnowledgeScene>> GetKnowledgeScenesByIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default)
