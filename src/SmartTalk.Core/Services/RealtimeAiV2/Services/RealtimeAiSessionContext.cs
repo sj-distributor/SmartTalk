@@ -41,6 +41,27 @@ public class RealtimeAiSessionContext
     /// </summary>
     public string LastAssistantItemId { get; set; }
 
+    /// <summary>
+    /// Most recent <c>media.timestamp</c> (ms since stream start) parsed from a
+    /// client-direction media frame. Twilio populates this on every incoming
+    /// audio chunk; web / default clients leave it null because they have no
+    /// equivalent timing signal. Phase 10.3 subtracts <see cref="ResponseStartTimestampTwilio"/>
+    /// from this value to compute <c>audio_end_ms</c> for the OpenAI
+    /// <c>conversation.item.truncate</c> sent at user barge-in time.
+    /// Phase 10.2 wires the tracking; today no consumer reads it.
+    /// </summary>
+    public long? LatestMediaTimestamp { get; set; }
+
+    /// <summary>
+    /// The <see cref="LatestMediaTimestamp"/> snapshot taken on the FIRST
+    /// <c>ResponseAudioDelta</c> of the current AI turn — i.e. the stream-time
+    /// at which the AI started speaking this turn. Set lazily (only when null)
+    /// to capture the first delta; cleared by <c>OnAiTurnCompletedAsync</c>
+    /// alongside <see cref="LastAssistantItemId"/>. <c>null</c> between turns
+    /// and for non-Twilio clients.
+    /// </summary>
+    public long? ResponseStartTimestampTwilio { get; set; }
+
     // Recording — buffer encapsulates the previous (MemoryStream + SemaphoreSlim)
     // pair behind a single interface; PR 3.2 will swap implementations via env var.
     public IRecordingBuffer AudioBuffer { get; set; }
