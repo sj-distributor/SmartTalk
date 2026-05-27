@@ -30,6 +30,17 @@ public class RealtimeAiSessionContext
     public bool IsProviderResponseInProgress;
     public bool HasPendingProviderResponseTrigger;
 
+    /// <summary>
+    /// The provider <c>item_id</c> of the AI's current in-flight assistant turn,
+    /// captured from every <see cref="Messages.Enums.RealtimeAi.RealtimeAiWssEventType.ResponseAudioDelta"/>
+    /// that carries one. Phase 10.3 will read this to build the OpenAI
+    /// <c>conversation.interrupt</c> message at user-barge-in time. <c>null</c>
+    /// between turns (cleared by <c>OnAiTurnCompletedAsync</c>) so a stale id
+    /// from a previous turn cannot be sent on the next interrupt opportunity.
+    /// Phase 10.1 wires the tracking; today no consumer reads it.
+    /// </summary>
+    public string LastAssistantItemId { get; set; }
+
     // Recording — buffer encapsulates the previous (MemoryStream + SemaphoreSlim)
     // pair behind a single interface; PR 3.2 will swap implementations via env var.
     public IRecordingBuffer AudioBuffer { get; set; }

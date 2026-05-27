@@ -101,6 +101,13 @@ public partial class RealtimeAiService
 
         _ctx.IsAiSpeaking = true;
 
+        // Track the latest assistant item_id for Phase 10.3 barge-in. Adapter populates
+        // this on every OpenAI response.output_audio.delta; Google adapter leaves it null
+        // (Google's protocol does not surface a per-delta id). Either way, an empty value
+        // must not clobber a previously-tracked id from earlier in the same turn.
+        if (!string.IsNullOrEmpty(aiAudioData.ItemId))
+            _ctx.LastAssistantItemId = aiAudioData.ItemId;
+
         var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
         await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
@@ -122,6 +129,10 @@ public partial class RealtimeAiService
 
         _ctx.Round += 1;
         _ctx.IsAiSpeaking = false;
+
+        // The interrupt window for this turn has closed; clear so the next user-barge-in
+        // opportunity (Phase 10.3) can't send a stale id that the provider would reject.
+        _ctx.LastAssistantItemId = null;
 
         var idleFollowUp = _ctx.Options.IdleFollowUp;
 
