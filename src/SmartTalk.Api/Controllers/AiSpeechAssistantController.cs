@@ -175,6 +175,7 @@ public class AiSpeechAssistantController : ControllerBase
 
         return Ok(response);
     }
+
     
     [Route("assistant/update"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantResponse))]

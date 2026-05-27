@@ -1,7 +1,7 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
 
@@ -17,6 +17,7 @@ public class AiSpeechAssistantMapping : Profile
 
         CreateMap<AddAiSpeechAssistantKnowledgeCommand, AiSpeechAssistantKnowledge>();
         CreateMap<AiSpeechAssistantKnowledge, AiSpeechAssistantKnowledgeDto>().ReverseMap();
+        CreateMap<AiSpeechAssistantKnowledgeSceneRelation, AiSpeechAssistantKnowledgeSceneRelationDto>();
         CreateMap<NumberPool, NumberPoolDto>().ReverseMap();
 
         CreateMap<UpdateAiSpeechAssistantCommand, AiSpeechAssistant>()
