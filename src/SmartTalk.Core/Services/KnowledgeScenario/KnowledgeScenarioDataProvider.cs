@@ -5,6 +5,7 @@ using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
 
@@ -46,6 +47,10 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task UpdateKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task DeleteKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeleteKnowledgeSceneHistoryItemsAsync(List<KnowledgeSceneHistoryItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
+
     Task DeleteKnowledgeScenesAsync(List<KnowledgeScene> scenes, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneAndNamesAsync(int sceneId, List<string> names, CancellationToken cancellationToken = default);
@@ -54,15 +59,19 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
 
-    Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(List<int> sceneIds = null, int? companyId = null, bool? isApplied = null, CancellationToken cancellationToken = default);
+    Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(List<int> sceneIds = null, int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default);
 
     Task<KnowledgeSceneCompany> GetKnowledgeSceneCompanyAsync(int sceneId, int companyId, CancellationToken cancellationToken = default);
+
+    Task<KnowledgeSceneCompany> GetKnowledgeSceneCompanyStoreAsync(int sceneId, int storeId, CancellationToken cancellationToken = default);
+
+    Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompanyStoreApplicationsAsync(int companyId, int storeId, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task DeleteKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default);
+    Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int storeId, string keyword, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -245,6 +254,24 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task DeleteKnowledgeSceneHistoriesAsync(List<KnowledgeSceneHistory> histories, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (histories.Count != 0)
+            await _repository.DeleteAllAsync(histories, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteKnowledgeSceneHistoryItemsAsync(List<KnowledgeSceneHistoryItem> items, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (items.Count != 0)
+            await _repository.DeleteAllAsync(items, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task DeleteKnowledgeScenesAsync(List<KnowledgeScene> scenes, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         if (scenes.Count != 0)
@@ -285,7 +312,7 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         return await _repository.Query<KnowledgeSceneItem>().Where(x => sceneIds.Contains(x.SceneId)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(List<int> sceneIds = null, int? companyId = null, bool? isApplied = null, CancellationToken cancellationToken = default)
+    public async Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(List<int> sceneIds = null, int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<KnowledgeSceneCompany>();
 
@@ -295,8 +322,14 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         if (companyId.HasValue)
             query = query.Where(x => x.CompanyId == companyId.Value);
 
+        if (storeId.HasValue)
+            query = query.Where(x => x.StoreId == storeId.Value);
+
         if (isApplied.HasValue)
             query = query.Where(x => x.IsApplied == isApplied.Value);
+
+        if (isCompanyAuthorization.HasValue)
+            query = isCompanyAuthorization.Value ? query.Where(x => x.StoreId == null) : query.Where(x => x.StoreId != null);
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -304,7 +337,22 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
     public async Task<KnowledgeSceneCompany> GetKnowledgeSceneCompanyAsync(int sceneId, int companyId, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<KnowledgeSceneCompany>()
-            .FirstOrDefaultAsync(x => x.SceneId == sceneId && x.CompanyId == companyId, cancellationToken)
+            .FirstOrDefaultAsync(x => x.SceneId == sceneId && x.CompanyId == companyId && x.StoreId == null, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<KnowledgeSceneCompany> GetKnowledgeSceneCompanyStoreAsync(int sceneId, int storeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<KnowledgeSceneCompany>()
+            .FirstOrDefaultAsync(x => x.SceneId == sceneId && x.StoreId == storeId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompanyStoreApplicationsAsync(int companyId, int storeId, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<KnowledgeSceneCompany>()
+            .Where(x => x.CompanyId == companyId && (x.StoreId == null || x.StoreId == storeId))
+            .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -326,21 +374,21 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int companyId, string keyword, CancellationToken cancellationToken = default)
+    public async Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int storeId, string keyword, CancellationToken cancellationToken = default)
     {
-        if (companyId <= 0)
-            throw new Exception("CompanyId is required.");
+        if (storeId <= 0)
+            throw new Exception("StoreId is required.");
 
         var trimmedKeyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim();
 
         var query =
             from store in _repository.QueryNoTracking<CompanyStore>()
             join posAgent in _repository.QueryNoTracking<PosAgent>() on store.Id equals posAgent.StoreId
-            join agent in _repository.QueryNoTracking<Agent>() on posAgent.AgentId equals agent.Id
+            join agent in _repository.QueryNoTracking<Agent>() on posAgent.AgentId equals agent.Id 
             join agentAssistant in _repository.QueryNoTracking<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             join knowledge in _repository.QueryNoTracking<AiSpeechAssistantKnowledge>() on assistant.Id equals knowledge.AssistantId
-            where store.CompanyId == companyId && knowledge.IsActive
+            where store.Id == storeId && knowledge.IsActive && agent.IsDisplay && agent.IsSurface
             select new AgentKnowledgeDto
             {
                 StoreId = store.Id,

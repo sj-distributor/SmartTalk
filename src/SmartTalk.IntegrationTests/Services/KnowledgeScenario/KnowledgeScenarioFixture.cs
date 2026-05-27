@@ -6,6 +6,7 @@ using Shouldly;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.IntegrationTests.TestBaseClasses;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
@@ -323,6 +324,44 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     }
 
     [Fact]
+    public async Task ShouldDeleteKnowledgeScene()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        SceneCascadeSeedResult seeded = null!;
+        var promptService = CreatePromptServiceMock();
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            seeded = await SeedSceneCascadeAsync(repository, unitOfWork, caseId);
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var response = await mediator.SendAsync<DeleteKnowledgeSceneCommand, DeleteKnowledgeSceneResponse>(
+                new DeleteKnowledgeSceneCommand { Id = seeded.SceneId });
+
+            response.Data.ShouldNotBeNull();
+            response.Data.Id.ShouldBe(seeded.SceneId);
+            response.Data.Name.ShouldBe(seeded.SceneName);
+            response.Data.SceneItems.Count.ShouldBe(1);
+            response.Data.SceneItems.Single().Id.ShouldBe(seeded.SceneItemId);
+        }, BuildPromptServiceRegistration(promptService));
+
+        await Run<IRepository>(async repository =>
+        {
+            (await repository.Query<KnowledgeScene>().AnyAsync(x => x.Id == seeded.SceneId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneItem>().AnyAsync(x => x.Id == seeded.SceneItemId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneHistory>().AnyAsync(x => x.Id == seeded.HistoryId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneHistoryItem>().AnyAsync(x => x.Id == seeded.HistoryItemId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneCompany>().AnyAsync(x => x.Id == seeded.SceneCompanyId)).ShouldBeFalse();
+            (await repository.Query<KnowledgeSceneCompany>().AnyAsync(x => x.Id == seeded.SceneStoreApplicationId)).ShouldBeFalse();
+            (await repository.Query<AiSpeechAssistantKnowledgeSceneRelation>().AnyAsync(x => x.Id == seeded.RelationId)).ShouldBeFalse();
+        });
+
+        await promptService.Received(1).RefreshScenePromptsAsync(Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == seeded.KnowledgeId), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ShouldGetKnowledgeSceneRelatedKnowledges()
     {
         var caseId = Guid.NewGuid().ToString("N")[..8];
@@ -342,6 +381,69 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             response.Data.Count.ShouldBe(2);
             response.Data[0].ShouldBe(seeded.SecondKnowledgeId);
             response.Data[1].ShouldBe(seeded.FirstKnowledgeId);
+        });
+    }
+
+    [Fact]
+    public async Task ShouldApplyKnowledgeScenePerStore()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        int sceneId = 0;
+        Company company = null!;
+        CompanyStore firstStore = null!;
+        CompanyStore secondStore = null!;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}");
+            sceneId = (await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{caseId}", "desc", KnowledgeSceneStatus.Published)).Id;
+            (company, firstStore, secondStore) = await CreateCompanyWithStoresAsync(repository, unitOfWork, caseId);
+
+            await repository.InsertAsync(new KnowledgeSceneCompany
+            {
+                SceneId = sceneId,
+                CompanyId = company.Id,
+                AuthorizedAt = DateTimeOffset.UtcNow
+            });
+            await unitOfWork.SaveChangesAsync();
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var applyResponse = await mediator.SendAsync<UpdateKnowledgeSceneCompanyCommand, UpdateKnowledgeSceneCompanyResponse>(
+                new UpdateKnowledgeSceneCompanyCommand
+                {
+                    SceneId = sceneId,
+                    CompanyId = company.Id,
+                    StoreId = firstStore.Id,
+                    IsApplied = true
+                });
+
+            applyResponse.Data.ShouldNotBeNull();
+            applyResponse.Data.StoreId.ShouldBe(firstStore.Id);
+            applyResponse.Data.IsApplied.ShouldBeTrue();
+
+            var firstStoreMarket = await mediator.RequestAsync<GetKnowledgeSceneMarketRequest, GetKnowledgeSceneMarketResponse>(
+                new GetKnowledgeSceneMarketRequest
+                {
+                    CompanyId = company.Id,
+                    StoreId = firstStore.Id,
+                    MarketType = KnowledgeSceneMarketType.MyTemplates
+                });
+
+            firstStoreMarket.Data.Scenes.Count.ShouldBe(1);
+            firstStoreMarket.Data.Scenes.Single().Id.ShouldBe(sceneId);
+            firstStoreMarket.Data.Scenes.Single().IsApplied.ShouldBeTrue();
+
+            var secondStoreMarket = await mediator.RequestAsync<GetKnowledgeSceneMarketRequest, GetKnowledgeSceneMarketResponse>(
+                new GetKnowledgeSceneMarketRequest
+                {
+                    CompanyId = company.Id,
+                    StoreId = secondStore.Id,
+                    MarketType = KnowledgeSceneMarketType.MyTemplates
+                });
+
+            secondStoreMarket.Data.Scenes.ShouldBeEmpty();
         });
     }
 
@@ -486,6 +588,8 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     {
         var caseId = Guid.NewGuid().ToString("N")[..8];
         int folderId = 0;
+        int sceneId = 0;
+        var promptService = CreatePromptServiceMock();
 
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
@@ -511,6 +615,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                         }
                     ]
                 });
+            sceneId = addResponse.Data.Id;
 
             var updateResponse = await mediator.SendAsync<UpdateKnowledgeSceneCommand, UpdateKnowledgeSceneResponse>(
                 new UpdateKnowledgeSceneCommand
@@ -535,6 +640,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             var historyResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
                 new GetKnowledgeSceneHistoryRequest { SceneId = addResponse.Data.Id });
             var oldVersion = historyResponse.Data.Scenes.First(x => x.Version == "1.0");
+            promptService.ClearReceivedCalls();
 
             var switchResponse = await mediator.SendAsync<SwitchKnowledgeSceneVersionCommand, SwitchKnowledgeSceneVersionResponse>(
                 new SwitchKnowledgeSceneVersionCommand
@@ -553,7 +659,11 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             latestHistoryResponse.Data.Count.ShouldBe(2);
             latestHistoryResponse.Data.Scenes.Count(x => x.IsActive).ShouldBe(1);
             latestHistoryResponse.Data.Scenes.Single(x => x.IsActive).Version.ShouldBe("1.0");
-        });
+        }, BuildPromptServiceRegistration(promptService));
+
+        await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(
+            Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId),
+            Arg.Any<CancellationToken>());
     }
 
     private static IAiSpeechAssistantKnowledgePromptService CreatePromptServiceMock()
@@ -679,6 +789,74 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         return new FolderCascadeSeedResult(folder.Id, folder.Name, scene.Id, item.Id, relation.Id, knowledge.Id);
     }
 
+    private static async Task<SceneCascadeSeedResult> SeedSceneCascadeAsync(IRepository repository, IUnitOfWork unitOfWork, string suffix)
+    {
+        var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{suffix}");
+        var scene = await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{suffix}", $"Scene Desc {suffix}", KnowledgeSceneStatus.Published);
+        var item = await CreateSceneItemAsync(repository, unitOfWork, scene.Id, $"Item-{suffix}", KnowledgeSceneItemType.Text, $"Content {suffix}");
+        var knowledge = await CreateActiveKnowledgeAsync(repository, unitOfWork, $"Knowledge-{suffix}");
+
+        var history = new KnowledgeSceneHistory
+        {
+            SceneId = scene.Id,
+            FolderId = folder.Id,
+            Name = scene.Name,
+            Description = scene.Description,
+            Version = scene.Version,
+            Status = scene.Status,
+            IsActive = true,
+            CreatedAt = scene.CreatedAt,
+            UpdatedAt = scene.UpdatedAt,
+            SnapshotAt = DateTimeOffset.UtcNow
+        };
+        await repository.InsertAsync(history);
+        await unitOfWork.SaveChangesAsync();
+
+        var historyItem = new KnowledgeSceneHistoryItem
+        {
+            HistoryId = history.Id,
+            SceneItemId = item.Id,
+            Name = item.Name,
+            Type = item.Type,
+            Content = item.Content,
+            FileName = item.FileName,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt
+        };
+        await repository.InsertAsync(historyItem);
+
+        var sceneCompany = new KnowledgeSceneCompany
+        {
+            SceneId = scene.Id,
+            CompanyId = 1000 + scene.Id,
+            AuthorizedAt = DateTimeOffset.UtcNow
+        };
+        await repository.InsertAsync(sceneCompany);
+        await unitOfWork.SaveChangesAsync();
+
+        var sceneStoreApplication = new KnowledgeSceneCompany
+        {
+            SceneId = scene.Id,
+            CompanyId = sceneCompany.CompanyId,
+            StoreId = 2000 + scene.Id,
+            IsApplied = true,
+            AppliedAt = DateTimeOffset.UtcNow,
+            AuthorizedAt = sceneCompany.AuthorizedAt
+        };
+        await repository.InsertAsync(sceneStoreApplication);
+
+        var relation = new AiSpeechAssistantKnowledgeSceneRelation
+        {
+            KnowledgeId = knowledge.Id,
+            SceneId = scene.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        await repository.InsertAsync(relation);
+        await unitOfWork.SaveChangesAsync();
+
+        return new SceneCascadeSeedResult(scene.Id, scene.Name, item.Id, history.Id, historyItem.Id, sceneCompany.Id, sceneStoreApplication.Id, relation.Id, knowledge.Id);
+    }
+
     private static async Task<RelationSaveSeedResult> SeedSceneRelationAsync(IRepository repository, IUnitOfWork unitOfWork, string suffix, bool includeSecondRelation = true)
     {
         var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{suffix}");
@@ -710,6 +888,66 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     }
 
     private sealed record FolderCascadeSeedResult(int FolderId, string FolderName, int SceneId, int SceneItemId, int RelationId, int KnowledgeId);
+
+    private static async Task<(Company Company, CompanyStore FirstStore, CompanyStore SecondStore)> CreateCompanyWithStoresAsync(
+        IRepository repository,
+        IUnitOfWork unitOfWork,
+        string suffix)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var company = new Company
+        {
+            Name = $"company-{suffix}",
+            Description = $"company description {suffix}",
+            Status = true,
+            CreatedBy = 1,
+            CreatedDate = now,
+            LastModifiedBy = 1,
+            LastModifiedDate = now
+        };
+        await repository.InsertAsync(company);
+        await unitOfWork.SaveChangesAsync();
+
+        var firstStore = CreateStore(company.Id, $"first-{suffix}", now);
+        var secondStore = CreateStore(company.Id, $"second-{suffix}", now);
+        await repository.InsertAsync(firstStore);
+        await repository.InsertAsync(secondStore);
+        await unitOfWork.SaveChangesAsync();
+
+        return (company, firstStore, secondStore);
+    }
+
+    private static CompanyStore CreateStore(int companyId, string suffix, DateTimeOffset now)
+    {
+        return new CompanyStore
+        {
+            CompanyId = companyId,
+            Names = $"store-{suffix}",
+            Description = $"store description {suffix}",
+            Status = true,
+            PhoneNums = $"+1555{suffix[..Math.Min(6, suffix.Length)]}",
+            Logo = $"logo-{suffix}.png",
+            Address = $"address-{suffix}",
+            Latitude = "22.2800",
+            Longitude = "114.1600",
+            Link = $"https://store-{suffix}.example.com",
+            AppId = $"app-{suffix}",
+            AppSecret = $"secret-{suffix}",
+            TimePeriod = "09:00-18:00",
+            PosName = $"pos-{suffix}",
+            PosId = $"pos-id-{suffix}",
+            IsLink = true,
+            Timezone = "Pacific Standard Time",
+            IsManualReview = false,
+            IsTaskEnabled = true,
+            CreatedBy = 1,
+            CreatedDate = now,
+            LastModifiedBy = 1,
+            LastModifiedDate = now
+        };
+    }
+
+    private sealed record SceneCascadeSeedResult(int SceneId, string SceneName, int SceneItemId, int HistoryId, int HistoryItemId, int SceneCompanyId, int SceneStoreApplicationId, int RelationId, int KnowledgeId);
 
     private sealed record RelationSaveSeedResult(int SceneId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
 }

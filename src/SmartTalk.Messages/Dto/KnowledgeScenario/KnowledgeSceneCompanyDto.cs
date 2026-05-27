@@ -8,7 +8,11 @@ public class KnowledgeSceneCompanyDto
 
     public int CompanyId { get; set; }
 
+    public int? StoreId { get; set; }
+
     public bool IsApplied { get; set; }
 
     public DateTimeOffset AuthorizedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? AppliedAt { get; set; }
 }

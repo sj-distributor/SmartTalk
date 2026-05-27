@@ -12,7 +12,6 @@ using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
@@ -30,6 +29,8 @@ public interface IKnowledgeScenarioService : IScopedDependency
     Task<AddKnowledgeSceneResponse> AddKnowledgeSceneAsync(AddKnowledgeSceneCommand command, CancellationToken cancellationToken);
 
     Task<UpdateKnowledgeSceneResponse> UpdateKnowledgeSceneAsync(UpdateKnowledgeSceneCommand command, CancellationToken cancellationToken);
+
+    Task<DeleteKnowledgeSceneResponse> DeleteKnowledgeSceneAsync(DeleteKnowledgeSceneCommand command, CancellationToken cancellationToken);
     
     Task<GetKnowledgeSceneFoldersResponse> GetKnowledgeSceneFoldersAsync(GetKnowledgeSceneFoldersRequest request, CancellationToken cancellationToken);
 
@@ -235,11 +236,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         scene.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (command.Status.HasValue || sceneItemsChanged)
-        {
-            Log.Information("UpdateKnowledgeSceneAsync status changed. SceneId={@SceneId}, SceneStatus={@SceneStatus}. Refreshing related prompts.", scene.Id, scene.Status);
-            await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
-        }
+        Log.Information("UpdateKnowledgeSceneAsync scene changed. SceneId={@SceneId}, SceneStatus={@SceneStatus}, SceneItemsChanged={@SceneItemsChanged}. Refreshing related prompts.", scene.Id, scene.Status, sceneItemsChanged);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+
         Log.Information("UpdateKnowledgeSceneAsync updated scene. SceneId={@SceneId}, SceneFolderId={@SceneFolderId}, SceneName={@SceneName}", scene.Id, scene.FolderId, scene.Name);
 
         var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(scene.Id, null, cancellationToken).ConfigureAwait(false);
@@ -248,6 +247,62 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems);
 
         return new UpdateKnowledgeSceneResponse
+        {
+            Data = sceneDto
+        };
+    }
+
+    public async Task<DeleteKnowledgeSceneResponse> DeleteKnowledgeSceneAsync(DeleteKnowledgeSceneCommand command, CancellationToken cancellationToken)
+    {
+        if (command.Id <= 0) throw new Exception("DeleteKnowledgeScene Id is required.");
+
+        var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.Id, cancellationToken).ConfigureAwait(false);
+        if (scene == null)
+            throw new Exception($"DeleteKnowledgeScene Scene [{command.Id}] does not exist.");
+
+        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(scene.Id, null, cancellationToken).ConfigureAwait(false);
+        var (_, histories) = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoriesAsync(scene.Id, null, null, cancellationToken).ConfigureAwait(false);
+        var historyItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoryItemsAsync(histories.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync([scene.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(scene.Id, cancellationToken).ConfigureAwait(false);
+        var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
+
+        Log.Information("DeleteKnowledgeSceneAsync loaded related data. SceneId={@SceneId}, SceneItemIds={@SceneItemIds}, HistoryIds={@HistoryIds}, HistoryItemIds={@HistoryItemIds}, CompanyIds={@CompanyIds}, StoreIds={@StoreIds}, RelationIds={@RelationIds}, KnowledgeIds={@KnowledgeIds}",
+            scene.Id,
+            sceneItems.Select(x => x.Id).ToList(),
+            histories.Select(x => x.Id).ToList(),
+            historyItems.Select(x => x.Id).ToList(),
+            sceneCompanies.Select(x => x.CompanyId).ToList(),
+            sceneCompanies.Where(x => x.StoreId.HasValue).Select(x => x.StoreId!.Value).ToList(),
+            relations.Select(x => x.Id).ToList(),
+            knowledgeIds);
+
+        if (relations.Count != 0)
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relations, false, cancellationToken).ConfigureAwait(false);
+
+        if (sceneCompanies.Count != 0)
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneCompaniesAsync(sceneCompanies, false, cancellationToken).ConfigureAwait(false);
+
+        if (historyItems.Count != 0)
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneHistoryItemsAsync(historyItems, false, cancellationToken).ConfigureAwait(false);
+
+        if (histories.Count != 0)
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneHistoriesAsync(histories, false, cancellationToken).ConfigureAwait(false);
+
+        if (sceneItems.Count != 0)
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneItemsAsync(sceneItems, false, cancellationToken).ConfigureAwait(false);
+
+        await _knowledgeScenarioDataProvider.DeleteKnowledgeScenesAsync([scene], true, cancellationToken).ConfigureAwait(false);
+
+        if (knowledgeIds.Count != 0)
+            await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("DeleteKnowledgeSceneAsync completed. SceneId={@SceneId}", scene.Id);
+
+        var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
+        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems);
+
+        return new DeleteKnowledgeSceneResponse
         {
             Data = sceneDto
         };
@@ -287,6 +342,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         {
             var knowledge = _mapper.Map<KnowledgeSceneItem>(item);
             knowledge.SceneId = scene.Id;
+            knowledge.UpdatedAt ??= knowledge.CreatedAt;
             return knowledge;
         }).ToList();
 
@@ -358,6 +414,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             {
                 var knowledge = _mapper.Map<KnowledgeSceneItem>(item);
                 knowledge.SceneId = scene.Id;
+                knowledge.UpdatedAt ??= knowledge.CreatedAt;
                 itemsToAdd.Add(knowledge);
             }
         }
@@ -489,42 +546,97 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (request.CompanyId <= 0) throw new Exception("GetKnowledgeSceneMarket CompanyId is required.");
         if (request.StoreId <= 0) throw new Exception("GetKnowledgeSceneMarket StoreId is required.");
 
-        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: request.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (store == null || store.CompanyId != request.CompanyId)
-            throw new Exception($"Store [{request.StoreId}] does not belong to Company [{request.CompanyId}].");
+        await EnsureStoreInCompanyAsync(request.CompanyId, request.StoreId, cancellationToken).ConfigureAwait(false);
 
-        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(companyId: request.CompanyId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var (sceneCompanies, sceneStoreApplications) =
+            await LoadMarketSceneRowsAsync(request.CompanyId, request.StoreId, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("GetKnowledgeSceneMarket sceneCompanies {@SceneCompanies}", sceneCompanies.Count);
-        
         if (sceneCompanies.Count == 0)
-            return new GetKnowledgeSceneMarketResponse { Data = new GetKnowledgeSceneMarketResponseData() { Scenes = new List<KnowledgeSceneDto>() } };
+            return EmptyMarketResponse();
 
-        var sceneIds = sceneCompanies.Select(x => x.SceneId).Distinct().ToList();
-        var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("GetKnowledgeSceneMarket ScenIds {@SceneIds}", sceneIds);
+        var scenes = await LoadAuthorizedScenesAsync(sceneCompanies, cancellationToken).ConfigureAwait(false);
         if (scenes.Count == 0)
-            return new GetKnowledgeSceneMarketResponse { Data = new GetKnowledgeSceneMarketResponseData() { Scenes = new List<KnowledgeSceneDto>() } };
+            return EmptyMarketResponse();
 
         var keyword = request.Keyword?.Trim();
-        var filteredScenes = scenes
-            .Where(x => string.IsNullOrWhiteSpace(keyword) || x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(x => x.IsActive)
-            .ToList();
+        var visibleScenes = FilterMarketScenes(scenes, sceneStoreApplications, keyword, request.MarketType);
 
-        filteredScenes = request.MarketType == KnowledgeSceneMarketType.MyTemplates
-            ? filteredScenes.Where(x => sceneCompanies.Any(c => c.SceneId == x.Id && c.IsApplied)).ToList()
-            : filteredScenes.ToList();
+        return BuildMarketResponse(visibleScenes, sceneStoreApplications);
+    }
 
+    private static GetKnowledgeSceneMarketResponse EmptyMarketResponse()
+    {
         return new GetKnowledgeSceneMarketResponse
         {
             Data = new GetKnowledgeSceneMarketResponseData
             {
-                Scenes = filteredScenes.Select(scene =>
+                Scenes = new List<KnowledgeSceneDto>()
+            }
+        };
+    }
+
+    private async Task EnsureStoreInCompanyAsync(int companyId, int storeId, CancellationToken cancellationToken)
+    {
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null || store.CompanyId != companyId)
+            throw new Exception($"Store [{storeId}] does not belong to Company [{companyId}].");
+    }
+
+    private async Task<(List<KnowledgeSceneCompany> SceneCompanies, List<KnowledgeSceneCompany> SceneStoreApplications)>
+        LoadMarketSceneRowsAsync(int companyId, int storeId, CancellationToken cancellationToken)
+    {
+        var rows = await _knowledgeScenarioDataProvider
+            .GetKnowledgeSceneCompanyStoreApplicationsAsync(companyId, storeId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var sceneCompanies = rows.Where(x => x.StoreId == null).ToList();
+        var sceneStoreApplications = rows.Where(x => x.StoreId == storeId).ToList();
+
+        Log.Information("GetKnowledgeSceneMarket rows loaded. Total={Total}, CompanyAuthCount={CompanyAuthCount}, StoreApplyCount={StoreApplyCount}",
+            rows.Count, sceneCompanies.Count, sceneStoreApplications.Count);
+
+        return (sceneCompanies, sceneStoreApplications);
+    }
+
+    private async Task<List<KnowledgeScene>> LoadAuthorizedScenesAsync(List<KnowledgeSceneCompany> sceneCompanies, CancellationToken cancellationToken)
+    {
+        var sceneIds = sceneCompanies.Select(x => x.SceneId).Distinct().ToList();
+        Log.Information("GetKnowledgeSceneMarket authorized scene ids {@SceneIds}", sceneIds);
+        return await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static List<KnowledgeScene> FilterMarketScenes(List<KnowledgeScene> scenes, List<KnowledgeSceneCompany> storeApplications, string keyword, KnowledgeSceneMarketType marketType)
+    {
+        var list = scenes
+            .Where(x => string.IsNullOrWhiteSpace(keyword) || x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.IsActive)
+            .ToList();
+        
+        if (marketType == KnowledgeSceneMarketType.MyTemplates)
+        {
+            return list
+                .Where(x => IsApplied(storeApplications, x.Id))
+                .ToList();
+        }
+        
+        return list
+            .Where(x => x.Status == KnowledgeSceneStatus.Published || IsApplied(storeApplications, x.Id))
+            .ToList();
+    }
+
+    private static bool IsApplied(List<KnowledgeSceneCompany> storeApplications, int sceneId)
+        => storeApplications.Any(x => x.SceneId == sceneId && x.IsApplied);
+
+    private GetKnowledgeSceneMarketResponse BuildMarketResponse(List<KnowledgeScene> scenes, List<KnowledgeSceneCompany> storeApplications)
+    {
+        return new GetKnowledgeSceneMarketResponse
+        {
+            Data = new GetKnowledgeSceneMarketResponseData
+            {
+                Scenes = scenes.Select(scene =>
                 {
                     var dto = _mapper.Map<KnowledgeSceneDto>(scene);
-                    dto.IsApplied = sceneCompanies.Any(x => x.SceneId == scene.Id && x.IsApplied);
+                    dto.IsApplied = IsApplied(storeApplications, scene.Id);
                     return dto;
                 }).ToList()
             }
@@ -539,7 +651,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (scene == null)
             throw new Exception($"GetKnowledgeSceneCompanies Scene [{request.SceneId}] does not exist.");
 
-        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [request.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [request.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetKnowledgeSceneCompaniesResponse
         {
@@ -550,6 +662,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     public async Task<GetKnowledgeSceneRelatedKnowledgesResponse> GetKnowledgeSceneRelatedKnowledgesAsync(GetKnowledgeSceneRelatedKnowledgesRequest request, CancellationToken cancellationToken)
     {
         if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges SceneId is required.");
+        if (request.StoreId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges StoreId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
 
@@ -557,7 +670,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             throw new Exception($"GetKnowledgeSceneRelatedKnowledges Scene [{request.SceneId}] does not exist.");
 
         var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(request.SceneId, cancellationToken).ConfigureAwait(false);
-        var data = BuildRelatedKnowledgeDtos(relations);
+        var data = await BuildRelatedAssistantIdsByStoreAsync(relations, request.StoreId, cancellationToken).ConfigureAwait(false);
         Log.Information("GetKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, RelationCount={RelationCount}, ActiveKnowledgeCount={KnowledgeCount}",
             request.SceneId, relations.Count, data.Count);
   
@@ -570,26 +683,27 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     public async Task<SaveKnowledgeSceneRelatedKnowledgesResponse> SaveKnowledgeSceneRelatedKnowledgesAsync(SaveKnowledgeSceneRelatedKnowledgesCommand command, CancellationToken cancellationToken)
     {
         if (command.SceneId <= 0) throw new Exception("SaveKnowledgeSceneRelatedKnowledges SceneId is required.");
+        if (command.StoreId <= 0) throw new Exception("SaveKnowledgeSceneRelatedKnowledges StoreId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
 
         if (scene == null)
             throw new Exception($"SaveKnowledgeSceneRelatedKnowledges Scene [{command.SceneId}] does not exist.");
-
-        var targetAssistantIds = (command.AssistantIds ?? []).Where(x => x > 0).Distinct().ToList();
-        var activeKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(targetAssistantIds, cancellationToken).ConfigureAwait(false);
-        var targetKnowledgeIds = activeKnowledges.Select(x => x.Id).Distinct().ToList();
         
-        var currentRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
-        var currentKnowledgeIds = currentRelations.Select(x => x.KnowledgeId).Distinct().ToHashSet();
+        var targetAssistantIds = (command.AssistantIds ?? []).Where(x => x > 0).Distinct().ToList();
+        
+        var currentStoreRelations = await _aiSpeechAssistantDataProvider.GetStoreKnowledgeSceneRelationsBySceneIdAsync(command.StoreId, command.SceneId, cancellationToken).ConfigureAwait(false);
+        
+        var targetKnowledgeIds = await _aiSpeechAssistantDataProvider.GetStoreActiveKnowledgeIdsByAssistantIdsAsync(command.StoreId, targetAssistantIds, cancellationToken).ConfigureAwait(false);
+
+        var currentKnowledgeIdSet = currentStoreRelations.Select(x => x.KnowledgeId).ToHashSet();
         var targetKnowledgeIdSet = targetKnowledgeIds.ToHashSet();
 
-        var relationsToDelete = currentRelations.Where(x => !targetKnowledgeIdSet.Contains(x.KnowledgeId)).ToList();
-        var knowledgeIdsToAdd = targetKnowledgeIds.Where(x => !currentKnowledgeIds.Contains(x)).ToList(); 
+        var relationsToDelete = currentStoreRelations.Where(x => !targetKnowledgeIdSet.Contains(x.KnowledgeId)).ToList();
+        var knowledgeIdsToAdd = targetKnowledgeIds.Where(x => !currentKnowledgeIdSet.Contains(x)).ToList();
         
-        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync diff built. SceneId={SceneId}, CurrentCount={CurrentCount}, TargetCount={TargetCount}, DeleteCount={DeleteCount}, AddCount={AddCount}",
-            command.SceneId, currentKnowledgeIds.Count, targetKnowledgeIds.Count, relationsToDelete.Count, knowledgeIdsToAdd.Count);
-
+        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync diff built. SceneId={SceneId}, StoreId={StoreId}, CurrentStoreCount={CurrentCount}, TargetCount={TargetCount}, DeleteCount={DeleteCount}, AddCount={AddCount}",
+            command.SceneId, command.StoreId, currentKnowledgeIdSet.Count, targetKnowledgeIds.Count, relationsToDelete.Count, knowledgeIdsToAdd.Count);
         if (relationsToDelete.Count != 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToDelete, true, cancellationToken).ConfigureAwait(false);
 
@@ -604,7 +718,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToAdd, true, cancellationToken).ConfigureAwait(false);
         }
 
-        var affectedKnowledgeIds = currentKnowledgeIds.Union(targetKnowledgeIdSet).ToList();
+        var affectedKnowledgeIds = currentKnowledgeIdSet.Union(targetKnowledgeIdSet).ToList();
 
         if (affectedKnowledgeIds.Count != 0)
         {
@@ -612,13 +726,13 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(affectedKnowledgeIds, cancellationToken).ConfigureAwait(false);
         }
 
-        var latestRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
-        var data = latestRelations.OrderByDescending(x => x.CreatedAt).Select(x => x.KnowledgeId).ToList();
-        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, SavedKnowledgeCount={KnowledgeCount}", command.SceneId, data.Count);
+        var latestStoreRelations = await _aiSpeechAssistantDataProvider.GetStoreKnowledgeSceneRelationsBySceneIdAsync(command.StoreId, command.SceneId, cancellationToken).ConfigureAwait(false);
+        var latestStoreKnowledgeIds = latestStoreRelations.OrderByDescending(x => x.CreatedAt).Select(x => x.KnowledgeId).ToList();
+        Log.Information("SaveKnowledgeSceneRelatedKnowledgesAsync completed. SceneId={SceneId}, StoreId={StoreId}, SavedKnowledgeCount={KnowledgeCount}", command.SceneId, command.StoreId, latestStoreKnowledgeIds.Count);
 
         return new SaveKnowledgeSceneRelatedKnowledgesResponse
         {
-            Data = data
+            Data = latestStoreKnowledgeIds
         };
     }
 
@@ -632,7 +746,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var targetCompanyIds = (command.CompanyIds ?? []).Where(x => x > 0).Distinct().ToList();
 
-        var currentCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var currentCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var currentCompanyIdSet = currentCompanies.Select(x => x.CompanyId).ToHashSet();
         var targetCompanyIdSet = targetCompanyIds.ToHashSet();
@@ -644,17 +758,29 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             {
                 SceneId = command.SceneId,
                 CompanyId = x,
+                StoreId = null,
                 IsApplied = false,
+                AppliedAt = null,
                 AuthorizedAt = DateTimeOffset.UtcNow
             }).ToList();
 
+        var storeApplicationsToDelete = companiesToDelete.Count == 0
+            ? []
+            : await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+        storeApplicationsToDelete = storeApplicationsToDelete
+            .Where(x => companiesToDelete.Any(c => c.CompanyId == x.CompanyId))
+            .ToList();
+
+        if (storeApplicationsToDelete.Count != 0)
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneCompaniesAsync(storeApplicationsToDelete, false, cancellationToken).ConfigureAwait(false);
+
         if (companiesToDelete.Count != 0)
-            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneCompaniesAsync(companiesToDelete, companiesToAdd.Count == 0, cancellationToken).ConfigureAwait(false);
+            await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneCompaniesAsync(companiesToDelete, false, cancellationToken).ConfigureAwait(false);
 
         if (companiesToAdd.Count != 0)
             await _knowledgeScenarioDataProvider.AddKnowledgeSceneCompaniesAsync(companiesToAdd, true, cancellationToken).ConfigureAwait(false);
 
-        var latestCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var latestCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new SaveKnowledgeSceneCompaniesResponse
         {
@@ -666,25 +792,69 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (command.SceneId <= 0) throw new Exception("UpdateKnowledgeSceneCompany SceneId is required.");
         if (command.CompanyId <= 0) throw new Exception("UpdateKnowledgeSceneCompany CompanyId is required.");
+        if (command.StoreId <= 0) throw new Exception("UpdateKnowledgeSceneCompany StoreId is required.");
 
         var scene = await _knowledgeScenarioDataProvider.GetKnowledgeSceneByIdAsync(command.SceneId, cancellationToken).ConfigureAwait(false);
         if (scene == null)
             throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] does not exist.");
+
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: command.StoreId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null || store.CompanyId != command.CompanyId)
+            throw new Exception($"Store [{command.StoreId}] does not belong to Company [{command.CompanyId}].");
         
         var sceneCompany = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompanyAsync(command.SceneId, command.CompanyId, cancellationToken).ConfigureAwait(false);
         if (sceneCompany == null)
             throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] is not authorized for Company [{command.CompanyId}].");
 
-        if (sceneCompany.IsApplied != command.IsApplied)
+        var sceneStore = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompanyStoreAsync(command.SceneId, command.StoreId, cancellationToken).ConfigureAwait(false);
+        if (sceneStore == null)
         {
-            sceneCompany.IsApplied = command.IsApplied;
-            await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneCompanyAsync(sceneCompany, true, cancellationToken).ConfigureAwait(false);
+            sceneStore = new KnowledgeSceneCompany
+            {
+                SceneId = command.SceneId,
+                CompanyId = command.CompanyId,
+                StoreId = command.StoreId,
+                AuthorizedAt = sceneCompany.AuthorizedAt
+            };
         }
+
+        sceneStore.CompanyId = command.CompanyId;
+        sceneStore.IsApplied = command.IsApplied;
+        sceneStore.AppliedAt = command.IsApplied ? DateTimeOffset.UtcNow : null;
+
+        if (sceneStore.Id <= 0)
+            await _knowledgeScenarioDataProvider.AddKnowledgeSceneCompaniesAsync([sceneStore], true, cancellationToken).ConfigureAwait(false);
+        else
+            await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneCompanyAsync(sceneStore, true, cancellationToken).ConfigureAwait(false);
+
+        if (!command.IsApplied)
+            await RemoveSceneRelationsFromStoreKnowledgeAsync(command.SceneId, command.StoreId, cancellationToken).ConfigureAwait(false);
 
         return new UpdateKnowledgeSceneCompanyResponse
         {
-            Data = _mapper.Map<KnowledgeSceneCompanyDto>(sceneCompany)
+            Data = _mapper.Map<KnowledgeSceneCompanyDto>(sceneStore)
         };
+    }
+
+    private async Task RemoveSceneRelationsFromStoreKnowledgeAsync(int sceneId, int storeId, CancellationToken cancellationToken)
+    { 
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken).ConfigureAwait(false);
+        var assistantIds = assistants.Select(x => x.Id).Distinct().ToList();
+        if (assistantIds.Count == 0)
+            return;
+
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        var knowledgeIds = knowledges.Select(x => x.Id).Distinct().ToList();
+        if (knowledgeIds.Count == 0)
+            return;
+
+        var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(sceneId, cancellationToken).ConfigureAwait(false);
+        var toDelete = relations.Where(x => knowledgeIds.Contains(x.KnowledgeId)).ToList();
+        if (toDelete.Count == 0)
+            return;
+
+        await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(toDelete, true, cancellationToken).ConfigureAwait(false);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<UpdateKnowledgeSceneHistoryResponse> UpdateKnowledgeSceneHistoryAsync(UpdateKnowledgeSceneHistoryCommand command, CancellationToken cancellationToken)
@@ -768,9 +938,20 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         };
     }
 
-    private static List<int> BuildRelatedKnowledgeDtos(List<AiSpeechAssistantKnowledgeSceneRelation> relations)
+    private async Task<List<int>> BuildRelatedAssistantIdsByStoreAsync(List<AiSpeechAssistantKnowledgeSceneRelation> relations, int storeId, CancellationToken cancellationToken)
     {
-        return relations.OrderByDescending(x => x.CreatedAt).Select(x => x.KnowledgeId).ToList();
+        if (relations == null || relations.Count == 0)
+            return new List<int>();
+
+        var storeAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken).ConfigureAwait(false);
+        var storeAssistantIdSet = storeAssistants.Select(x => x.Id).ToHashSet();
+        if (storeAssistantIdSet.Count == 0)
+            return new List<int>();
+
+        var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
+        var knowledgeList = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        return knowledgeList.Where(k => storeAssistantIdSet.Contains(k.AssistantId)).Select(k => k.AssistantId).Distinct().ToList();
     }
 
     private async Task<string> GetNextSceneVersionAsync(int sceneId, string currentVersion, CancellationToken cancellationToken)
@@ -1037,10 +1218,10 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     
     public async Task<GetAgentKnowledgeResponse> GetAgentKnowledgeAsync(GetAgentKnowledgeRequest request, CancellationToken cancellationToken)
     {
-        if (request.CompanyId <= 0)
-            throw new Exception("CompanyId is required.");
+        if (request.StoreId <= 0)
+            throw new Exception("StoreId is required.");
 
-        var sources = await _knowledgeScenarioDataProvider.GetAgentKnowledgeAsync(request.CompanyId, request.Keyword, cancellationToken).ConfigureAwait(false);
+        var sources = await _knowledgeScenarioDataProvider.GetAgentKnowledgeAsync(request.StoreId, request.Keyword, cancellationToken).ConfigureAwait(false);
 
         var result = sources
             .GroupBy(x => new { x.AgentId, x.AgentName })
