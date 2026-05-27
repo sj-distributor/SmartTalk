@@ -40,7 +40,7 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
             if (phoneMatch.SoldToIds.Count > 0)
                 return phoneMatch;
 
-            var storeMatch = await MatchByStoreNameAsync(storeName, crmToken, cancellationToken).ConfigureAwait(false);
+            var storeMatch = await MatchByStoreNameAsync(storeName, cancellationToken).ConfigureAwait(false);
             if (storeMatch.SoldToIds.Count > 0)
                 return storeMatch;
         }
@@ -109,7 +109,7 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
         return new SalesCustomerMatchResult();
     }
 
-    private async Task<SalesCustomerMatchResult> MatchByStoreNameAsync(string storeName, string crmToken, CancellationToken cancellationToken)
+    private async Task<SalesCustomerMatchResult> MatchByStoreNameAsync(string storeName, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(storeName))
             return new SalesCustomerMatchResult();
@@ -118,7 +118,7 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
 
         try
         {
-            var crmCustomers = await _crmClient.GetCustomersByRestaurantNameAsync(storeName, crmToken, cancellationToken).ConfigureAwait(false);
+            var crmCustomers = await _crmClient.GetCustomerIdsByShopNameAsync(storeName, cancellationToken).ConfigureAwait(false);
             soldToIds = crmCustomers
                 .Select(x => NormalizeCustomerId(x.SapId))
                 .Where(x => !string.IsNullOrWhiteSpace(x))

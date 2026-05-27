@@ -50,9 +50,9 @@ public class SalesCustomerMatchServiceTests
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
         _crmClient.GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), "crm-token", Arg.Any<CancellationToken>())
             .Returns([]);
-        _crmClient.GetCustomersByRestaurantNameAsync("Lucky House", "crm-token", Arg.Any<CancellationToken>())
+        _crmClient.GetCustomerIdsByShopNameAsync("Lucky House", Arg.Any<CancellationToken>())
             .Returns([
-                new GetCustomersPhoneNumberDataDto
+                new GetCustomerIdByShopNameResponseDto
                 {
                     SapId = "00098765",
                     CustomerName = "Lucky House"
@@ -73,7 +73,7 @@ public class SalesCustomerMatchServiceTests
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
         _crmClient.GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), "crm-token", Arg.Any<CancellationToken>())
             .Returns([]);
-        _crmClient.GetCustomersByRestaurantNameAsync(Arg.Any<string>(), "crm-token", Arg.Any<CancellationToken>())
+        _crmClient.GetCustomerIdsByShopNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns([]);
         _salesClient.GetCustomerNumbersByNameAsync(Arg.Any<GetCustomerNumbersByNameRequestDto>(), Arg.Any<CancellationToken>())
             .Returns(new GetCustomerNumbersByNameResponseDto { Data = [] });
@@ -102,7 +102,7 @@ public class SalesCustomerMatchServiceTests
         result.SoldToIds.ShouldBeEmpty();
         result.SalesGroup.ShouldBe("SG-001");
         await _crmClient.DidNotReceive().GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-        await _crmClient.DidNotReceive().GetCustomersByRestaurantNameAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _crmClient.DidNotReceive().GetCustomerIdsByShopNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class SalesCustomerMatchServiceTests
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
         _crmClient.GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), "crm-token", Arg.Any<CancellationToken>())
             .Returns([]);
-        _crmClient.GetCustomersByRestaurantNameAsync(Arg.Any<string>(), "crm-token", Arg.Any<CancellationToken>())
+        _crmClient.GetCustomerIdsByShopNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns([]);
         _salesClient.GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>())
             .Returns(string.Empty);

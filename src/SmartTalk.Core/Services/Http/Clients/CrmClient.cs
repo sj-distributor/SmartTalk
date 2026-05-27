@@ -18,7 +18,7 @@ public interface ICrmClient : IScopedDependency
 
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default);
 
-    Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByRestaurantNameAsync(string restaurantName, string token = null, CancellationToken cancellationToken = default);
+    Task<List<GetCustomerIdByShopNameResponseDto>> GetCustomerIdsByShopNameAsync(string shopName, CancellationToken cancellationToken = default);
 
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
 
@@ -27,7 +27,7 @@ public interface ICrmClient : IScopedDependency
 
 public class CrmClient : ICrmClient
 {
-    private const string CustomerByRestaurantNamePath = "/api/customer/get-customers-by-restaurant-name?restaurant_name={0}";
+    private const string CustomerIdsByShopNamePath = "/api/external/get-customers-by-shop-name?shop_name={0}";
     private readonly CrmSetting _crmSetting;
     private readonly ISmartTalkHttpClientFactory _httpClient;
 
@@ -83,24 +83,22 @@ public class CrmClient : ICrmClient
         return result;
     }
 
-    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByRestaurantNameAsync(string restaurantName, string token = null, CancellationToken cancellationToken = default)
+    public async Task<List<GetCustomerIdByShopNameResponseDto>> GetCustomerIdsByShopNameAsync(string shopName, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(restaurantName))
+        if (string.IsNullOrWhiteSpace(shopName))
             return [];
-
-        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
 
         var headers = new Dictionary<string, string>
         {
             { "Accept", "application/json" },
-            { "Authorization", $"Bearer {token}" }
+            { "X-API-KEY", _crmSetting.ApiKey }
         };
 
-        var url = $"{_crmSetting.BaseUrl}{string.Format(CustomerByRestaurantNamePath, Uri.EscapeDataString(restaurantName))}";
+        var url = $"{_crmSetting.SyncBaseUrl}{string.Format(CustomerIdsByShopNamePath, Uri.EscapeDataString(shopName))}";
 
-        var result = await _httpClient.GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
+        var result = await _httpClient.GetAsync<List<GetCustomerIdByShopNameResponseDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
 
-        Log.Information("Found {Count} customers for restaurant {RestaurantName}", result.Count, restaurantName);
+        Log.Information("Found {Count} customer ids for shop {ShopName}", result.Count, shopName);
         return result;
     }
 
