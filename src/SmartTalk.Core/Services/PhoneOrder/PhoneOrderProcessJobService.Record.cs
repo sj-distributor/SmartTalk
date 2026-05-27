@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Twilio;
 using Serilog;
 using OpenAI;
 using OpenAI.Chat;
@@ -9,7 +8,6 @@ using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.STT;
-using Twilio.Rest.Api.V2010.Account;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using Smarties.Messages.DTO.OpenAi;
@@ -22,19 +20,17 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.Printer;
 using SmartTalk.Messages.Enums.Sales;
+using JsonDocument = System.Text.Json.JsonDocument;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using System.ClientModel;
 using System.Text.Encodings.Web;
-using System.Text.Json;
-using SmartTalk.Core.Domain.Sales;
-using SmartTalk.Core.Services.Sale;
-using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -169,24 +165,25 @@ public partial class PhoneOrderProcessJobService
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
         
-        var callFrom = string.Empty;
-        var callTo = string.Empty;
-        
-        TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
+        var callFrom = record.PhoneNumber ?? string.Empty;
+        var callTo = record.IncomingCallNumber ?? string.Empty;
 
-        try
+        if (string.IsNullOrWhiteSpace(callFrom) && !string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
         {
-            await RetryAsync(async () =>
+            try
             {
-                var call = await CallResource.FetchAsync(record.SessionId);
-                callFrom = call?.From;
-                callTo = call?.To;
-                Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-            }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
-        }
-        catch (Exception e)
-        {
-            Log.Warning($"Twilio not found this record, cid:{record.SessionId}");
+                await RetryHelper.RetryAsync(async () =>
+                {
+                    var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
+                    callFrom = callInfo?.From;
+                    callTo = callInfo?.To;
+                    Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+                }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
+            }
+            catch (Exception e)
+            {
+                Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
+            }
         }
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
@@ -1038,7 +1035,9 @@ public partial class PhoneOrderProcessJobService
         if (!string.IsNullOrEmpty(aiSpeechAssistant.Name))
              soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
 
-        var historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        var historyItems = soldToIds.Count > 0
+            ? await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken).ConfigureAwait(false)
+            : [];
 
         var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
@@ -1048,20 +1047,35 @@ public partial class PhoneOrderProcessJobService
 
         foreach (var storeOrder in extractedOrders)
         { 
-            var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            var customerMatch = await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            var soldToId = customerMatch.SoldToId;
+            var matchedSoldToIds = customerMatch.SoldToIds.Count > 0
+                ? customerMatch.SoldToIds
+                : string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase)
+                    ? []
+                    : soldToIds;
+
+            if (matchedSoldToIds.Count > 0 && storeOrder.Orders.Any(x => string.IsNullOrWhiteSpace(x.MaterialNumber)))
+            {
+                var matchedHistoryItems = await GetCustomerHistoryItemsBySoldToIdAsync(matchedSoldToIds, cancellationToken).ConfigureAwait(false);
+                BackfillMaterialNumbers(storeOrder, matchedHistoryItems);
+            }
 
             if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
             {
-                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, soldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
+                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, matchedSoldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
                 continue;
             }
             
-            await RefineOrderByAiAsync(storeOrder, soldToId, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(soldToId))
+                await RefineOrderByAiAsync(storeOrder, soldToId, cancellationToken).ConfigureAwait(false);
 
-            var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
+            var draftOrder = CreateDraftOrder(record, storeOrder, soldToId, matchedSoldToIds, customerMatch.SalesGroup, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
 
             await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, cancellationToken).ConfigureAwait(false);
         }
+
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken) 
@@ -1071,8 +1085,8 @@ public partial class PhoneOrderProcessJobService
         var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
         var systemPrompt =
-            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。" +
-            "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd），如果說了明天送貨，則不需要填寫。" +
+            "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。「優先準確匹配物料列表中靠前的物料，如果有多個同類一樣物料，選用歷史列表中排在前的。」" +
+            "如果報告中提到了明確的預約送貨日期，請提取送貨時間（格式yyyy-MM-dd）；如果只是說了明天送貨，則不需要填寫。" +
             "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
             
             "【訂單意圖判斷規則（非常重要）】\n" +
@@ -1277,11 +1291,10 @@ public partial class PhoneOrderProcessJobService
         return string.Empty;
     }
 
-    private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, TimeZoneInfo pacificZone, DateTime pacificNow, bool useCanceledOrder) 
+    private GenerateAiOrdersRequestDto CreateDraftOrder(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, string salesGroup, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, TimeZoneInfo pacificZone, DateTime pacificNow, bool useCanceledOrder)
     { 
         var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
-
-        var assistantNameWithComma = aiSpeechAssistant.Name?.Replace('/', ',') ?? string.Empty;
+        var soldToIdsText = soldToIds.Count > 0 ? string.Join(",", soldToIds) : string.Empty;
 
         return new GenerateAiOrdersRequestDto
         {
@@ -1291,7 +1304,8 @@ public partial class PhoneOrderProcessJobService
             {
                 SoldToId = soldToId,
                 AiAssistantId = aiSpeechAssistant.Id,
-                SoldToIds = string.IsNullOrEmpty(soldToId) ? assistantNameWithComma : soldToId,
+                SoldToIds = string.IsNullOrEmpty(soldToId) ? soldToIdsText : soldToId,
+                SalesGroup = salesGroup,
                 DocumentDate = pacificNow.Date,
                 DeliveryDate = pacificDeliveryDate.Date,
                 AiOrderItemDtoList = storeOrder.Orders.Select(i => new AiOrderItemDto
@@ -1306,6 +1320,38 @@ public partial class PhoneOrderProcessJobService
                 }).ToList()
             }
         };
+    }
+
+    private async Task<SalesCustomerMatchResult> ResolveSalesCustomerMatchAsync(
+        PhoneOrderRecord record,
+        ExtractedOrderDto storeOrder,
+        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,
+        List<string> soldToIds,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
+        {
+            var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            return new SalesCustomerMatchResult
+            {
+                SoldToId = soldToId,
+                SoldToIds = string.IsNullOrWhiteSpace(soldToId) ? soldToIds : [soldToId]
+            };
+        }
+
+        var matched = await _salesCustomerMatchService
+            .MatchCustomerAsync(record.PhoneNumber, record.IncomingCallNumber, storeOrder.StoreName, [record.PhoneNumber, record.IncomingCallNumber], cancellationToken)
+            .ConfigureAwait(false);
+
+        return matched;
+    }
+
+    private void BackfillMaterialNumbers(ExtractedOrderDto storeOrder, List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems)
+    {
+        if (historyItems.Count == 0) return;
+
+        foreach (var order in storeOrder.Orders.Where(x => string.IsNullOrWhiteSpace(x.MaterialNumber)))
+            order.MaterialNumber = MatchMaterialNumber(order.AiMaterialDesc, order.MaterialNumber, order.Unit, historyItems);
     }
     
     private async Task<int> SendAgentMessageRecordAsync(Agent agent, int recordId, int groupKey, CancellationToken cancellationToken)

@@ -14,6 +14,8 @@ public class AiOrderInfoDto
     public string SoldToId { get; set; } 
 
     public int? AiAssistantId { get; set; }
+
+    public string SalesGroup { get; set; }
     
     public DateTime DocumentDate { get; set; }
     

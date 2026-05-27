@@ -19,6 +19,8 @@ public interface ISalesClient : IScopedDependency
     Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
 
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
+
+    Task<string> GetSalesGroupByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
     
     Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
     
@@ -50,13 +52,11 @@ public class SalesClient : ISalesClient
     {
         if (request.CustomerNumbers == null || request.CustomerNumbers.Count == 0)
             throw new ArgumentException("CustomerNumbers cannot be null or empty.");
-        
+
         var queryString = new StringBuilder("?");
         
         foreach (var customerNumber in request.CustomerNumbers)
-        {
             queryString.Append("CustomerNumbers=").Append(Uri.EscapeDataString(customerNumber)).Append('&');
-        }
         
         var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAskInfoDetailListByCustomer" + queryString.ToString().TrimEnd('&');
 
@@ -102,6 +102,12 @@ public class SalesClient : ISalesClient
             throw new ArgumentException("CustomerIds cannot be null or empty.");
 
         return await _httpClientFactory.PostAsJsonAsync<GetOrderArrivalTimeResponseDto>($"{_salesOrderArrivalSetting.BaseUrl}/api/order/getOrderArrivalTime", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<string> GetSalesGroupByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
+    {
+        Log.Information("Sales group lookup is skipped because GetSalesGroupByPhoneNumberAsync is not available yet. PhoneNumber: {PhoneNumber}", phoneNumber);
+        return Task.FromResult(string.Empty);
     }
 
     public async Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken)

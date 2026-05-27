@@ -137,7 +137,7 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
     {
         var req = JsonSerializer.Deserialize<DeleteAiOrderRequestDto>(task.RequestJson);
         
-        var resp =await _salesClient.DeleteAiOrderAsync(req, cancellationToken).ConfigureAwait(false);
+        var resp = await _salesClient.DeleteAiOrderAsync(req, cancellationToken).ConfigureAwait(false);
         Log.Information("Sales DeleteOrder SUCCESS. TaskId={TaskId}, Request={@Request}", task.Id, req);
         
         if (resp?.Data == null || resp.Data == Guid.Empty)

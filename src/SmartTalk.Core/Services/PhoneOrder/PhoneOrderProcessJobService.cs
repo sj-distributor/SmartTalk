@@ -46,6 +46,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
+    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
 
     public PhoneOrderProcessJobService(
         ISalesClient salesClient,
@@ -63,7 +64,11 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPhoneOrderUtilService phoneOrderUtilService, ITwilioService twilioService, TwilioSettings twilioSettings)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        IPhoneOrderUtilService phoneOrderUtilService,
+        ITwilioService twilioService,
+        TwilioSettings twilioSettings,
+        ISalesCustomerMatchService salesCustomerMatchService)
     {
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
@@ -79,12 +84,12 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
-        _smartTalkBackgroundJobClient = backgroundJobClient;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _phoneOrderUtilService = phoneOrderUtilService;
         _twilioService = twilioService;
         _twilioSettings = twilioSettings;
+        _salesCustomerMatchService = salesCustomerMatchService;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)

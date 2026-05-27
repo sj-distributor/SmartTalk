@@ -13,9 +13,11 @@ public interface ICrmClient : IScopedDependency
     Task<string> GetCrmTokenAsync(CancellationToken cancellationToken);
 
     Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default);
-    
+
+    Task<List<GetCustomerIdByShopNameResponseDto>> GetCustomerIdsByShopNameAsync(string shopName, CancellationToken cancellationToken = default);
+
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
-    
+
     Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken);
 
     Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
@@ -23,8 +25,8 @@ public interface ICrmClient : IScopedDependency
 
 public class CrmClient : ICrmClient
 {
+    private const string CustomerIdsByShopNamePath = "/api/external/get-customers-by-shop-name?shop_name={0}";
     private readonly CrmSetting _crmSetting;
-    private readonly Dictionary<string, string> _headers;
     private readonly ISmartTalkHttpClientFactory _httpClient;
 
     public CrmClient(ISmartTalkHttpClientFactory httpClient, CrmSetting crmSetting)
@@ -43,9 +45,9 @@ public class CrmClient : ICrmClient
             { "client_id", _crmSetting.ClientId },
             { "client_secret", _crmSetting.ClientSecret }
         };
-        
+
         var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
-        
+
         var headers = new Dictionary<string, string>
         {
             { "Accept", "application/json" }
@@ -53,6 +55,58 @@ public class CrmClient : ICrmClient
         var response = await _httpClient.PostAsync<CrmTokenResponse>(url, content, cancellationToken, headers: headers).ConfigureAwait(false);
 
         return response?.AccessToken;
+    }
+
+    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default)
+    {
+        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
+
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "Authorization", $"Bearer {token}"}
+        };
+
+        var url = $"{_crmSetting.BaseUrl}/api/customer/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
+
+        var result = await _httpClient.GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
+
+        Log.Information("Found {Count} customers for phone {PhoneNumber}", result.Count, numberRequest.PhoneNumber);
+        return result;
+    }
+
+    public async Task<List<GetCustomerIdByShopNameResponseDto>> GetCustomerIdsByShopNameAsync(string shopName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopName))
+            return [];
+
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "X-API-KEY", _crmSetting.ApiKey }
+        };
+
+        var url = $"{_crmSetting.SyncBaseUrl}{string.Format(CustomerIdsByShopNamePath, Uri.EscapeDataString(shopName))}";
+
+        var result = await _httpClient.GetAsync<List<GetCustomerIdByShopNameResponseDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
+
+        Log.Information("Found {Count} customer ids for shop {ShopName}", result.Count, shopName);
+        return result;
+    }
+
+    public async Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
+    {
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/ring-central/call-logs" + $"?start_time={startTimeUtc:O}&end_time={endTimeUtc:O}";
+        
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "X-API-KEY", _crmSetting.ApiKey }
+        };
+
+        var response = await _httpClient.GetAsync<GetCallRecordsDataDto>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return response?.Data ?? [];
     }
 
     public async Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default)
@@ -64,46 +118,13 @@ public class CrmClient : ICrmClient
             { "Accept", "application/json" },
             { "Authorization", $"Bearer {token}" }
         };
-        
+
         Log.Information("Fetching contacts for customer {CustomerId}", customerId);
-        
-        var contacts = await _httpClient.GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var contacts = await _httpClient.GetAsync<List<CrmContactDto>>($"{_crmSetting.BaseUrl}/api/customer/{customerId}/contacts", headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
         Log.Information("Found {Count} contacts for customer {CustomerId}", contacts.Count, customerId);
-        
+
         return contacts;
-    }
-    
-    public async Task<List<GetCustomersPhoneNumberDataDto>> GetCustomersByPhoneNumberAsync(GetCustmoersByPhoneNumberRequestDto numberRequest, string token = null, CancellationToken cancellationToken = default)
-    {
-        token ??= await GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-        
-        var headers = new Dictionary<string, string>
-        {
-            { "Accept", "application/json" },
-            { "Authorization", $"Bearer {token}"}
-        };
-        
-        var url = $"{_crmSetting.BaseUrl}/api/customer/get-customers-by-phone-number?phone_number={numberRequest.PhoneNumber}";
-
-        var result = await _httpClient.GetAsync<List<GetCustomersPhoneNumberDataDto>>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        Log.Information("Found {Count} customers for phone {PhoneNumber}", result.Count, numberRequest.PhoneNumber);
-        return result;
-    }
-    
-    public async Task<List<AutoTestCallLogDto>> GetCallRecordsAsync(DateTime startTimeUtc, DateTime endTimeUtc, CancellationToken cancellationToken)
-    {
-        var url = $"{_crmSetting.SyncBaseUrl}/api/external/ring-central/call-logs" + $"?start_time={startTimeUtc:O}&end_time={endTimeUtc:O}";
-        
-        var headers = new Dictionary<string, string>
-        {
-            { "Accept", "application/json" },
-            { "X-API-KEY", _crmSetting.ApiKey }
-        };
-        
-        var response = await _httpClient.GetAsync<GetCallRecordsDataDto>(url, headers: headers, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return response.Data;
     }
 
     public async Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default)
@@ -119,6 +140,6 @@ public class CrmClient : ICrmClient
             { "Accept", "application/json" }
         };
 
-        return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+        return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false) ?? [];
     }
 }
