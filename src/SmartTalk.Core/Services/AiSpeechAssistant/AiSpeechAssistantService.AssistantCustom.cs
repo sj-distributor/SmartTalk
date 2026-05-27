@@ -2129,6 +2129,7 @@ public partial class AiSpeechAssistantService
 	        await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgesAsync(result.NewTargets, true, cancellationToken).ConfigureAwait(false);
 
 	        var newTargetIdMap = result.TargetPairs.ToDictionary(x => x.OldTargetId, x => x.NewTarget.Id);
+            await MigrateKnowledgeSceneRelationsAsync(newTargetIdMap, cancellationToken).ConfigureAwait(false);
 
 	        if (result.DetailModeOldTargetIds is { Count: > 0 })
 	        {
@@ -2174,6 +2175,32 @@ public partial class AiSpeechAssistantService
 
 	        await _aiSpeechAssistantDataProvider.AddKnowledgeCopyRelatedAsync(result.NewRelations, true, cancellationToken).ConfigureAwait(false);
 	    }
+
+        private async Task MigrateKnowledgeSceneRelationsAsync(Dictionary<int, int> oldToNewKnowledgeIdMap, CancellationToken cancellationToken)
+        {
+            if (oldToNewKnowledgeIdMap.Count == 0)
+                return;
+
+            var oldTargetIds = oldToNewKnowledgeIdMap.Keys.ToList();
+            var oldSceneRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(oldTargetIds, cancellationToken).ConfigureAwait(false);
+
+            if (oldSceneRelations.Count == 0)
+                return;
+
+            var newSceneRelations = oldSceneRelations
+                .Where(r => oldToNewKnowledgeIdMap.ContainsKey(r.KnowledgeId))
+                .Select(r => new AiSpeechAssistantKnowledgeSceneRelation
+                {
+                    KnowledgeId = oldToNewKnowledgeIdMap[r.KnowledgeId],
+                    SceneId = r.SceneId,
+                    CreatedAt = DateTimeOffset.UtcNow
+                }).ToList();
+
+            if (newSceneRelations.Count == 0)
+                return;
+
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(newSceneRelations, true, cancellationToken).ConfigureAwait(false);
+        }
 
 	    private sealed class RebuildResult
 	    {
