@@ -8,12 +8,9 @@ using Xunit;
 namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 /// <summary>
-/// Pins that the Google adapter's <c>BuildTruncateMessage</c> returns null. Google's
-/// Live API relies on its server-side VAD to handle barge-in; sending a client-side
-/// truncate would either be ignored or generate a protocol-error log on Google's side.
-/// The caller (<c>RealtimeAiService.SendBargeInTruncateIfApplicableAsync</c>) checks
-/// for null and skips <c>SendToProviderAsync</c>, while the Twilio <c>clear</c> frame
-/// still flushes the audio buffer at the client side.
+/// Pins that the Google adapter's <c>BuildTruncateMessage</c> returns null —
+/// Google's Live API handles barge-in via server-side VAD with no client-sent
+/// truncate equivalent.
 /// </summary>
 public class GoogleRealtimeAiProviderAdapterTruncateMessageTests
 {

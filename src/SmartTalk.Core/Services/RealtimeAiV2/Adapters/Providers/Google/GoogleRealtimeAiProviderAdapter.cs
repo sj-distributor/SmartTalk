@@ -99,13 +99,7 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return JsonSerializer.Serialize(message);
     }
     
-    /// <summary>
-    /// Google's Live API relies on its own server-side VAD to handle user barge-in;
-    /// there is no client-sent equivalent of OpenAI's <c>conversation.item.truncate</c>.
-    /// Returns null so the V2 service skips <c>SendToProviderAsync</c> without warning,
-    /// while still letting Twilio receive the <c>clear</c> frame that actually stops
-    /// playback. The signature is preserved for cross-provider symmetry with OpenAI.
-    /// </summary>
+    // Google's Live API handles barge-in via its own server-side VAD; no client-sent truncate.
     public string BuildTruncateMessage(string itemId, long audioEndMs) => null;
 
     public string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output)

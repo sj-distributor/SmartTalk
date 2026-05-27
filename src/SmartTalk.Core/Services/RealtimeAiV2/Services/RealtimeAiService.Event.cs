@@ -101,18 +101,11 @@ public partial class RealtimeAiService
 
         _ctx.IsAiSpeaking = true;
 
-        // Track the latest assistant item_id for Phase 10.3 barge-in. Adapter populates
-        // this on every OpenAI response.output_audio.delta; Google adapter leaves it null
-        // (Google's protocol does not surface a per-delta id). Either way, an empty value
-        // must not clobber a previously-tracked id from earlier in the same turn.
+        // Empty item_id must not clobber a previously-tracked id from earlier in the same turn.
         if (!string.IsNullOrEmpty(aiAudioData.ItemId))
             _ctx.LastAssistantItemId = aiAudioData.ItemId;
 
-        // Capture the stream-time at which the AI started speaking THIS turn (set-once
-        // per turn). Phase 10.3 will compute audio_end_ms = LatestMediaTimestamp - this
-        // value to tell OpenAI exactly where to truncate the assistant message in its
-        // conversation history. Set only on the FIRST delta of the turn so subsequent
-        // deltas don't shift the anchor forwards.
+        // Anchor is set once per turn — first delta wins so subsequent deltas don't shift it.
         if (!_ctx.ResponseStartTimestampTwilio.HasValue && _ctx.LatestMediaTimestamp.HasValue)
             _ctx.ResponseStartTimestampTwilio = _ctx.LatestMediaTimestamp;
 
@@ -128,34 +121,15 @@ public partial class RealtimeAiService
         if (_ctx.Options.IdleFollowUp != null)
             _inactivityTimerManager.StopTimer(_ctx.SessionId);
 
-        // Client `clear` frame goes FIRST — it's the time-critical signal that the
-        // user is waiting on (stops Twilio playback the user can still hear). The
-        // provider truncate is a history-correction follow-up that doesn't affect
-        // what the user perceives in the moment.
+        // `clear` first (time-critical playback stop), truncate after (history correction).
         await SendToClientAsync(_ctx.ClientAdapter.BuildSpeechDetectedMessage(_ctx.SessionId)).ConfigureAwait(false);
-
-        // Phase 10.3 barge-in: tell the provider exactly where the user heard the AI
-        // cut off so the conversation history reflects only what the user actually
-        // experienced. Skipped silently when any of the tracking values is missing
-        // (cold session, web client without timestamps, etc.).
         await SendBargeInTruncateIfApplicableAsync().ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Builds and sends a provider truncate event when all three tracking values are
-    /// populated:
-    /// <list type="bullet">
-    ///   <item><see cref="RealtimeAiSessionContext.LastAssistantItemId"/> (Phase 10.1)</item>
-    ///   <item><see cref="RealtimeAiSessionContext.LatestMediaTimestamp"/> (Phase 10.2 running clock)</item>
-    ///   <item><see cref="RealtimeAiSessionContext.ResponseStartTimestampTwilio"/> (Phase 10.2 per-turn anchor)</item>
-    /// </list>
-    /// If any is missing, skip silently — the existing Twilio <c>clear</c> frame still
-    /// stops playback immediately; we just lose the OpenAI history precision (an
-    /// acceptable degraded mode). After sending, the interrupt window for this turn
-    /// is consumed; clear the per-turn fields so a subsequent speech-detected event
-    /// can't re-truncate the same already-truncated item (which OpenAI would reject).
-    /// <see cref="RealtimeAiSessionContext.LatestMediaTimestamp"/> deliberately keeps
-    /// its value because it's the running stream clock.
+    /// Sends a provider truncate when item_id, stream clock, and per-turn anchor are
+    /// all set. Skipped silently otherwise. Clears per-turn state after sending so a
+    /// second speech-detected in the same turn cannot re-truncate the same item.
     /// </summary>
     private async Task SendBargeInTruncateIfApplicableAsync()
     {
@@ -186,13 +160,8 @@ public partial class RealtimeAiService
         _ctx.Round += 1;
         _ctx.IsAiSpeaking = false;
 
-        // The interrupt window for this turn has closed; clear so the next user-barge-in
-        // opportunity (Phase 10.3) can't send a stale id that the provider would reject.
+        // Clear per-turn barge-in state. LatestMediaTimestamp keeps its value (running clock).
         _ctx.LastAssistantItemId = null;
-
-        // Reset the per-turn stream-time anchor. The next turn's first ResponseAudioDelta
-        // will set it again. LatestMediaTimestamp deliberately keeps its value — it's the
-        // running clock, not a per-turn quantity.
         _ctx.ResponseStartTimestampTwilio = null;
 
         var idleFollowUp = _ctx.Options.IdleFollowUp;

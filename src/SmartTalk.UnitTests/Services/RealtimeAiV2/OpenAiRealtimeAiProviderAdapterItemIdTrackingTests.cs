@@ -10,18 +10,10 @@ using Xunit;
 namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 /// <summary>
-/// Pins that the V2 OpenAI adapter surfaces the per-message <c>item_id</c> on both
+/// Pins that the OpenAI adapter surfaces <c>item_id</c> on both
 /// <see cref="ParsedRealtimeAiProviderEvent.ItemId"/> and (for audio deltas)
-/// <see cref="RealtimeAiWssAudioData.ItemId"/>.
-///
-/// <para>
-/// Captured separately from the existing <c>BetaEventSunset</c> / <c>ParseMessageUsage</c>
-/// suites because those assert on event type and usage; they do not pin the
-/// <c>item_id</c> propagation, which is the regression boundary for the Phase 10
-/// barge-in work (Phase 10.3 will read <see cref="RealtimeAiSessionContext.LastAssistantItemId"/>
-/// to build the OpenAI <c>conversation.interrupt</c> message; if the adapter ever
-/// drops <c>item_id</c>, barge-in stops working silently).
-/// </para>
+/// <see cref="RealtimeAiWssAudioData.ItemId"/> — the regression boundary for
+/// barge-in: if the adapter drops <c>item_id</c>, barge-in stops working silently.
 /// </summary>
 public class OpenAiRealtimeAiProviderAdapterItemIdTrackingTests
 {
@@ -50,8 +42,7 @@ public class OpenAiRealtimeAiProviderAdapterItemIdTrackingTests
     [Fact]
     public void ParseMessage_ResponseAudioDeltaWithItemId_AlsoSetsItemIdOnParsedEvent()
     {
-        // The top-level ItemId on ParsedRealtimeAiProviderEvent must be in sync with the
-        // audio-data ItemId so that consumers reading from either path see the same value.
+        // Both surfaces must carry the same id so consumers reading either path agree.
         var raw = """
             {
               "type": "response.output_audio.delta",
@@ -69,9 +60,8 @@ public class OpenAiRealtimeAiProviderAdapterItemIdTrackingTests
     [Fact]
     public void ParseMessage_ResponseAudioDeltaWithoutItemId_LeavesItemIdNull()
     {
-        // Defensive: providers may emit deltas without item_id (older snapshots, edge
-        // events). The adapter must not synthesize a value or crash; it must leave
-        // both fields as null so downstream consumers can detect "no id available".
+        // Adapter must not synthesise a value when id is absent — consumers rely on null
+        // to detect "no id available".
         var raw = """
             {
               "type": "response.output_audio.delta",
@@ -89,9 +79,7 @@ public class OpenAiRealtimeAiProviderAdapterItemIdTrackingTests
     [Fact]
     public void ParseMessage_NonAudioEventWithItemId_PopulatesParsedEventItemId()
     {
-        // item_id appears on non-audio events too (e.g. response.output_audio_transcript.delta).
-        // It must propagate to ParsedRealtimeAiProviderEvent.ItemId regardless of event type
-        // so Phase 10 can correlate transcripts to specific assistant items if needed.
+        // item_id appears on transcript deltas too — must propagate regardless of event type.
         var raw = """
             {
               "type": "response.output_audio_transcript.delta",
@@ -109,10 +97,7 @@ public class OpenAiRealtimeAiProviderAdapterItemIdTrackingTests
     [Fact]
     public void ParseMessage_TurnCompletedEvent_ItemIdNotRequired()
     {
-        // response.done events don't carry item_id at the top level; consumers must not
-        // rely on it being present for turn completion. This pins the contract so a
-        // future barge-in / cleanup refactor that incorrectly required ItemId on turn-end
-        // would surface here.
+        // response.done carries no top-level item_id; consumers must not require it on turn-end.
         var raw = """
             {
               "type": "response.done",

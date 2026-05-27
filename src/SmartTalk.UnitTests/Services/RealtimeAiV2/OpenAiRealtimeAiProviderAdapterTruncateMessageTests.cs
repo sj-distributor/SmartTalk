@@ -9,11 +9,9 @@ using Xunit;
 namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 /// <summary>
-/// Pins the GA <c>conversation.item.truncate</c> shape built by the OpenAI V2 adapter
-/// for Phase 10.3 barge-in. If OpenAI ever rejects this payload, the Twilio <c>clear</c>
-/// frame still stops playback, but the assistant message in OpenAI's history reverts
-/// to the un-truncated form and the next turn responds as if the user heard the AI
-/// finish (subtly wrong restaurant-call context).
+/// Pins the GA <c>conversation.item.truncate</c> shape built by the OpenAI adapter
+/// at user barge-in. Wrong payload → OpenAI rejects → next turn responds as if the
+/// user heard the full AI utterance (subtly wrong restaurant-call context).
 /// </summary>
 public class OpenAiRealtimeAiProviderAdapterTruncateMessageTests
 {
@@ -36,10 +34,7 @@ public class OpenAiRealtimeAiProviderAdapterTruncateMessageTests
     [Fact]
     public void BuildTruncateMessage_ZeroAudioEndMs_StillEmitsZeroNotOmits()
     {
-        // OpenAI accepts audio_end_ms = 0 (means "user interrupted before any audio
-        // played"); the field must still be present in the payload. A common refactor
-        // mistake is to treat 0 as "default" and omit the key, which OpenAI would
-        // reject as a missing required field.
+        // OpenAI accepts 0; the field must still be present (don't treat 0 as "default and omit").
         var json = NewAdapter().BuildTruncateMessage("item_abc", 0);
 
         var parsed = JObject.Parse(json!);
@@ -49,9 +44,7 @@ public class OpenAiRealtimeAiProviderAdapterTruncateMessageTests
     [Fact]
     public void BuildTruncateMessage_NegativeAudioEndMs_ClampsToZero()
     {
-        // Service-side caller already clamps, but the adapter guards too — a faulty
-        // future consumer that bypassed the clamp must not ship a payload OpenAI
-        // would reject.
+        // Adapter clamps even though the caller already does — defensive against future consumers.
         var json = NewAdapter().BuildTruncateMessage("item_abc", -42);
 
         var parsed = JObject.Parse(json!);
@@ -61,26 +54,19 @@ public class OpenAiRealtimeAiProviderAdapterTruncateMessageTests
     [Fact]
     public void BuildTruncateMessage_NullItemId_ReturnsNull()
     {
-        // Sending the event without item_id would be rejected by the GA server.
-        // Returning null lets the caller skip SendToProviderAsync without a warning
-        // (the per-turn anchor may also be null in this case, e.g. cold session).
         NewAdapter().BuildTruncateMessage(null, 100).ShouldBeNull();
     }
 
     [Fact]
     public void BuildTruncateMessage_EmptyItemId_ReturnsNull()
     {
-        // Empty string is treated identically to null — both indicate "no in-flight
-        // assistant turn to truncate". The skip is silent to avoid noise on every
-        // user-speech-detected event during cold-session warm-up.
         NewAdapter().BuildTruncateMessage("", 100).ShouldBeNull();
     }
 
     [Fact]
     public void BuildTruncateMessage_LargeAudioEndMs_RoundTripsExact()
     {
-        // Long-running calls (hour-plus restaurant queues) can push audio_end_ms beyond
-        // int range. Pin that the long path holds without precision loss.
+        // Long calls can exceed int range — pin the long path to keep precision.
         var json = NewAdapter().BuildTruncateMessage("item_long", 9_000_000_000L);
 
         var parsed = JObject.Parse(json!);

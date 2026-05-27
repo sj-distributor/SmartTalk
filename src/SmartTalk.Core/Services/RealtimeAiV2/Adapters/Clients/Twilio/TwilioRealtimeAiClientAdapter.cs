@@ -77,25 +77,16 @@ public class TwilioRealtimeAiClientAdapter : IRealtimeAiClientAdapter
         };
     }
 
-    /// <summary>
-    /// Twilio's media-streams protocol ships <c>media.timestamp</c> as a string of
-    /// milliseconds since stream start. Returns null when the field is absent or
-    /// cannot be parsed — a single malformed timestamp must not drop the whole
-    /// media frame, the audio payload is more critical than the timing metadata.
-    /// </summary>
+    // Twilio doc'd shape is string ms; real payloads occasionally use the numeric form.
+    // Bad / missing timestamp must not drop the audio frame.
     private static long? ExtractMediaTimestamp(JsonElement media)
     {
         if (!media.TryGetProperty("timestamp", out var tsProp)) return null;
 
-        // Twilio docs specify string form, but real-world payloads occasionally surface
-        // the numeric form (older preview snapshots, future protocol revisions). Accept
-        // both rather than silently dropping one variant.
-        if (tsProp.ValueKind == JsonValueKind.String &&
-            long.TryParse(tsProp.GetString(), out var parsed))
+        if (tsProp.ValueKind == JsonValueKind.String && long.TryParse(tsProp.GetString(), out var parsed))
             return parsed;
 
-        if (tsProp.ValueKind == JsonValueKind.Number &&
-            tsProp.TryGetInt64(out var direct))
+        if (tsProp.ValueKind == JsonValueKind.Number && tsProp.TryGetInt64(out var direct))
             return direct;
 
         return null;

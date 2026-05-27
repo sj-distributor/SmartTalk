@@ -17,11 +17,8 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
     string BuildTextUserMessage(string text, string sessionId);
 
     /// <summary>
-    /// Builds the provider-specific message that truncates the in-flight assistant
-    /// turn at <paramref name="audioEndMs"/> milliseconds, called when the user barges
-    /// in. Returns <c>null</c> when the provider has no equivalent (Google's Live API
-    /// relies on its server-side VAD instead of an explicit client truncate). The
-    /// caller skips <c>SendToProviderAsync</c> on null without warning.
+    /// Builds the provider truncate message at user barge-in. Returns null when the
+    /// provider has no equivalent; the caller skips sending on null.
     /// </summary>
     string BuildTruncateMessage(string itemId, long audioEndMs);
 

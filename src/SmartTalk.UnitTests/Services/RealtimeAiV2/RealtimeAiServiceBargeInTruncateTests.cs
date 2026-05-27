@@ -8,14 +8,11 @@ using Xunit;
 namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 /// <summary>
-/// End-to-end pins for Phase 10.3 V2 barge-in. Exercises the full
-/// <c>OnAiDetectedUserSpeechAsync</c> path with item_id (Phase 10.1),
-/// LatestMediaTimestamp + ResponseStartTimestampTwilio (Phase 10.2)
-/// already populated by upstream events, and asserts the provider
-/// <c>BuildTruncateMessage</c> is called with the elapsed-time math
-/// — the regression boundary for restaurant calls where users barge
-/// in mid-greeting and OpenAI's conversation history must stay aligned
-/// with what the user actually heard.
+/// End-to-end pins for V2 user-barge-in. Drives the full
+/// <c>OnAiDetectedUserSpeechAsync</c> path with item_id + clock + anchor populated
+/// by upstream events and asserts the provider truncate is built with the right
+/// elapsed-time math — the regression boundary for mid-greeting barge-ins where
+/// OpenAI's history must stay aligned with what the user actually heard.
 /// </summary>
 public class RealtimeAiServiceBargeInTruncateTests : RealtimeAiServiceTestBase
 {
@@ -83,8 +80,7 @@ public class RealtimeAiServiceBargeInTruncateTests : RealtimeAiServiceTestBase
     [Fact]
     public async Task SpeechDetected_WithoutPriorAiAudio_DoesNotSendTruncate()
     {
-        // Cold-session edge case: user starts speaking before AI has produced any
-        // audio. LastAssistantItemId stays null; truncate must be skipped silently.
+        // Cold session: user speaks before AI produced any audio → LastAssistantItemId null → skip.
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.SpeechDetected });
 
@@ -108,9 +104,7 @@ public class RealtimeAiServiceBargeInTruncateTests : RealtimeAiServiceTestBase
     [Fact]
     public async Task SpeechDetected_AiSpokeButNoClientTimestamp_DoesNotSendTruncate()
     {
-        // Web (DefaultRealtimeAiClientAdapter) does not surface a stream clock. Without
-        // LatestMediaTimestamp the per-turn anchor never gets set, so the elapsed-time
-        // math has no input — skip the truncate rather than ship a bogus offset.
+        // Web client has no stream clock → anchor never sets → skip rather than ship a bogus offset.
         var providerCall = 0;
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(_ =>
@@ -148,10 +142,8 @@ public class RealtimeAiServiceBargeInTruncateTests : RealtimeAiServiceTestBase
     [Fact]
     public async Task SpeechDetectedTwiceInARow_OnlyTruncatesOnce()
     {
-        // After a successful truncate the per-turn fields are cleared so a second
-        // speech-detected within the same turn can't re-truncate the now-already-truncated
-        // item (OpenAI would error). Pin this so a future refactor of the cleanup
-        // doesn't reintroduce double-truncate.
+        // After truncate the per-turn fields are cleared so a second speech-detected
+        // in the same turn cannot re-truncate the already-truncated item.
         const string itemId = "item_once";
 
         var providerCall = 0;
@@ -198,9 +190,7 @@ public class RealtimeAiServiceBargeInTruncateTests : RealtimeAiServiceTestBase
     [Fact]
     public async Task SpeechDetected_AcrossTurns_TruncatesEachTurnIndependently()
     {
-        // Two complete turns of AI speech, each interrupted. Both must emit a truncate
-        // with their own item_id and elapsed time — confirms the per-turn anchor
-        // re-arms after OnAiTurnCompletedAsync clears it.
+        // Each turn's anchor re-arms after OnAiTurnCompletedAsync clears it.
         var providerCall = 0;
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(_ =>
@@ -253,8 +243,7 @@ public class RealtimeAiServiceBargeInTruncateTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        // Only turn 2's item_id should be truncated — turn 1 was completed normally
-        // and its anchor was cleared by OnAiTurnCompletedAsync.
+        // Only turn 2's item_id is truncated — turn 1 completed normally so its anchor was cleared.
         ProviderAdapter.Received(1).BuildTruncateMessage("item_turn_2", Arg.Any<long>());
         ProviderAdapter.DidNotReceive().BuildTruncateMessage("item_turn_1", Arg.Any<long>());
     }
