@@ -178,7 +178,7 @@ public partial class PhoneOrderProcessJobService
         var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
 
         var client = new ChatClient(
-            "gpt-4o-audio-preview",
+            "gpt-audio-2025-08-28",
             new ApiKeyCredential(_openAiSettings.ApiKey),
             new OpenAIClientOptions
             {
@@ -913,14 +913,13 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
          Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, string callFrom,
          string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
     {
-        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-
-        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(aiSpeechAssistant.Name, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine,
+            customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
         
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 
@@ -1157,7 +1156,11 @@ public partial class PhoneOrderProcessJobService
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
-        ;
+        
+        if (!string.IsNullOrWhiteSpace(baseNumber) &&
+            candidates.Contains(baseNumber, StringComparer.OrdinalIgnoreCase))
+            return baseNumber;
+
         if (candidates.Count == 1) return candidates.First();
 
         if (!string.IsNullOrWhiteSpace(unit))
