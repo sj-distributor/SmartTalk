@@ -84,6 +84,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPosUtilService _posUtilService;
     private readonly IPhoneOrderService _phoneOrderService;
+    private readonly IPhoneOrderProcessJobService _phoneOrderProcessJobService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
     private readonly ISpeechMaticsService _speechMaticsService;
@@ -121,6 +122,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPosDataProvider posDataProvider,
         IPosUtilService posUtilService,
         IPhoneOrderService phoneOrderService,
+        IPhoneOrderProcessJobService phoneOrderProcessJobService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         ISpeechMaticsService speechMaticsService,
@@ -153,6 +155,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _posUtilService = posUtilService;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
+        _phoneOrderProcessJobService = phoneOrderProcessJobService;
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;

@@ -30,6 +30,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly IFfmpegService _ffmpegService;
     private readonly ITwilioService _twilioService;
     private readonly OpenAiSettings _openAiSettings;
+    private readonly IOpenaiClient _openaiClient;
     private readonly TwilioSettings _twilioSettings;
     private readonly IPosUtilService _posUtilService;
     private readonly ISmartiesClient _smartiesClient;
@@ -50,6 +51,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ITwilioService twilioService,
         TwilioSettings twilioSettings,
         OpenAiSettings openAiSettings,
+        IOpenaiClient openaiClient,
         ISmartiesClient smartiesClient,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
@@ -66,6 +68,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _twilioService = twilioService;
         _twilioSettings = twilioSettings;
         _openAiSettings = openAiSettings;
+        _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _translationClient = translationClient;
         _phoneOrderService = phoneOrderService;
