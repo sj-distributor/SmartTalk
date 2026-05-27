@@ -108,6 +108,14 @@ public partial class RealtimeAiService
         if (!string.IsNullOrEmpty(aiAudioData.ItemId))
             _ctx.LastAssistantItemId = aiAudioData.ItemId;
 
+        // Capture the stream-time at which the AI started speaking THIS turn (set-once
+        // per turn). Phase 10.3 will compute audio_end_ms = LatestMediaTimestamp - this
+        // value to tell OpenAI exactly where to truncate the assistant message in its
+        // conversation history. Set only on the FIRST delta of the turn so subsequent
+        // deltas don't shift the anchor forwards.
+        if (!_ctx.ResponseStartTimestampTwilio.HasValue && _ctx.LatestMediaTimestamp.HasValue)
+            _ctx.ResponseStartTimestampTwilio = _ctx.LatestMediaTimestamp;
+
         var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
         await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
@@ -133,6 +141,11 @@ public partial class RealtimeAiService
         // The interrupt window for this turn has closed; clear so the next user-barge-in
         // opportunity (Phase 10.3) can't send a stale id that the provider would reject.
         _ctx.LastAssistantItemId = null;
+
+        // Reset the per-turn stream-time anchor. The next turn's first ResponseAudioDelta
+        // will set it again. LatestMediaTimestamp deliberately keeps its value — it's the
+        // running clock, not a per-turn quantity.
+        _ctx.ResponseStartTimestampTwilio = null;
 
         var idleFollowUp = _ctx.Options.IdleFollowUp;
 

@@ -9,13 +9,22 @@ public enum RealtimeAiClientMessageType { Audio, Image, Text, Start, Stop, Unkno
 public class ParsedClientMessage
 {
     public string Payload { get; set; }
-    
+
     public RealtimeAiClientMessageType Type { get; set; }
 
     /// <summary>
     /// Metadata from lifecycle events (e.g. CallSid, StreamSid from Twilio "start").
     /// </summary>
     public Dictionary<string, string> Metadata { get; set; }
+
+    /// <summary>
+    /// Optional millisecond timestamp the client emitted alongside this message.
+    /// Currently populated only by <see cref="Clients.Twilio.TwilioRealtimeAiClientAdapter"/>
+    /// from the <c>media.timestamp</c> field; web / default clients leave it null.
+    /// Phase 10.3 reads this on user-speech-detected to compute the OpenAI
+    /// <c>conversation.item.truncate audio_end_ms</c> for the in-flight assistant turn.
+    /// </summary>
+    public long? Timestamp { get; set; }
 }
 
 public interface IRealtimeAiClientAdapter : IScopedDependency
