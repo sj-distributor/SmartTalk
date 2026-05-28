@@ -9,6 +9,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
@@ -283,7 +284,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         if (assistant?.Knowledge == null || string.IsNullOrEmpty(assistant.Knowledge.Prompt))
             return string.Empty;
 
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
         var finalPrompt = string.Join("\n\n", new[]

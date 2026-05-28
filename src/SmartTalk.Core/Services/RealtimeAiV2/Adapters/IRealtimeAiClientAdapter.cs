@@ -9,13 +9,19 @@ public enum RealtimeAiClientMessageType { Audio, Image, Text, Start, Stop, Unkno
 public class ParsedClientMessage
 {
     public string Payload { get; set; }
-    
+
     public RealtimeAiClientMessageType Type { get; set; }
 
     /// <summary>
     /// Metadata from lifecycle events (e.g. CallSid, StreamSid from Twilio "start").
     /// </summary>
     public Dictionary<string, string> Metadata { get; set; }
+
+    /// <summary>
+    /// Optional millisecond timestamp from the client. Populated by Twilio from
+    /// <c>media.timestamp</c>; web / default clients leave it null.
+    /// </summary>
+    public long? Timestamp { get; set; }
 }
 
 public interface IRealtimeAiClientAdapter : IScopedDependency

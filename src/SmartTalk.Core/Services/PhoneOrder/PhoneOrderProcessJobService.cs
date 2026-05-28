@@ -12,8 +12,9 @@ using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Core.Utils;
+using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -106,7 +107,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange()
     {
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         
         var startLocal = new DateTime(2025, 8, 1, 0, 0, 0);
         var endLocal = new DateTime(2025, 8, 31, 23, 59, 59);

@@ -30,6 +30,12 @@ public class RealtimeAiSessionContext
     public bool IsProviderResponseInProgress;
     public bool HasPendingProviderResponseTrigger;
 
+    // Barge-in state: item_id of the in-flight assistant turn + stream-time anchor.
+    // Both cleared after the truncate is sent or the turn completes.
+    public string LastAssistantItemId { get; set; }
+    public long? LatestMediaTimestamp { get; set; }
+    public long? ResponseStartTimestampTwilio { get; set; }
+
     // Recording — buffer encapsulates the previous (MemoryStream + SemaphoreSlim)
     // pair behind a single interface; PR 3.2 will swap implementations via env var.
     public IRecordingBuffer AudioBuffer { get; set; }

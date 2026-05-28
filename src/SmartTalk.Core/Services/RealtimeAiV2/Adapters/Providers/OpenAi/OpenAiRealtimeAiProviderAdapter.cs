@@ -230,20 +230,21 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return JsonSerializer.Serialize(message);
     }
     
-    public object BuildInterruptMessage(string lastAssistantItemIdToInterrupt)
+    public string BuildTruncateMessage(string itemId, long audioEndMs)
     {
-        if (!string.IsNullOrEmpty(lastAssistantItemIdToInterrupt))
+        if (string.IsNullOrEmpty(itemId))
         {
-            var message = new
-            {
-                type = "conversation.interrupt",
-                item_id_to_interrupt = lastAssistantItemIdToInterrupt
-            };
-            return message;
+            Log.Warning("[RealtimeAi] Cannot build truncate message, missing item ID");
+            return null;
         }
 
-        Log.Warning("[RealtimeAi] Cannot build interrupt message, missing item ID");
-        return null;
+        return JsonSerializer.Serialize(new
+        {
+            type = "conversation.item.truncate",
+            item_id = itemId,
+            content_index = 0,
+            audio_end_ms = Math.Max(0L, audioEndMs)
+        });
     }
 
     public string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output)

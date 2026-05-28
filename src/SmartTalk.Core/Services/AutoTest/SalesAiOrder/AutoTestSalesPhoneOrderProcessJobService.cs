@@ -29,6 +29,7 @@ using SmartTalk.Messages.Dto.SpeechMatics;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.Caching.Redis;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
@@ -184,7 +185,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return;
             }
 
-            var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            var pstZone = PstTimeZone.Get();
             var singleDayRecords = callRecords.SelectMany(r => new[]
                 {
                     new { Phone = NormalizePhone(r.FromNumber), Record = r }, 
@@ -673,8 +674,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, byte[] audioContent, CancellationToken cancellationToken)
     {
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow,
-            TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
         var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(aiSpeechAssistant.Name, cancellationToken);
@@ -849,7 +849,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistant.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (knowledge == null) return null;
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         var finalPrompt = knowledge.Prompt
             .Replace("#{current_time}", currentTime)
@@ -985,7 +985,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
                 return null;
             }
             
-            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            var pacificZone = PstTimeZone.Get();
             var sapStartDate = TimeZoneInfo.ConvertTimeFromUtc(record.StartTimeUtc, pacificZone).Date;
             
             var sapResp = await RetrySapAsync(() =>

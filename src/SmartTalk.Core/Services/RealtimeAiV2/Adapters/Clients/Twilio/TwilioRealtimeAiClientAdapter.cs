@@ -68,12 +68,28 @@ public class TwilioRealtimeAiClientAdapter : IRealtimeAiClientAdapter
             return new ParsedClientMessage { Type = RealtimeAiClientMessageType.Unknown };
 
         var mediaType = media.TryGetProperty("type", out var t) ? t.GetString() : null;
+        var timestamp = ExtractMediaTimestamp(media);
 
         return mediaType switch
         {
-            "video" => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Image, Payload = payload },
-            _ => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = payload }
+            "video" => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Image, Payload = payload, Timestamp = timestamp },
+            _ => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = payload, Timestamp = timestamp }
         };
+    }
+
+    // Twilio doc'd shape is string ms; real payloads occasionally use the numeric form.
+    // Bad / missing timestamp must not drop the audio frame.
+    private static long? ExtractMediaTimestamp(JsonElement media)
+    {
+        if (!media.TryGetProperty("timestamp", out var tsProp)) return null;
+
+        if (tsProp.ValueKind == JsonValueKind.String && long.TryParse(tsProp.GetString(), out var parsed))
+            return parsed;
+
+        if (tsProp.ValueKind == JsonValueKind.Number && tsProp.TryGetInt64(out var direct))
+            return direct;
+
+        return null;
     }
 
     public object BuildAudioDeltaMessage(string base64Payload, string sessionId)

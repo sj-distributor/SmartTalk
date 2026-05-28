@@ -2,6 +2,7 @@ using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AutoTest.SalesAiOrder;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Enums.AutoTest;
 
 namespace SmartTalk.Core.Services.AutoTest;
@@ -55,7 +56,7 @@ public class ApiDataImportHandler : IAutoTestDataImportHandler
                     var startUtc = startDateObj is DateTime dt1 ? dt1 : DateTime.Parse(startDateObj.ToString());
                     var endUtc = endDateObj is DateTime dt2 ? dt2 : DateTime.Parse(endDateObj.ToString());
 
-                    var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+                    var pstZone = PstTimeZone.Get();
 
                     var startPstDate = TimeZoneInfo.ConvertTimeFromUtc(startUtc, pstZone).Date;
                     var endPstDate = TimeZoneInfo.ConvertTimeFromUtc(endUtc, pstZone).Date;
