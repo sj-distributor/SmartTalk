@@ -1542,10 +1542,7 @@ public partial class AiSpeechAssistantService
             relatedLookup = copyToRelateds.GroupBy(x => x.TargetKnowledgeId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(x => x.CreatedDate).ToList());
         }
-
-        var isSameAssistantCopy = copyToKnowledges.All(x => x.AssistantId == copyFromKnowledge.AssistantId);
-        var effectiveIsSyncUpdate = command.IsSyncUpdate || isSameAssistantCopy;
-
+       
         foreach (var copyToKnowledge in copyToKnowledges)
         {
             var newCopyToKnowledge = await BuildNewCopyToKnowledgeAsync(
@@ -1572,11 +1569,11 @@ public partial class AiSpeechAssistantService
             var oldCopyTo = effectiveCopyToKnowledges[i];
             var newCopyTo = newCopeToKnowledges[i];
 
-            await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, effectiveIsSyncUpdate, cancellationToken)
+            await BuildNewCopyToKnowledgeDetailAsync(oldCopyTo, newCopyTo, copyFromKnowledge, command.IsSyncUpdate, cancellationToken)
                 .ConfigureAwait(false);
         }
         
-        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, effectiveIsSyncUpdate, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
+        await BuildAndPersistCopyRelatedsAsync(copyFromKnowledge, command.IsSyncUpdate, copyToKnowledges, newCopeToKnowledges, relatedLookup, copyFromRelatedLookup, cancellationToken).ConfigureAwait(false);
         
         var oldToNewKnowledgeIdMap = new Dictionary<int, int>();
         for (var i = 0; i < effectiveCopyToKnowledges.Count && i < newCopeToKnowledges.Count; i++) oldToNewKnowledgeIdMap[effectiveCopyToKnowledges[i].Id] = newCopeToKnowledges[i].Id;
