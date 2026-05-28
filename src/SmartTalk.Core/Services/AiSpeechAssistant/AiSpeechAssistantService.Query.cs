@@ -206,7 +206,9 @@ public partial class AiSpeechAssistantService
     {
         var sceneRelationMap = await BuildKnowledgeSceneRelationDtosAsync([knowledgeId], cancellationToken).ConfigureAwait(false);
         var sceneItemMap = await BuildKnowledgeSceneItemMapAsync(sceneRelationMap, cancellationToken).ConfigureAwait(false);
-        return sceneItemMap.TryGetValue(knowledgeId, out var items) ? items : [];
+        return sceneItemMap.TryGetValue(knowledgeId, out var items)
+            ? items.OrderBy(x => x.Id).ToList()
+            : [];
     }
 
     private async Task<Dictionary<int, List<KnowledgeSceneItemDto>>> BuildKnowledgeSceneItemMapAsync(Dictionary<int, List<AiSpeechAssistantKnowledgeSceneRelationDto>> sceneRelationMap, CancellationToken cancellationToken)
