@@ -26,6 +26,12 @@ public interface IPosUtilService : IScopedDependency
     Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken);
 
     Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
+
+    Task<List<PosMenuProductBriefDto>> GetPosMenuProductBriefsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
+
+    Task<string> GetPosMenuTimePeriodsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
+
+    Task<string> GetPosStoreTimePeriodsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default);
 }
 
 public class PosUtilService : IPosUtilService
@@ -48,30 +54,64 @@ public class PosUtilService : IPosUtilService
     
     public async Task GenerateAiDraftAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant assistant, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        if (record is not { Scenario: DialogueScenarios.Order })
-        {
-            Log.Information("The scenario is not the order scenario: {@Record}.", record);
-            
-            return;
-        }
+        if (IsNotOrderScenario(record)) return;
         
         if (agent.Type != AgentType.PosCompanyStore || !assistant.IsAutoGenerateOrder) return;
         
-        var posOrder = await _posDataProvider.GetPosOrderByIdAsync(recordId: record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (posOrder != null)
-        {
-            Log.Information("The order already exist: {@PosOrder}, recordId: {RecordId}", posOrder, record.Id);
-            
-            return;
-        }
+        if (await CheckPosOrderIfExistsAsync(record.Id, cancellationToken).ConfigureAwait(false)) return;
         
-        var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var report = originalReport?.Report ?? record.TranscriptionText;
+        var report = await GetOriginalAnalysisReportAsync(record, cancellationToken).ConfigureAwait(false);
         
         var (products, menuItems) = await GeneratePosMenuItemsAsync(agent.Id, true, record.Language, cancellationToken).ConfigureAwait(false);
 
+        try
+        {
+            var aiDraftOrder = await GenerateDraftOrderFromReportAsync(record, menuItems, report, cancellationToken).ConfigureAwait(false);
+
+            var matchedProducts = MatchPosProducts(products, aiDraftOrder);
+
+            await HandleAiDraftOrderSpecificationsAsync(record, matchedProducts, aiDraftOrder, cancellationToken).ConfigureAwait(false);
+
+            var order = await BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
+
+            if (assistant.IsAllowOrderPush)
+                await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Generate ai draft order failed");
+        }
+    }
+
+    private bool IsNotOrderScenario(PhoneOrderRecord record)
+    {
+        if (record is { Scenario: DialogueScenarios.Order }) return false;
+        
+        Log.Information("The scenario is not the order scenario: {@Record}.", record);
+        
+        return true;
+    }
+
+    private async Task<bool> CheckPosOrderIfExistsAsync(int recordId, CancellationToken cancellationToken)
+    {
+        var posOrder = await _posDataProvider.GetPosOrderByIdAsync(recordId: recordId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (posOrder == null) return false;
+        
+        Log.Information("The order already exist: {@PosOrder}, recordId: {RecordId}", posOrder, recordId);
+            
+        return true;
+    }
+
+    private async Task<string> GetOriginalAnalysisReportAsync(PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
+        var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return originalReport?.Report ?? record.TranscriptionText;
+    }
+
+    private async Task<AiDraftOrderDto> GenerateDraftOrderFromReportAsync(PhoneOrderRecord record, string menuItems, string report, CancellationToken cancellationToken)
+    {
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
         var systemPrompt =
@@ -81,12 +121,25 @@ public class PosUtilService : IPosUtilService
             "如果報告中提到了客户的姓名，請提取客户的姓名 customerName 。\n" +
             "如果報告中提到了客户的配送地址，請提取客户的配送地址 customerAddress，若无则忽略 。\n" +
             "如果報告中提到了客户的订单注意事项或者是要求，且該內容不能獨立構成一個可下單的菜品名稱，則請提取為备注信息 notes；若该要求是附属于某一道菜品的特殊交代（如口味、加料、忌口），則在不影響該菜品正常生成 items 的前提下，將該要求體現在 notes 中。\n" +
-            "另外请注意备注的语言，当前的语言为: " + record.Language.GetDescription() + "，如果当前语言类型为 zh，则备注为中文，若不是 zh，则备注为英文 \n" +
+            "另外请注意备注的语言与表达方式：当前语言为 " + record.Language.GetDescription() + "，zh 用中文，否则用英文；备注必须为客户原话或直接指令（如“不要辣”、“rice on the side”），去除“客人/Customer”等前缀，不得使用第三人称转述。\n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"type\"，items（数组，元素包含 productId：菜品ID, name：菜品名, quantity：数量, specification：规格（比如：大、中、小，加小料、加椰果或者有关菜品的其他内容））。\n" +
             "範例：\n" +
             "{\"type\":0,\"phoneNumber\":\"40085235698\",\"customerName\":\"刘先生\",\"customerAddress\":\"中环广场一座\",\"notes\":\"给个酱油包\",\"items\":[{\"productId\":\"9778779965031491\",\"name\":\"海南雞湯麵\",\"quantity\":1,\"specification\":null}]}" +
             "{\"type\":1,\"phoneNumber\":\"40026235458\",\"customerName\":\"吴先生\",\"customerAddress\":\"中环广场三座\",\"notes\":\"到了不要敲门，放门口\",\"items\":[{\"productId\":\"9225097809167409\",\"name\":\"港式燒鴨\",\"quantity\":1,\"specification\":\"半隻\"}]} \n\n" +
             "菜單列表：\n" + menuItems + "\n\n" +
+            "菜品提取補充規則（非常重要）：\n" +
+            "1. 菜單中的序號（如 1.、144.）不是 productId 的一部分，必須忽略。\n" +
+            "2. 每一行菜單必須拆分為：菜名 + (數字ID)，只允許提取括號中的數字作為 productId。\n" +
+            "3. productId 必須為純數字字符串（例如：\"9593707405182106\"）。\n" +
+            "4. 嚴禁將“序號.菜名”或“序號.菜名(數字ID)”或任何包含文字的內容作為 productId。\n" +
+            "5. 如果 productId 包含非數字內容（如字母、點號、菜名），則該結果視為錯誤，不允許輸出。\n" +
+            "6. productId 必須能在菜單中唯一對應到某一個菜品，否則不得輸出該 item。\n" +
+            "7. 如果客戶對飯或湯有修改（如不要湯、換飯），需體現在 specification 或 notes 中。\n" +
+            "8. 菜品匹配优先依据关键字（如 Seafood / Chicken / Beef + Fried / Soup / Pan Fried + Rice / Noodle），尽量保持这些词一致。\n" +
+            "9. 若有多个相似菜品，优先选择关键字重合度最高的一个，而不是第一个匹配项。\n" +
+            "10. 若客户提到 Fried / Soup / Rice / Noodle 等关键类型词，不得匹配相反类型（如 Noodle ≠ Rice，Fried ≠ Soup）。\n" +
+            "11. 用户表达不完整时（如 “seafood noodle”），可匹配最合理的完整菜品，不要求完全一致。\n" +
+            "12. 在多个候选中，请先比较再选择最合适的一个，避免误选相似菜品。\n" +
             "注意：\n1. 必須嚴格按格式輸出 JSON，不要有其他字段或額外說明。\n2. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"type\":0, \"items\": [] }。不得臆造或猜測菜品。** \n" +
             "請務必完整提取報告中每一個提到的菜品";
 
@@ -98,57 +151,17 @@ public class PosUtilService : IPosUtilService
             new UserChatMessage("客戶分析報告文本：\n" + report + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseModalities = ChatResponseModalities.Text, ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
-
-        try
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions
         {
-            var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
+            ResponseModalities = ChatResponseModalities.Text,
+            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+        }, cancellationToken).ConfigureAwait(false);
+        
+        var aiDraftOrder = JsonConvert.DeserializeObject<AiDraftOrderDto>(completion.Value.Content.FirstOrDefault()?.Text ?? "");
 
-            Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
-
-            var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).DistinctBy(x => x.ProductId).ToList();
-
-            Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
-
-            var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
-                .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
-
-            Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
-
-            foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification) && !string.IsNullOrEmpty(x.ProductId)))
-            {
-                if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
-                {
-                    try
-                    {
-                        var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, record.Language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
-                        
-                        Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
-
-                        if (builtModifiers == null || builtModifiers.Count == 0) continue;
-
-                        aiDraftItem.Modifiers = builtModifiers;
-                    }
-                    catch (Exception e)
-                    {
-                        aiDraftItem.Modifiers = [];
-                        
-                        Log.Error(e, "Failed to build product: {@AiDraftItem} modifiers", aiDraftItem);
-                    }
-                }
-            }
-
-            Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
-
-            var order = await BuildPosOrderAsync(record, aiDraftOrder, matchedProducts, cancellationToken).ConfigureAwait(false);
-
-            if (assistant.IsAllowOrderPush)
-                await _posService.HandlePosOrderAsync(order, false, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception e)
-        {
-            Log.Error(e, "Failed to extract products from report text");
-        }
+        Log.Information("Deserialize response to ai order: {@AiOrder}", aiDraftOrder);
+        
+        return aiDraftOrder;
     }
 
     public async Task<List<AiDraftItemModifiersDto>> GenerateSpecificationProductsAsync(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language, string specification, CancellationToken cancellationToken)
@@ -184,6 +197,48 @@ public class PosUtilService : IPosUtilService
         Log.Information("Deserialize response to ai specification: {@Result}", result);
         
         return result.Modifiers;
+    }
+
+    private List<PosProduct> MatchPosProducts(List<PosProduct> products, AiDraftOrderDto aiDraftOrder)
+    {
+        var matchedProducts = products.Where(x => aiDraftOrder.Items.Select(p => p.ProductId).Contains(x.ProductId)).DistinctBy(x => x.ProductId).ToList();
+
+        Log.Information("Matched products: {@MatchedProducts}", matchedProducts);
+        
+        return matchedProducts;
+    }
+
+    private async Task HandleAiDraftOrderSpecificationsAsync(PhoneOrderRecord record, List<PosProduct> matchedProducts, AiDraftOrderDto aiDraftOrder, CancellationToken cancellationToken)
+    {
+        var productModifiersLookup = matchedProducts.Where(x => !string.IsNullOrWhiteSpace(x.Modifiers))
+            .ToDictionary(x => x.ProductId, x => JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(x.Modifiers));
+
+        Log.Information("Build product's modifiers: {@ModifiersLookUp}", productModifiersLookup);
+
+        foreach (var aiDraftItem in aiDraftOrder.Items.Where(x => !string.IsNullOrEmpty(x.Specification) && !string.IsNullOrEmpty(x.ProductId)))
+        {
+            if (productModifiersLookup.TryGetValue(aiDraftItem.ProductId, out var modifiers))
+            {
+                try
+                {
+                    var builtModifiers = await GenerateSpecificationProductsAsync(modifiers, record.Language, aiDraftItem.Specification, cancellationToken).ConfigureAwait(false);
+                        
+                    Log.Information("Matched modifiers: {@MatchedModifiers}", builtModifiers);
+
+                    if (builtModifiers == null || builtModifiers.Count == 0) continue;
+
+                    aiDraftItem.Modifiers = builtModifiers;
+                }
+                catch (Exception e)
+                {
+                    aiDraftItem.Modifiers = [];
+                        
+                    Log.Error(e, "Failed to build product: {@AiDraftItem} modifiers", aiDraftItem);
+                }
+            }
+        }
+
+        Log.Information("Enrich ai draft order: {@EnrichAiDraftOrder}", aiDraftOrder);
     }
     
      public async Task<(List<PosProduct> Products, string MenuItems)> GeneratePosMenuItemsAsync(int agentId, bool isWithProductId = false, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
@@ -228,6 +283,454 @@ public class PosUtilService : IPosUtilService
         }
 
         return (categoryProductsLookup.SelectMany(x => x.Value).ToList(), menuItems.TrimEnd('\r', '\n'));
+    }
+
+    public async Task<List<PosMenuProductBriefDto>> GetPosMenuProductBriefsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
+    {
+        var productMenuPairs = await _posDataProvider
+            .GetPosProductsWithMenusByAgentIdAsync(agentId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (productMenuPairs.Count == 0) return [];
+
+        var productsWithMenus = productMenuPairs
+            .Where(x => x.Product is { Status: true } && !string.IsNullOrWhiteSpace(x.Product.ProductId))
+            .GroupBy(x => x.Product.ProductId)
+            .Select(group =>
+            {
+                var products = group
+                    .Select(x => x.Product)
+                    .DistinctBy(x => x.Id)
+                    .ToList();
+
+                var product = products
+                    .OrderBy(x => x.SortOrder ?? int.MaxValue)
+                    .ThenBy(x => x.Id)
+                    .First();
+
+                var categoryIds = products
+                    .Select(x => x.CategoryId)
+                    .Distinct()
+                    .ToList();
+
+                var menus = group
+                    .Select(x => x.Menu)
+                    .Where(x => x != null)
+                    .DistinctBy(x => x.Id)
+                    .OrderBy(x => x.Id)
+                    .ToList();
+
+                return (Product: product, Menus: menus, CategoryIds: categoryIds);
+            })
+            .OrderBy(x => x.Product.SortOrder ?? int.MaxValue)
+            .ThenBy(x => x.Product.ProductId ?? string.Empty, StringComparer.Ordinal)
+            .ToList();
+
+        var categories = await _posDataProvider.GetPosCategoriesAsync(
+            ids: productsWithMenus.SelectMany(x => x.CategoryIds).Distinct().ToList(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var categoryNamesById = categories
+            .DistinctBy(x => x.Id)
+            .ToDictionary(
+                x => x.Id,
+                x =>
+                {
+                    try
+                    {
+                        var localization = JsonConvert.DeserializeObject<PosNamesLocalization>(x.Names);
+                        return BuildMenuItemPosDisplayName(localization);
+                    }
+                    catch
+                    {
+                        return string.Empty;
+                    }
+                });
+
+        var result = new List<PosMenuProductBriefDto>(productsWithMenus.Count);
+
+        foreach (var (product, menus, categoryIds) in productsWithMenus)
+        {
+            var productLocalization = JsonConvert.DeserializeObject<PosNamesLocalization>(product.Names);
+            var name = BuildMenuItemPosName(productLocalization, language);
+            var nameCn = BuildMenuItemPosName(productLocalization, TranscriptionLanguage.Chinese);
+            var nameEn = BuildMenuItemPosName(productLocalization, TranscriptionLanguage.English);
+            var categoryName = string.Join("、", categoryIds
+                .Select(id => categoryNamesById.TryGetValue(id, out var currentCategoryName) ? currentCategoryName : string.Empty)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal));
+
+            var taxes = ParseProductTaxes(product.Tax);
+            var specification = ParseProductModifierOptions(product.Modifiers, language);
+            var modifierGroups = ParseProductModifierGroups(product.Modifiers, language);
+            var menuInfos = menus
+                .Select(menu =>
+                {
+                    string menuName;
+                    try
+                    {
+                        var localization = JsonConvert.DeserializeObject<PosNamesLocalization>(menu.Names);
+                        menuName = BuildMenuItemPosName(localization, language);
+                    }
+                    catch
+                    {
+                        menuName = string.Empty;
+                    }
+
+                    var timePeriod = ParseMenuTimePeriods(menu.TimePeriod, language);
+
+                    if (string.IsNullOrWhiteSpace(menuName) && string.IsNullOrWhiteSpace(timePeriod))
+                        return null;
+
+                    return new PosMenuBriefDto
+                    {
+                        Name = menuName,
+                        TimePeriod = timePeriod
+                    };
+                })
+                .Where(x => x != null)
+                .DistinctBy(x => new { x.Name, x.TimePeriod })
+                .ToList();
+
+            result.Add(new PosMenuProductBriefDto
+            {
+                ProductId = product.ProductId,
+                Name = name,
+                NameCn = nameCn,
+                NameEn = nameEn,
+                CategoryName = categoryName,
+                Price = product.Price,
+                Tax = taxes,
+                Specification = specification,
+                ModifierGroups = modifierGroups,
+                PosMenus = menuInfos
+            });
+        }
+
+        return result;
+    }
+
+    public async Task<string> GetPosMenuTimePeriodsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
+    {
+        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        if (storeAgent == null) return string.Empty;
+
+        var menus = await _posDataProvider.GetPosMenusAsync(storeAgent.StoreId, true, cancellationToken).ConfigureAwait(false);
+        if (menus == null || menus.Count == 0) return string.Empty;
+
+        var lines = new List<string>();
+
+        foreach (var menu in menus)
+        {
+            if (string.IsNullOrWhiteSpace(menu?.TimePeriod)) continue;
+
+            List<EasyPosResponseTimePeriod> periods;
+            try
+            {
+                periods = JsonConvert.DeserializeObject<List<EasyPosResponseTimePeriod>>(menu.TimePeriod);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (periods == null || periods.Count == 0) continue;
+
+            var menuName = string.Empty;
+            try
+            {
+                var localization = JsonConvert.DeserializeObject<PosNamesLocalization>(menu.Names);
+                menuName = BuildMenuItemPosName(localization, language);
+            }
+            catch
+            {
+                menuName = string.Empty;
+            }
+
+            foreach (var period in periods)
+            {
+                if (period == null || string.IsNullOrWhiteSpace(period.StartTime) || string.IsNullOrWhiteSpace(period.EndTime))
+                    continue;
+
+                var dayText = BuildDayOfWeekSummary(period.DayOfWeeks, language);
+                var periodName = string.IsNullOrWhiteSpace(period.Name) ? string.Empty : period.Name.Trim();
+                var label = string.IsNullOrWhiteSpace(menuName) ? string.Empty : $"{menuName} ";
+                var window = $"{period.StartTime}-{period.EndTime}";
+
+                var line = string.IsNullOrWhiteSpace(periodName)
+                    ? $"{label}{dayText} {window}".Trim()
+                    : $"{label}{periodName} {dayText} {window}".Trim();
+
+                if (!string.IsNullOrWhiteSpace(line))
+                    lines.Add(line);
+            }
+        }
+
+        var distinctLines = lines
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return distinctLines.Count == 0 ? string.Empty : string.Join(Environment.NewLine, distinctLines);
+    }
+
+    public async Task<string> GetPosStoreTimePeriodsAsync(int agentId, TranscriptionLanguage language = TranscriptionLanguage.Chinese, CancellationToken cancellationToken = default)
+    {
+        var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
+        if (store == null || string.IsNullOrWhiteSpace(store.TimePeriod)) return string.Empty;
+
+        List<StoreTimePeriod> periods;
+        try
+        {
+            periods = JsonConvert.DeserializeObject<List<StoreTimePeriod>>(store.TimePeriod);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+
+        if (periods == null || periods.Count == 0) return string.Empty;
+
+        var lines = new List<string>();
+
+        foreach (var period in periods)
+        {
+            if (period == null || string.IsNullOrWhiteSpace(period.StartTime) || string.IsNullOrWhiteSpace(period.EndTime))
+                continue;
+
+            var dayText = BuildDayOfWeekSummary(period.DayOfWeeks, language);
+            var periodName = string.IsNullOrWhiteSpace(period.Name) ? string.Empty : period.Name.Trim();
+            var window = $"{period.StartTime}-{period.EndTime}";
+
+            var line = string.IsNullOrWhiteSpace(periodName)
+                ? $"{dayText} {window}".Trim()
+                : $"{periodName} {dayText} {window}".Trim();
+
+            if (!string.IsNullOrWhiteSpace(line))
+                lines.Add(line);
+        }
+
+        var distinctLines = lines
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return distinctLines.Count == 0 ? string.Empty : string.Join(Environment.NewLine, distinctLines);
+    }
+
+    private static string BuildDayOfWeekSummary(List<int> dayOfWeeks, TranscriptionLanguage language)
+    {
+        if (dayOfWeeks == null || dayOfWeeks.Count == 0) return language == TranscriptionLanguage.English ? "Daily" : "每天";
+
+        var validDays = dayOfWeeks
+            .Where(x => x is >= 0 and <= 6)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+
+        if (validDays.Count == 0 || validDays.Count == 7) return language == TranscriptionLanguage.English ? "Daily" : "每天";
+
+        var zhDays = new[] { "周日", "周一", "周二", "周三", "周四", "周五", "周六" };
+        var enDays = new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+        var dayNames = validDays.Select(x => language == TranscriptionLanguage.English ? enDays[x] : zhDays[x]);
+
+        return language == TranscriptionLanguage.English
+            ? string.Join(",", dayNames)
+            : string.Join("、", dayNames);
+    }
+
+    private string BuildMenuItemPosName(PosNamesLocalization localization, TranscriptionLanguage language = TranscriptionLanguage.Chinese)
+    {
+        if (language is TranscriptionLanguage.Chinese)
+        {
+            var zhPosName = !string.IsNullOrWhiteSpace(localization?.Cn?.PosName) ? localization.Cn.PosName : string.Empty;
+            if (!string.IsNullOrWhiteSpace(zhPosName)) return zhPosName;
+
+            var zhName = !string.IsNullOrWhiteSpace(localization?.Cn?.Name) ? localization.Cn.Name : string.Empty;
+            if (!string.IsNullOrWhiteSpace(zhName)) return zhName;
+
+            var zhSendChefName = !string.IsNullOrWhiteSpace(localization?.Cn?.SendChefName) ? localization.Cn.SendChefName : string.Empty;
+            if (!string.IsNullOrWhiteSpace(zhSendChefName)) return zhSendChefName;
+        }
+
+        var usPosName = !string.IsNullOrWhiteSpace(localization?.En?.PosName) ? localization.En.PosName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usPosName)) return usPosName;
+
+        var usName = !string.IsNullOrWhiteSpace(localization?.En?.Name) ? localization.En.Name : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usName)) return usName;
+
+        var usSendChefName = !string.IsNullOrWhiteSpace(localization?.En?.SendChefName) ? localization.En.SendChefName : string.Empty;
+        if (!string.IsNullOrWhiteSpace(usSendChefName)) return usSendChefName;
+
+        return string.Empty;
+    }
+
+    private string BuildMenuItemPosDisplayName(PosNamesLocalization localization)
+    {
+        var cn = BuildMenuItemPosName(localization, TranscriptionLanguage.Chinese).Trim();
+        var en = BuildMenuItemPosName(localization, TranscriptionLanguage.English).Trim();
+
+        if (!string.IsNullOrWhiteSpace(cn) && !string.IsNullOrWhiteSpace(en))
+            return string.Equals(cn, en, StringComparison.OrdinalIgnoreCase) ? cn : $"{cn} ({en})";
+
+        if (!string.IsNullOrWhiteSpace(cn))
+            return cn;
+
+        if (!string.IsNullOrWhiteSpace(en))
+            return en;
+
+        return string.Empty;
+    }
+
+    private static string ParseProductTaxes(string taxJson)
+    {
+        if (string.IsNullOrWhiteSpace(taxJson)) return string.Empty;
+
+        try
+        {
+            var taxes = JsonConvert.DeserializeObject<List<EasyPosResponseTax>>(taxJson);
+            if (taxes == null || taxes.Count == 0) return string.Empty;
+
+            var simplified = taxes
+                .Select(t => t == null
+                    ? null
+                    : t.IsPercentage
+                        ? $"{t.Value:0.##}%"
+                        : $"{t.Value:0.##}")
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            return simplified.Count == 0 ? string.Empty : string.Join(" + ", simplified);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private string ParseProductModifierOptions(string modifiersJson, TranscriptionLanguage language)
+    {
+        if (string.IsNullOrWhiteSpace(modifiersJson) || modifiersJson == "[]") return string.Empty;
+
+        try
+        {
+            var groups = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(modifiersJson);
+            if (groups == null || groups.Count == 0) return string.Empty;
+
+            var groupSummaries = new List<string>();
+
+            foreach (var group in groups)
+            {
+                if (group?.ModifierProducts == null || group.ModifierProducts.Count == 0) continue;
+
+                var options = group.ModifierProducts
+                    .Select(x =>
+                    {
+                        var optionName = BuildModifierName(x.Localizations, language);
+                        if (string.IsNullOrWhiteSpace(optionName)) return null;
+
+                        return $"{optionName}(+{x.Price:0.##})";
+                    })
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+
+                if (options.Count == 0) continue;
+
+                var optionsText = string.Join("/", options);
+
+                var groupName = BuildModifierName(group.Localizations, language);
+                if (string.IsNullOrWhiteSpace(groupName) || groups.Count == 1)
+                    groupSummaries.Add(optionsText);
+                else
+                    groupSummaries.Add($"{groupName}:{optionsText}");
+            }
+
+            if (groupSummaries.Count == 0) return string.Empty;
+
+            return string.Join("；", groupSummaries.Distinct(StringComparer.Ordinal));
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private List<PosMenuProductModifierGroupDto> ParseProductModifierGroups(string modifiersJson, TranscriptionLanguage language)
+    {
+        if (string.IsNullOrWhiteSpace(modifiersJson) || modifiersJson == "[]") return [];
+
+        try
+        {
+            var groups = JsonConvert.DeserializeObject<List<EasyPosResponseModifierGroups>>(modifiersJson);
+            if (groups == null || groups.Count == 0) return [];
+
+            return groups
+                .Where(x => x?.ModifierProducts != null && x.ModifierProducts.Count != 0)
+                .Select(group => new PosMenuProductModifierGroupDto
+                {
+                    Id = group.Id,
+                    Name = BuildModifierName(group.Localizations, language),
+                    MinimumSelect = group.MinimumSelect,
+                    MaximumSelect = group.MaximumSelect,
+                    MaximumRepetition = group.MaximumRepetition,
+                    Options = group.ModifierProducts
+                        .Select(option => new PosMenuProductModifierOptionDto
+                        {
+                            Id = option.Id,
+                            ProductId = option.ProductId,
+                            Name = BuildModifierName(option.Localizations, language),
+                            Price = option.Price
+                        })
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+                        .DistinctBy(x => x.Id)
+                        .ToList()
+                })
+                .Where(x => x.Options.Count != 0)
+                .DistinctBy(x => x.Id)
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private string ParseMenuTimePeriods(string timePeriodJson, TranscriptionLanguage language)
+    {
+        if (string.IsNullOrWhiteSpace(timePeriodJson)) return string.Empty;
+
+        try
+        {
+            var periods = JsonConvert.DeserializeObject<List<EasyPosResponseTimePeriod>>(timePeriodJson);
+            if (periods == null || periods.Count == 0) return string.Empty;
+
+            var lines = periods
+                .Where(x => x != null && !string.IsNullOrWhiteSpace(x.StartTime) && !string.IsNullOrWhiteSpace(x.EndTime))
+                .Select(x =>
+                {
+                    var dayText = BuildDayOfWeekSummary(x.DayOfWeeks, language);
+                    var periodName = string.IsNullOrWhiteSpace(x.Name) ? string.Empty : x.Name.Trim();
+                    var window = $"{x.StartTime}-{x.EndTime}";
+
+                    return string.IsNullOrWhiteSpace(periodName)
+                        ? $"{dayText} {window}".Trim()
+                        : $"{periodName} {dayText} {window}".Trim();
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            return lines.Count == 0 ? string.Empty : string.Join("；", lines);
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private string BuildItemModifiers(List<EasyPosResponseModifierGroups> modifiers, TranscriptionLanguage language = TranscriptionLanguage.Chinese)

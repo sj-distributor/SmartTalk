@@ -7,11 +7,14 @@ using Shouldly;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.IntegrationTests.Mocks;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.Smarties;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
 
@@ -221,6 +224,131 @@ public partial class AiSpeechAssistantConnectFixture
 
         // Session update sent to OpenAI proves the service proceeded past the service hours check
         openaiWs.SentMessages.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public async Task ShouldResolveCrossTokenCascade_GreetingContainingCustomerItemsToken_NestedTokenAlsoResolved()
+    {
+        // ── Characterization test for the cross-token cascade invariant ──────────
+        //
+        // The original BuildKnowledgeAsync ran each ResolveX sequentially:
+        //   ResolveGreeting injects greeting text → mutates _ctx.Prompt
+        //   ResolveCustomerItems then re-reads _ctx.Prompt and processes any tokens
+        //   that the greeting injection introduced.
+        //
+        // This test pins that emergent behaviour: an operator who configures a
+        // SaleAutoCallNumber greeting containing `#{customer_items}` expects the
+        // customer items to actually appear in the final prompt, NOT a raw
+        // `#{customer_items}` literal that the LLM would treat as broken markup.
+        //
+        // Any refactor that pre-collects token-presence checks (e.g. a hypothetical
+        // "all fetches first, then all applies" rearrangement) would break this
+        // cascade because the customer-items token-presence check would run against
+        // the pre-greeting prompt and find no token — the greeting injection later
+        // would then leak the raw `#{customer_items}` literal.
+        //
+        // The Resolve order in BuildKnowledgeAsync is: Greeting → CustomerItems →
+        // MenuItems → CustomerInfo → POS → Delivery. Cascade only chains FORWARDS
+        // in that order — a greeting can inject any downstream token; CustomerInfo
+        // cannot inject `#{greeting}` (Greeting already ran). This test exercises
+        // the most-reachable cascade: Greeting → CustomerItems.
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "CascadeAssistant",
+                AnsweringNumber = TestDidNumber,
+                ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy",
+                IsDefault = true,
+                IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id,
+                Prompt = "Greeting: #{greeting} End.",
+                IsActive = true,
+                Version = "1.0"
+            });
+
+            // Customer-items cache that the cascade should reach. Distinct literals
+            // so the assertion can confirm the cascade actually resolved the token
+            // (not just that the raw literal happens to be absent for some other reason).
+            // The cache row is keyed by the fixed "customer_items" CacheKey + the
+            // assistant Name in Filter — see SalesDataProvider.CustomerItemsCacheKey.
+            await repository.InsertAsync(new Core.Domain.Sales.AiSpeechAssistantKnowledgeVariableCache
+            {
+                CacheKey = "customer_items",
+                Filter = "CascadeAssistant",
+                CacheValue = "CASCADE_MARKER_PIZZA_LARGE"
+            });
+        });
+
+        // Smarties returns a greeting that EMBEDS the downstream token literal.
+        // The original code's cascade then processes that token when ResolveCustomerItems runs.
+        var smartiesMock = Substitute.For<ISmartiesClient>();
+        smartiesMock.GetSaleAutoCallNumberAsync(Arg.Any<GetSaleAutoCallNumberRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new GetSaleAutoCallNumberResponse
+            {
+                Data = new GetSaleAutoCallNumberResponseData
+                {
+                    Number = new SettingNumberDto
+                    {
+                        Greeting = "Welcome! Today's items: #{customer_items}"
+                    }
+                }
+            });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_CASCADE_TEST", streamSid = "MZ_CASCADE_TEST" }
+        }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber,
+            To = TestDidNumber,
+            Host = TestHost,
+            TwilioWebSocket = twilioWs,
+            NumberId = 42   // Must be non-null so ResolveGreetingAsync fires
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(smartiesMock).AsImplementedInterfaces();
+            openaiWs.Register(builder);
+        });
+
+        openaiWs.SentMessages.ShouldNotBeEmpty();
+        var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
+
+        // Greeting was injected
+        sessionUpdate.ShouldContain("Welcome!");
+
+        // CASCADE invariant: the downstream token embedded in the greeting MUST
+        // have been resolved. The raw `#{customer_items}` literal MUST NOT remain.
+        sessionUpdate.ShouldNotContain("#{customer_items}");
+
+        // The customer-items cache value MUST appear in the final prompt — the
+        // proof that the cascade actually fetched and substituted, not just stripped.
+        sessionUpdate.ShouldContain("CASCADE_MARKER_PIZZA_LARGE");
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
+using SmartTalk.Core.Services.RealtimeAiV2.Recording;
 using SmartTalk.Core.Services.RealtimeAiV2.Wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
@@ -26,16 +27,19 @@ public class RealtimeAiSessionContext
     public int Round { get; set; }
     public volatile bool IsAiSpeaking;
     public volatile bool IsClientAudioToProviderSuspended;
+    public bool IsProviderResponseInProgress;
+    public bool HasPendingProviderResponseTrigger;
 
-    // Recording
-    public MemoryStream AudioBuffer { get; set; }
-    public SemaphoreSlim BufferLock { get; } = new(1, 1);
+    // Recording — buffer encapsulates the previous (MemoryStream + SemaphoreSlim)
+    // pair behind a single interface; PR 3.2 will swap implementations via env var.
+    public IRecordingBuffer AudioBuffer { get; set; }
 
     // Transcriptions
     public ConcurrentQueue<(AiSpeechAssistantSpeaker Speaker, string Text)> Transcriptions { get; } = new();
 
     // Synchronization
     public SemaphoreSlim WsSendLock { get; } = new(1, 1);
+    public SemaphoreSlim ProviderResponseStateLock { get; } = new(1, 1);
 
     // Actions exposed to consumer callbacks
     public RealtimeAiSessionActions SessionActions { get; set; }

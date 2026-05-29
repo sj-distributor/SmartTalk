@@ -487,7 +487,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             new SystemChatMessage(prompt)
         };
 
-        var client = new ChatClient("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        var client = new ChatClient("gpt-audio-1.5", _openAiSettings.ApiKey);
 
         var options = new ChatCompletionOptions
         {
@@ -613,7 +613,7 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         var messages = await ConfigureRecordAnalyzePromptAsync(assistant, audio, cancellationToken).ConfigureAwait(false);
         
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio-2025-08-28", _openAiSettings.ApiKey);
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
@@ -640,12 +640,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         
-        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name)
-            ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList()
-            : new List<string>();
-
-        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.CacheKey == id)?.CacheValue ?? ""));
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(aiSpeechAssistant.Name, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine,
+            customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =
@@ -787,7 +784,11 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
-        ;
+        
+        if (!string.IsNullOrWhiteSpace(baseNumber) &&
+            candidates.Contains(baseNumber, StringComparer.OrdinalIgnoreCase))
+            return baseNumber;
+
         if (candidates.Count == 1) return candidates.First();
 
         if (!string.IsNullOrWhiteSpace(unit))
@@ -822,11 +823,9 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
         if (!finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase)) return finalPrompt;
         
-        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
-        
-        if (soldToIds.Count == 0) return finalPrompt;
-        
-        var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(assistant.Name)) return finalPrompt;
+
+        var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(assistant.Name, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
         finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
 

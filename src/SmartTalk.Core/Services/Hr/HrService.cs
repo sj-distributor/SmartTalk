@@ -23,14 +23,21 @@ public class HrService : IHrService
 
     public async Task AddHrInterviewQuestionsAsync(AddHrInterviewQuestionsCommand command, CancellationToken cancellationToken = default)
     {
-        var questions = command.Questions.Select(x => new HrInterviewQuestion
+        if (command.ClearExisting)
         {
-            Question = x,
-            Section = command.Section,
-            IsUsing = false
-        }).ToList();
-        
-        await _hrDataProvider.AddHrInterviewQuestionsAsync(questions, cancellationToken: cancellationToken);
+            await _hrDataProvider.ReplaceHrInterviewQuestionsAsync(command.Section, command.Questions, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            var entities = command.Questions.Select(x => new HrInterviewQuestion
+            {
+                Question = x,
+                Section = command.Section, 
+                IsUsing = false
+            }).ToList();
+
+            await _hrDataProvider.AddHrInterviewQuestionsAsync(entities, forceSave: true, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task<GetCurrentInterviewQuestionsResponse> GetCurrentInterviewQuestionsAsync(GetCurrentInterviewQuestionsRequest request, CancellationToken cancellationToken = default)
