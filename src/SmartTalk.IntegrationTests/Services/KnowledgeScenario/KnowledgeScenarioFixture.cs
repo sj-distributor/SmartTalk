@@ -491,36 +491,6 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     }
 
     [Fact]
-    public async Task ShouldGetKnowledgeSceneItems()
-    {
-        var caseId = Guid.NewGuid().ToString("N")[..8];
-        int sceneId = 0;
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}");
-            sceneId = (await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{caseId}", "desc", KnowledgeSceneStatus.Published)).Id;
-
-            await CreateSceneItemAsync(repository, unitOfWork, sceneId, $"Item-Match-{caseId}", KnowledgeSceneItemType.Text, $"Content {caseId}");
-            await CreateSceneItemAsync(repository, unitOfWork, sceneId, $"Item-Other-{caseId}", KnowledgeSceneItemType.FAQ, $"FAQ {caseId}");
-        });
-
-        await Run<IMediator>(async mediator =>
-        {
-            var response = await mediator.RequestAsync<GetKnowledgeSceneItemsRequest, GetKnowledgeSceneItemsResponse>(
-                new GetKnowledgeSceneItemsRequest
-                {
-                    SceneId = sceneId,
-                    Keyword = $"Match-{caseId}"
-                });
-
-            response.ShouldNotBeNull();
-            response.Data.Count.ShouldBe(1);
-            response.Data.Single().Name.ShouldBe($"Item-Match-{caseId}");
-        });
-    }
-
-    [Fact]
     public async Task ShouldGetKnowledgeSceneHistory()
     {
         var caseId = Guid.NewGuid().ToString("N")[..8];
@@ -581,89 +551,6 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
             historyResponse.Data.Scenes.Any(x => x.Version == "1.0" && x.Id > 0).ShouldBeTrue();
             historyResponse.Data.Scenes.Any(x => x.Version == "1.1" && x.Id > 0).ShouldBeTrue();
         });
-    }
-
-    [Fact]
-    public async Task ShouldSwitchKnowledgeSceneVersion()
-    {
-        var caseId = Guid.NewGuid().ToString("N")[..8];
-        int folderId = 0;
-        int sceneId = 0;
-        var promptService = CreatePromptServiceMock();
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            folderId = (await CreateFolderAsync(repository, unitOfWork, $"Folder-{caseId}")).Id;
-        });
-
-        await Run<IMediator>(async mediator =>
-        {
-            var addResponse = await mediator.SendAsync<AddKnowledgeSceneCommand, AddKnowledgeSceneResponse>(
-                new AddKnowledgeSceneCommand
-                {
-                    FolderId = folderId,
-                    Name = $"Scene-{caseId}",
-                    Description = $"Desc-{caseId}",
-                    Status = KnowledgeSceneStatus.Published,
-                    SceneItems =
-                    [
-                        new KnowledgeSceneItemDto
-                        {
-                            Name = $"Item-{caseId}",
-                            Type = KnowledgeSceneItemType.Text,
-                            Content = $"Content-{caseId}"
-                        }
-                    ]
-                });
-            sceneId = addResponse.Data.Id;
-
-            var updateResponse = await mediator.SendAsync<UpdateKnowledgeSceneCommand, UpdateKnowledgeSceneResponse>(
-                new UpdateKnowledgeSceneCommand
-                {
-                    Id = addResponse.Data.Id,
-                    FolderId = folderId,
-                    Name = $"Scene-{caseId}",
-                    Description = $"Desc-Updated-{caseId}",
-                    Status = KnowledgeSceneStatus.Published,
-                    SceneItems =
-                    [
-                        new KnowledgeSceneItemDto
-                        {
-                            Id = addResponse.Data.SceneItems.Single().Id,
-                            Name = $"Item-{caseId}",
-                            Type = KnowledgeSceneItemType.Text,
-                            Content = $"Content-Updated-{caseId}"
-                        }
-                    ]
-                });
-
-            var historyResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
-                new GetKnowledgeSceneHistoryRequest { SceneId = addResponse.Data.Id });
-            var oldVersion = historyResponse.Data.Scenes.First(x => x.Version == "1.0");
-            promptService.ClearReceivedCalls();
-
-            var switchResponse = await mediator.SendAsync<SwitchKnowledgeSceneVersionCommand, SwitchKnowledgeSceneVersionResponse>(
-                new SwitchKnowledgeSceneVersionCommand
-                {
-                    SceneId = addResponse.Data.Id,
-                    HistoryId = oldVersion.Id
-                });
-
-            switchResponse.Data.Description.ShouldBe($"Desc-{caseId}");
-            switchResponse.Data.Version.ShouldBe("1.0");
-            switchResponse.Data.SceneItems.Single().Content.ShouldBe($"Content-{caseId}");
-            updateResponse.Data.Version.ShouldBe("1.1");
-
-            var latestHistoryResponse = await mediator.RequestAsync<GetKnowledgeSceneHistoryRequest, GetKnowledgeSceneHistoryResponse>(
-                new GetKnowledgeSceneHistoryRequest { SceneId = addResponse.Data.Id });
-            latestHistoryResponse.Data.Count.ShouldBe(2);
-            latestHistoryResponse.Data.Scenes.Count(x => x.IsActive).ShouldBe(1);
-            latestHistoryResponse.Data.Scenes.Single(x => x.IsActive).Version.ShouldBe("1.0");
-        }, BuildPromptServiceRegistration(promptService));
-
-        await promptService.Received(1).RefreshScenePromptsBySceneIdsAsync(
-            Arg.Is<List<int>>(ids => ids.Count == 1 && ids[0] == sceneId),
-            Arg.Any<CancellationToken>());
     }
 
     private static IAiSpeechAssistantKnowledgePromptService CreatePromptServiceMock()

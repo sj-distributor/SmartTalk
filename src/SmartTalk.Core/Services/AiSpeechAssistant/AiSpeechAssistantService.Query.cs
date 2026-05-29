@@ -224,7 +224,7 @@ public partial class AiSpeechAssistantService
         if (sceneIds.Count == 0)
             return sceneRelationMap.Keys.ToDictionary(x => x, _ => new List<KnowledgeSceneItemDto>());
 
-        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(sceneIds: sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         var result = new Dictionary<int, List<KnowledgeSceneItemDto>>();
 
         foreach (var (knowledgeId, relationMap) in relationMapsByKnowledgeId)
