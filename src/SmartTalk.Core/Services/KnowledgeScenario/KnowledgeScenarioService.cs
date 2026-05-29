@@ -86,6 +86,14 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
     }
 
+    private static List<KnowledgeSceneItemDto> OrderSceneItems(IEnumerable<KnowledgeSceneItemDto> items)
+    {
+        return (items ?? Enumerable.Empty<KnowledgeSceneItemDto>())
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .ToList();
+    }
+
     public async Task<AddKnowledgeSceneFolderResponse> AddKnowledgeSceneFolderAsync(AddKnowledgeSceneFolderCommand command, CancellationToken cancellationToken)
     {
         var folderName = string.IsNullOrWhiteSpace(command.Name) ? "New Folder" : command.Name;
@@ -193,7 +201,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         Log.Information("AddKnowledgeSceneAsync completed. SceneId={@SceneId}, FolderId={@FolderId}, Status={@Status}, SceneItemCount={@SceneItemCount}", scene.Id, scene.FolderId, scene.Status, sceneItems.Count);
 
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
-        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems);
+        sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems));
 
         return new AddKnowledgeSceneResponse
         {
@@ -244,7 +252,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(scene.Id, null, cancellationToken).ConfigureAwait(false);
         await SnapshotKnowledgeSceneAsync(scene, sceneItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
-        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems);
+        sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems));
 
         return new UpdateKnowledgeSceneResponse
         {
@@ -300,7 +308,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         Log.Information("DeleteKnowledgeSceneAsync completed. SceneId={@SceneId}", scene.Id);
 
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
-        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems);
+        sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems));
 
         return new DeleteKnowledgeSceneResponse
         {
@@ -455,7 +463,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var sceneDtos = scenes.Select(scene =>
         {
             var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
-            sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(sceneItemMap.TryGetValue(scene.Id, out var items) ? items : []);
+            sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(sceneItemMap.TryGetValue(scene.Id, out var items) ? items : []));
             sceneDto.SceneItems.ForEach(x => x.SceneStatus = scene.Status);
             return sceneDto;
         }).ToList();
@@ -477,7 +485,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(request.Id, null, cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
-        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges);
+       
+        sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(knowledges));
         sceneDto.SceneItems.ForEach(x => x.SceneStatus = scene.Status);
         Log.Information("GetKnowledgeSceneAsync completed. SceneId={SceneId}, SceneItemCount={SceneItemCount}", scene.Id, knowledges.Count);
       
@@ -504,11 +513,13 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         return new GetKnowledgeSceneItemsResponse
         {
-            Data = _mapper.Map<List<KnowledgeSceneItemDto>>(knowledges).Select(x =>
-            {
-                x.SceneStatus = scene.Status;
-                return x;
-            }).ToList()
+            Data = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(knowledges))
+                .Select(x =>
+                {
+                    x.SceneStatus = scene.Status;
+                    return x;
+                })
+                .ToList()
         };
     }
 
@@ -930,7 +941,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
 
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
-        sceneDto.SceneItems = _mapper.Map<List<KnowledgeSceneItemDto>>(restoredItems);
+        sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(restoredItems));
 
         return new SwitchKnowledgeSceneVersionResponse
         {
