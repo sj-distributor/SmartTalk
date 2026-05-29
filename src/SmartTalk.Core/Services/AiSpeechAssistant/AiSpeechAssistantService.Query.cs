@@ -206,9 +206,7 @@ public partial class AiSpeechAssistantService
     {
         var sceneRelationMap = await BuildKnowledgeSceneRelationDtosAsync([knowledgeId], cancellationToken).ConfigureAwait(false);
         var sceneItemMap = await BuildKnowledgeSceneItemMapAsync(sceneRelationMap, cancellationToken).ConfigureAwait(false);
-        return sceneItemMap.TryGetValue(knowledgeId, out var items)
-            ? items.OrderBy(x => x.Id).ToList()
-            : [];
+        return sceneItemMap.TryGetValue(knowledgeId, out var items) ? items : [];
     }
 
     private async Task<Dictionary<int, List<KnowledgeSceneItemDto>>> BuildKnowledgeSceneItemMapAsync(Dictionary<int, List<AiSpeechAssistantKnowledgeSceneRelationDto>> sceneRelationMap, CancellationToken cancellationToken)
@@ -252,9 +250,8 @@ public partial class AiSpeechAssistantService
     {
         return sceneItems
             .Where(x => relationMap.ContainsKey(x.SceneId))
-            .OrderByDescending(x => relationMap[x.SceneId].CreatedAt)
-            .ThenByDescending(x => x.UpdatedAt ?? x.CreatedAt)
-            .ThenByDescending(x => x.Id)
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .ThenBy(x => x.Id)
             .Select(x =>
             {
                 var relation = relationMap[x.SceneId];
