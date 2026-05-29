@@ -157,15 +157,7 @@ public class KnowledgeScenarioController : ControllerBase
 
         return Ok(response);
     }
-
-    [Route("scene/version/switch"), HttpPost]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SwitchKnowledgeSceneVersionResponse))]
-    public async Task<IActionResult> SwitchKnowledgeSceneVersionAsync([FromBody] SwitchKnowledgeSceneVersionCommand command)
-    {
-        var response = await _mediator.SendAsync<SwitchKnowledgeSceneVersionCommand, SwitchKnowledgeSceneVersionResponse>(command).ConfigureAwait(false);
-
-        return Ok(response);
-    }
+    
     #endregion
 
     #region scene_relation
@@ -195,17 +187,5 @@ public class KnowledgeScenarioController : ControllerBase
 
         return Ok(response);
     }
-    #endregion
-
-    #region scene_item
-    [Route("scene/Items/get"), HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneItemsResponse))]
-    public async Task<IActionResult> GetKnowledgeSceneItemsAsync([FromQuery] GetKnowledgeSceneItemsRequest request)
-    {
-        var response = await _mediator.RequestAsync<GetKnowledgeSceneItemsRequest, GetKnowledgeSceneItemsResponse>(request).ConfigureAwait(false);
-
-        return Ok(response);
-    }
-
     #endregion
 }
