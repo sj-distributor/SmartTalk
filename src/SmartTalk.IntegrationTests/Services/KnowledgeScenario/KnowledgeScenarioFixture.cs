@@ -870,7 +870,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
 
         await unitOfWork.SaveChangesAsync();
 
-        return new RelationSaveSeedResult(scene.Id, company.Id, firstStore.Id, firstKnowledge.Id, firstKnowledge.AssistantId, secondKnowledge.Id, secondKnowledge.AssistantId);
+        return new RelationSaveSeedResult(scene.Id, firstStore.Id, firstKnowledge.Id, firstKnowledge.AssistantId, secondKnowledge.Id, secondKnowledge.AssistantId);
     }
 
     private sealed record FolderCascadeSeedResult(int FolderId, string FolderName, int SceneId, int SceneItemId, int RelationId, int KnowledgeId);
@@ -968,5 +968,5 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
 
     private sealed record SceneCascadeSeedResult(int SceneId, string SceneName, int SceneItemId, int HistoryId, int HistoryItemId, int SceneCompanyId, int SceneStoreApplicationId, int RelationId, int KnowledgeId);
 
-    private sealed record RelationSaveSeedResult(int SceneId, int CompanyId, int StoreId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
+    private sealed record RelationSaveSeedResult(int SceneId, int StoreId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
 }
