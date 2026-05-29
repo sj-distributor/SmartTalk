@@ -1,5 +1,6 @@
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
@@ -16,6 +17,7 @@ using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Core.Constants;
 
 namespace SmartTalk.Core.Services.AiKids;
 
@@ -127,7 +129,8 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                             Transcription = t.Text
                         }).ToList()
                     }, CancellationToken.None));
-            }
+            },
+            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, assistant, CancellationToken.None)
         };
 
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
@@ -144,8 +147,18 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var configs = functionCalls
             .Where(x => !string.IsNullOrWhiteSpace(x.Content))
-            .Select(x => (x.Type, Config: JsonConvert.DeserializeObject<object>(x.Content)))
+            .Select(x => (x.Type, Config: JsonConvert.DeserializeObject<JObject>(x.Content)))
             .ToList();
+
+        var tools = configs
+            .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool)
+            .Select(x => x.Config)
+            .Where(x => x != null)
+            .Cast<object>()
+            .ToList();
+
+        if (assistant.ModelProvider == RealtimeAiProvider.OpenAi)
+            EnsureGetProductPriceSchema(tools);
 
         return new RealtimeAiModelConfig
         {
@@ -155,13 +168,113 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             ModelName = assistant.ModelName,
             ModelLanguage = assistant.ModelLanguage,
             Prompt = resolvedPrompt,
-            Tools = configs
-                .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool)
-                .Select(x => x.Config)
-                .ToList(),
+            Tools = tools,
             TurnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).Config,
             InputAudioNoiseReduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction).Config
         };
+    }
+
+    private static void EnsureGetProductPriceSchema(List<object> tools)
+    {
+        foreach (var tool in tools.OfType<JObject>())
+        {
+            var name = tool.Value<string>("name");
+            if (!string.Equals(name, OpenAiToolConstants.GetProductPrice, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            tool["type"] ??= "function";
+
+            var parameters = tool["parameters"] as JObject ?? new JObject();
+            parameters["type"] ??= "object";
+
+            var properties = parameters["properties"] as JObject ?? new JObject();
+            if (properties["product_name"] == null)
+            {
+                properties["product_name"] = new JObject
+                {
+                    ["type"] = "string",
+                    ["description"] = "The product/dish name the user asked about."
+                };
+            }
+
+            var required = parameters["required"] as JArray ?? new JArray();
+            if (!required.Any(x => string.Equals(x?.ToString(), "product_name", StringComparison.Ordinal)))
+                required.Add("product_name");
+
+            parameters["properties"] = properties;
+            parameters["required"] = required;
+            parameters["additionalProperties"] ??= false;
+
+            tool["parameters"] = parameters;
+        }
+    }
+
+    private async Task<RealtimeAiFunctionCallResult> OnFunctionCallAsync(
+        RealtimeAiWssFunctionCallData functionCallData,
+        RealtimeAiSessionActions actions,
+        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
+        CancellationToken cancellationToken)
+    {
+        if (functionCallData == null || string.IsNullOrWhiteSpace(functionCallData.FunctionName))
+            return null;
+
+        if (!string.Equals(functionCallData.FunctionName, OpenAiToolConstants.GetProductPrice, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return await ProcessProductPriceAsync(functionCallData, assistant, cancellationToken).ConfigureAwait(false);
+    }
+
+    private sealed class ProductPriceArgs
+    {
+        public string ProductName { get; init; }
+    }
+
+    private static ProductPriceArgs ParseProductPriceArgs(string argumentsJson)
+    {
+        if (string.IsNullOrWhiteSpace(argumentsJson)) return new ProductPriceArgs();
+
+        try
+        {
+            var token = JToken.Parse(argumentsJson);
+            if (token.Type == JTokenType.String)
+                return new ProductPriceArgs { ProductName = token.Value<string>() };
+
+            var name = token.Value<string>("product_name")
+                       ?? token.Value<string>("productName")
+                       ?? token.Value<string>("name");
+
+            return new ProductPriceArgs { ProductName = name };
+        }
+        catch
+        {
+            return new ProductPriceArgs();
+        }
+    }
+
+    private static string DefaultPriceLine => $"{Random.Shared.Next(1, 21)}元";
+    
+    private async Task<RealtimeAiFunctionCallResult> ProcessProductPriceAsync(
+        RealtimeAiWssFunctionCallData functionCallData,
+        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
+        CancellationToken cancellationToken)
+    {
+        var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
+
+        if (string.IsNullOrWhiteSpace(args.ProductName))
+        {
+            return new RealtimeAiFunctionCallResult
+            {
+                Output = "Missing product_name. Ask the user which product they want the price for."
+            };
+        }
+
+        var price = DefaultPriceLine;
+        
+        var priceLine = $"{args.ProductName}：{price}";
+        
+        Log.Information("Get product price: {@productName}:{@DefaultPriceLine}", args.ProductName, price);
+
+        return new RealtimeAiFunctionCallResult { Output = priceLine };
     }
 
     private async Task<string> BuildResolvedPromptAsync(

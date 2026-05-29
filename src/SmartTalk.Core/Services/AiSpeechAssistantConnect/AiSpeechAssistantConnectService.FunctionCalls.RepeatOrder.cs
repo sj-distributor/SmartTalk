@@ -53,7 +53,7 @@ public partial class AiSpeechAssistantConnectService
         try
         {
             var stream = AudioHelper.GetRandomAudioStream(voice, language);
-
+            
             using var holdOnStream = new MemoryStream();
             await stream.CopyToAsync(holdOnStream).ConfigureAwait(false);
             var holdOn = Convert.ToBase64String(holdOnStream.ToArray());
