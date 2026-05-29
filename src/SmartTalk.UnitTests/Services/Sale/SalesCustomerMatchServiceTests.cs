@@ -3,7 +3,6 @@ using Shouldly;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Dto.Crm;
-using SmartTalk.Messages.Dto.Sales;
 using Xunit;
 
 namespace SmartTalk.UnitTests.Services.Sale;
@@ -11,12 +10,12 @@ namespace SmartTalk.UnitTests.Services.Sale;
 public class SalesCustomerMatchServiceTests
 {
     private readonly ICrmClient _crmClient = Substitute.For<ICrmClient>();
-    private readonly ISalesClient _salesClient = Substitute.For<ISalesClient>();
+    private readonly IDaovikaClient _daovikaClient = Substitute.For<IDaovikaClient>();
 
     [Fact]
     public async Task MatchCustomerAsync_ShouldReturnPhoneMatchedCustomer_WhenCrmPhoneMatched()
     {
-        var sut = new SalesCustomerMatchService(_crmClient, _salesClient);
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
 
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
         _crmClient.GetCustomersByPhoneNumberAsync(
@@ -45,7 +44,7 @@ public class SalesCustomerMatchServiceTests
     [Fact]
     public async Task MatchCustomerAsync_ShouldFallbackToStoreName_WhenPhoneNotMatched()
     {
-        var sut = new SalesCustomerMatchService(_crmClient, _salesClient);
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
 
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
         _crmClient.GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), "crm-token", Arg.Any<CancellationToken>())
@@ -68,16 +67,14 @@ public class SalesCustomerMatchServiceTests
     [Fact]
     public async Task MatchCustomerAsync_ShouldFallbackToSalesGroup_WhenCustomerIdNotMatched()
     {
-        var sut = new SalesCustomerMatchService(_crmClient, _salesClient);
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
 
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
         _crmClient.GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), "crm-token", Arg.Any<CancellationToken>())
             .Returns([]);
         _crmClient.GetCustomerIdsByShopNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns([]);
-        _salesClient.GetCustomerNumbersByNameAsync(Arg.Any<GetCustomerNumbersByNameRequestDto>(), Arg.Any<CancellationToken>())
-            .Returns(new GetCustomerNumbersByNameResponseDto { Data = [] });
-        _salesClient.GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>())
+        _daovikaClient.GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>())
             .Returns("SG-001");
 
         var result = await sut.MatchCustomerAsync("+1 (916) 428-4295", null, null, ["+1 (916) 428-4295"], CancellationToken.None);
@@ -90,10 +87,10 @@ public class SalesCustomerMatchServiceTests
     [Fact]
     public async Task MatchCustomerAsync_ShouldSkipCustomerMatchingAndFallbackToSalesGroup_WhenCrmUnavailable()
     {
-        var sut = new SalesCustomerMatchService(_crmClient, _salesClient);
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
 
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns<Task<string>>(_ => throw new Exception("crm unavailable"));
-        _salesClient.GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>())
+        _daovikaClient.GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>())
             .Returns("SG-001");
 
         var result = await sut.MatchCustomerAsync("+1 (916) 428-4295", null, "Lucky House", ["+1 (916) 428-4295"], CancellationToken.None);
@@ -108,22 +105,22 @@ public class SalesCustomerMatchServiceTests
     [Fact]
     public async Task MatchCustomerAsync_ShouldTryBothPhoneNumbers_WhenFallbackToSalesGroup()
     {
-        var sut = new SalesCustomerMatchService(_crmClient, _salesClient);
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
 
         _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
         _crmClient.GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), "crm-token", Arg.Any<CancellationToken>())
             .Returns([]);
         _crmClient.GetCustomerIdsByShopNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns([]);
-        _salesClient.GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>())
+        _daovikaClient.GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>())
             .Returns(string.Empty);
-        _salesClient.GetSalesGroupByPhoneNumberAsync("+19165550000", Arg.Any<CancellationToken>())
+        _daovikaClient.GetSalesGroupByPhoneNumberAsync("+19165550000", Arg.Any<CancellationToken>())
             .Returns("SG-002");
 
         var result = await sut.MatchCustomerAsync("+1 (916) 428-4295", "+1 (916) 555-0000", null, ["+1 (916) 428-4295", "+1 (916) 555-0000"], CancellationToken.None);
 
         result.SalesGroup.ShouldBe("SG-002");
-        await _salesClient.Received(1).GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>());
-        await _salesClient.Received(1).GetSalesGroupByPhoneNumberAsync("+19165550000", Arg.Any<CancellationToken>());
+        await _daovikaClient.Received(1).GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>());
+        await _daovikaClient.Received(1).GetSalesGroupByPhoneNumberAsync("+19165550000", Arg.Any<CancellationToken>());
     }
 }

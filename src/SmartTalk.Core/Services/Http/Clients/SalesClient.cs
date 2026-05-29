@@ -19,8 +19,6 @@ public interface ISalesClient : IScopedDependency
     Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
 
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
-
-    Task<string> GetSalesGroupByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
     
     Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
     
@@ -34,13 +32,15 @@ public class SalesClient : ISalesClient
     private readonly SalesSetting _salesSetting;
     private readonly Dictionary<string, string> _headers;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
-    public readonly SalesOrderArrivalSetting _salesOrderArrivalSetting;
+    private readonly SalesOrderArrivalSetting _salesOrderArrivalSetting;
+    private readonly SalesCustomerHabitSetting _salesCustomerHabitSetting;
 
-    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory, SalesOrderArrivalSetting salesOrderArrivalSetting)
+    public SalesClient(SalesSetting salesSetting, ISmartTalkHttpClientFactory httpClientFactory, SalesOrderArrivalSetting salesOrderArrivalSetting, SalesCustomerHabitSetting salesCustomerHabitSetting)
     {
         _salesSetting = salesSetting;
         _httpClientFactory = httpClientFactory;
         _salesOrderArrivalSetting = salesOrderArrivalSetting;
+        _salesCustomerHabitSetting = salesCustomerHabitSetting;
 
         _headers = new Dictionary<string, string>
         {
@@ -54,7 +54,7 @@ public class SalesClient : ISalesClient
             throw new ArgumentException("CustomerNumbers cannot be null or empty.");
 
         var queryString = new StringBuilder("?");
-        
+
         foreach (var customerNumber in request.CustomerNumbers)
             queryString.Append("CustomerNumbers=").Append(Uri.EscapeDataString(customerNumber)).Append('&');
         
@@ -87,9 +87,14 @@ public class SalesClient : ISalesClient
 
     public async Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken)
     {
-        return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var header = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _salesCustomerHabitSetting.ApiKey }
+        };
+
+        return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesCustomerHabitSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
-    
+
     public async Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken)
     {
         var header = new Dictionary<string, string>
@@ -102,12 +107,6 @@ public class SalesClient : ISalesClient
             throw new ArgumentException("CustomerIds cannot be null or empty.");
 
         return await _httpClientFactory.PostAsJsonAsync<GetOrderArrivalTimeResponseDto>($"{_salesOrderArrivalSetting.BaseUrl}/api/order/getOrderArrivalTime", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
-
-    public Task<string> GetSalesGroupByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
-    {
-        Log.Information("Sales group lookup is skipped because GetSalesGroupByPhoneNumberAsync is not available yet. PhoneNumber: {PhoneNumber}", phoneNumber);
-        return Task.FromResult(string.Empty);
     }
 
     public async Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken)

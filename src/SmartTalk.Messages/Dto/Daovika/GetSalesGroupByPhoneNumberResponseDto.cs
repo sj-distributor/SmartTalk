@@ -1,4 +1,4 @@
-namespace SmartTalk.Messages.Dto.Sales;
+namespace SmartTalk.Messages.Dto.Daovika;
 
 public class GetSalesGroupByPhoneNumberResponseDto
 {

@@ -22,12 +22,12 @@ public class SalesCustomerMatchResult
 public class SalesCustomerMatchService : ISalesCustomerMatchService
 {
     private readonly ICrmClient _crmClient;
-    private readonly ISalesClient _salesClient;
+    private readonly IDaovikaClient _daovikaClient;
 
-    public SalesCustomerMatchService(ICrmClient crmClient, ISalesClient salesClient)
+    public SalesCustomerMatchService(ICrmClient crmClient, IDaovikaClient daovikaClient)
     {
         _crmClient = crmClient;
-        _salesClient = salesClient;
+        _daovikaClient = daovikaClient;
     }
 
     public async Task<SalesCustomerMatchResult> MatchCustomerAsync(string callerNumber, string calleeNumber, string storeName, IEnumerable<string> salesPhoneNumbers, CancellationToken cancellationToken)
@@ -149,7 +149,7 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
         {
             try
             {
-                var salesGroup = await _salesClient.GetSalesGroupByPhoneNumberAsync(phoneNumber, cancellationToken).ConfigureAwait(false);
+                var salesGroup = await _daovikaClient.GetSalesGroupByPhoneNumberAsync(phoneNumber, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(salesGroup))
                     return salesGroup.Trim();
             }
