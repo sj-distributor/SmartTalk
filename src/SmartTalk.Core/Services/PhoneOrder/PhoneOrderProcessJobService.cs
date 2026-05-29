@@ -44,6 +44,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
+    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
 
     public PhoneOrderProcessJobService(
         ISalesClient salesClient,
@@ -61,7 +62,10 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPosUtilService posUtilService, IPhoneOrderUtilService phoneOrderUtilService)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        IPosUtilService posUtilService,
+        IPhoneOrderUtilService phoneOrderUtilService,
+        ISalesCustomerMatchService salesCustomerMatchService)
     {
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
@@ -73,14 +77,15 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
         _smartTalkHttpClient = smartTalkHttpClient;
+        _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
-        _smartTalkBackgroundJobClient = backgroundJobClient;
         _smartTalkBackgroundJobClient = smartTalkBackgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _posUtilService = posUtilService;
         _phoneOrderUtilService = phoneOrderUtilService;
+        _salesCustomerMatchService = salesCustomerMatchService;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)
