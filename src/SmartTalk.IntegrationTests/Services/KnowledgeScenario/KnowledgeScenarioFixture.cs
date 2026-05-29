@@ -7,9 +7,11 @@ using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.IntegrationTests.TestBaseClasses;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
+using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -375,12 +377,16 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         await Run<IMediator>(async mediator =>
         {
             var response = await mediator.RequestAsync<GetKnowledgeSceneRelatedKnowledgesRequest, GetKnowledgeSceneRelatedKnowledgesResponse>(
-                new GetKnowledgeSceneRelatedKnowledgesRequest { SceneId = seeded.SceneId });
+                new GetKnowledgeSceneRelatedKnowledgesRequest
+                {
+                    SceneId = seeded.SceneId,
+                    StoreId = seeded.StoreId
+                });
 
             response.ShouldNotBeNull();
             response.Data.Count.ShouldBe(2);
-            response.Data[0].ShouldBe(seeded.SecondKnowledgeId);
-            response.Data[1].ShouldBe(seeded.FirstKnowledgeId);
+            response.Data.ShouldContain(seeded.FirstAssistantId);
+            response.Data.ShouldContain(seeded.SecondAssistantId);
         });
     }
 
@@ -465,6 +471,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
                 new SaveKnowledgeSceneRelatedKnowledgesCommand
                 {
                     SceneId = seeded.SceneId,
+                    StoreId = seeded.StoreId,
                     AssistantIds = new List<int> { seeded.SecondAssistantId }
                 });
 
@@ -482,6 +489,70 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
 
             relations.Count.ShouldBe(1);
             relations.Single().KnowledgeId.ShouldBe(seeded.SecondKnowledgeId);
+        });
+
+        await promptService.Received(1).RefreshScenePromptsAsync(Arg.Is<List<int>>(ids => ids.Count == 2
+            && ids.Contains(seeded.FirstKnowledgeId)
+            && ids.Contains(seeded.SecondKnowledgeId)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShouldRejectSavingKnowledgeSceneRelatedKnowledgesWhenStoreHasNotAppliedScene()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        RelationSaveSeedResult seeded = null!;
+        var promptService = CreatePromptServiceMock();
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            seeded = await SeedSceneRelationAsync(repository, unitOfWork, caseId, includeSecondRelation: false, isApplied: false);
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var ex = await Should.ThrowAsync<Exception>(() => mediator.SendAsync<SaveKnowledgeSceneRelatedKnowledgesCommand, SaveKnowledgeSceneRelatedKnowledgesResponse>(
+                new SaveKnowledgeSceneRelatedKnowledgesCommand
+                {
+                    SceneId = seeded.SceneId,
+                    StoreId = seeded.StoreId,
+                    AssistantIds = new List<int> { seeded.SecondAssistantId }
+                }));
+
+            ex.Message.ShouldContain("is not applied");
+        }, BuildPromptServiceRegistration(promptService));
+
+        await promptService.DidNotReceive().RefreshScenePromptsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShouldRemoveStoreRelationsWhenCompanyAuthorizationIsRemoved()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        RelationSaveSeedResult seeded = null!;
+        var promptService = CreatePromptServiceMock();
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            seeded = await SeedSceneRelationAsync(repository, unitOfWork, caseId, includeSecondRelation: false);
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var response = await mediator.SendAsync<SaveKnowledgeSceneCompaniesCommand, SaveKnowledgeSceneCompaniesResponse>(
+                new SaveKnowledgeSceneCompaniesCommand
+                {
+                    SceneId = seeded.SceneId,
+                    CompanyIds = []
+                });
+
+            response.Data.ShouldBeEmpty();
+        }, BuildPromptServiceRegistration(promptService));
+
+        await Run<IRepository>(async repository =>
+        {
+            (await repository.Query<KnowledgeSceneCompany>().AnyAsync(x => x.SceneId == seeded.SceneId)).ShouldBeFalse();
+            (await repository.Query<AiSpeechAssistantKnowledgeSceneRelation>().AnyAsync(x => x.SceneId == seeded.SceneId)).ShouldBeFalse();
         });
 
         await promptService.Received(1).RefreshScenePromptsAsync(Arg.Is<List<int>>(ids => ids.Count == 2
@@ -744,13 +815,41 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         return new SceneCascadeSeedResult(scene.Id, scene.Name, item.Id, history.Id, historyItem.Id, sceneCompany.Id, sceneStoreApplication.Id, relation.Id, knowledge.Id);
     }
 
-    private static async Task<RelationSaveSeedResult> SeedSceneRelationAsync(IRepository repository, IUnitOfWork unitOfWork, string suffix, bool includeSecondRelation = true)
+    private static async Task<RelationSaveSeedResult> SeedSceneRelationAsync(
+        IRepository repository,
+        IUnitOfWork unitOfWork,
+        string suffix,
+        bool includeSecondRelation = true,
+        bool isApplied = true)
     {
         var folder = await CreateFolderAsync(repository, unitOfWork, $"Folder-{suffix}");
         var scene = await CreateSceneAsync(repository, unitOfWork, folder.Id, $"Scene-{suffix}", "desc", KnowledgeSceneStatus.Published);
         var firstKnowledge = await CreateActiveKnowledgeAsync(repository, unitOfWork, $"First-{suffix}");
         var secondKnowledge = await CreateActiveKnowledgeAsync(repository, unitOfWork, $"Second-{suffix}");
+        var (company, firstStore, _) = await CreateCompanyWithStoresAsync(repository, unitOfWork, suffix);
         var now = DateTimeOffset.UtcNow;
+
+        await repository.InsertAsync(new KnowledgeSceneCompany
+        {
+            SceneId = scene.Id,
+            CompanyId = company.Id,
+            StoreId = null,
+            IsApplied = false,
+            AuthorizedAt = now
+        });
+        await repository.InsertAsync(new KnowledgeSceneCompany
+        {
+            SceneId = scene.Id,
+            CompanyId = company.Id,
+            StoreId = firstStore.Id,
+            IsApplied = isApplied,
+            AuthorizedAt = now,
+            AppliedAt = isApplied ? now : null
+        });
+        await unitOfWork.SaveChangesAsync();
+
+        await LinkAssistantToStoreAsync(repository, unitOfWork, firstStore.Id, firstKnowledge.AssistantId, $"first-{suffix}");
+        await LinkAssistantToStoreAsync(repository, unitOfWork, firstStore.Id, secondKnowledge.AssistantId, $"second-{suffix}");
 
         await repository.InsertAsync(new AiSpeechAssistantKnowledgeSceneRelation
         {
@@ -771,7 +870,7 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
 
         await unitOfWork.SaveChangesAsync();
 
-        return new RelationSaveSeedResult(scene.Id, firstKnowledge.Id, firstKnowledge.AssistantId, secondKnowledge.Id, secondKnowledge.AssistantId);
+        return new RelationSaveSeedResult(scene.Id, company.Id, firstStore.Id, firstKnowledge.Id, firstKnowledge.AssistantId, secondKnowledge.Id, secondKnowledge.AssistantId);
     }
 
     private sealed record FolderCascadeSeedResult(int FolderId, string FolderName, int SceneId, int SceneItemId, int RelationId, int KnowledgeId);
@@ -834,7 +933,40 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
         };
     }
 
+    private static async Task LinkAssistantToStoreAsync(IRepository repository, IUnitOfWork unitOfWork, int storeId, int assistantId, string suffix)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var agent = new Agent
+        {
+            Name = $"agent-{suffix}",
+            Brief = $"agent brief {suffix}",
+            Type = AgentType.Restaurant,
+            IsDisplay = true,
+            IsSurface = true,
+            CreatedDate = now,
+            Timezone = "Pacific Standard Time"
+        };
+
+        await repository.InsertAsync(agent);
+        await unitOfWork.SaveChangesAsync();
+
+        await repository.InsertAsync(new AgentAssistant
+        {
+            AgentId = agent.Id,
+            AssistantId = assistantId,
+            CreatedBy = 1,
+            CreatedDate = now
+        });
+        await repository.InsertAsync(new PosAgent
+        {
+            StoreId = storeId,
+            AgentId = agent.Id,
+            CreatedDate = now
+        });
+        await unitOfWork.SaveChangesAsync();
+    }
+
     private sealed record SceneCascadeSeedResult(int SceneId, string SceneName, int SceneItemId, int HistoryId, int HistoryItemId, int SceneCompanyId, int SceneStoreApplicationId, int RelationId, int KnowledgeId);
 
-    private sealed record RelationSaveSeedResult(int SceneId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
+    private sealed record RelationSaveSeedResult(int SceneId, int CompanyId, int StoreId, int FirstKnowledgeId, int FirstAssistantId, int SecondKnowledgeId, int SecondAssistantId);
 }

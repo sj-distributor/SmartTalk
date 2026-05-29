@@ -146,12 +146,14 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
 
         var count = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
+        query = query
+            .OrderByDescending(x => x.SnapshotAt)
+            .ThenByDescending(x => x.Id);
+
         if (pageIndex.HasValue && pageSize.HasValue && pageSize > 0)
             query = query.Skip((pageIndex.Value - 1) * pageSize.Value).Take(pageSize.Value);
 
         var histories = await query
-            .OrderByDescending(x => x.SnapshotAt)
-            .ThenByDescending(x => x.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 

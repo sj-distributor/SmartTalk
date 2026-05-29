@@ -627,6 +627,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         if (scene == null)
             throw new Exception($"SaveKnowledgeSceneRelatedKnowledges Scene [{command.SceneId}] does not exist.");
+
+        await EnsureSceneAppliedToStoreAsync(command.SceneId, command.StoreId, cancellationToken).ConfigureAwait(false);
         
         var targetAssistantIds = (command.AssistantIds ?? []).Where(x => x > 0).Distinct().ToList();
         
@@ -674,6 +676,25 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         };
     }
 
+    private async Task EnsureSceneAppliedToStoreAsync(int sceneId, int storeId, CancellationToken cancellationToken)
+    {
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null)
+            throw new Exception($"Store [{storeId}] does not exist.");
+
+        var companyAuthorization = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(
+            sceneIds: [sceneId], companyId: store.CompanyId, isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        if (companyAuthorization == null)
+            throw new Exception($"Scene [{sceneId}] is not authorized for Company [{store.CompanyId}].");
+
+        var storeApplication = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(
+            sceneIds: [sceneId], storeId: storeId, isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+
+        if (storeApplication == null || !storeApplication.IsApplied)
+            throw new Exception($"Scene [{sceneId}] is not applied for Store [{storeId}].");
+    }
+
     public async Task<SaveKnowledgeSceneCompaniesResponse> SaveKnowledgeSceneCompaniesAsync(SaveKnowledgeSceneCompaniesCommand command, CancellationToken cancellationToken)
     {
         if (command.SceneId <= 0) throw new Exception("SaveKnowledgeSceneCompanies SceneId is required.");
@@ -709,6 +730,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         storeApplicationsToDelete = storeApplicationsToDelete
             .Where(x => companiesToDelete.Any(c => c.CompanyId == x.CompanyId))
             .ToList();
+
+        foreach (var storeApplication in storeApplicationsToDelete.Where(x => x.StoreId.HasValue))
+            await RemoveSceneRelationsFromStoreKnowledgeAsync(command.SceneId, storeApplication.StoreId!.Value, cancellationToken).ConfigureAwait(false);
 
         if (storeApplicationsToDelete.Count != 0)
             await _knowledgeScenarioDataProvider.DeleteKnowledgeSceneCompaniesAsync(storeApplicationsToDelete, false, cancellationToken).ConfigureAwait(false);
