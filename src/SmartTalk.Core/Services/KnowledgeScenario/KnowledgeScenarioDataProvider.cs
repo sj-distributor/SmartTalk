@@ -19,7 +19,7 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task DeleteKnowledgeSceneFolderAsync(KnowledgeSceneFolder folder, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, string keyword = null, string name = null, CancellationToken cancellationToken = default);
+    Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, string keyword = null, CancellationToken cancellationToken = default);
 
     Task<List<KnowledgeScene>> GetKnowledgeScenesByIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
 
@@ -116,15 +116,12 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, string keyword = null, string name = null, CancellationToken cancellationToken = default)
+    public async Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, string keyword = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<KnowledgeScene>();
 
         if (folderId.HasValue)
             query = query.Where(x => x.FolderId == folderId.Value);
-
-        if (!string.IsNullOrWhiteSpace(name))
-            query = query.Where(x => x.Name == name.Trim());
 
         if (!string.IsNullOrWhiteSpace(keyword))
             query = query.Where(x => x.Name.Contains(keyword.Trim()));
