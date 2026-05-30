@@ -181,7 +181,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (folder == null)
             throw new Exception($"AddKnowledgeScene Folder [{command.FolderId}] does not exist.");
         
-        var duplicatedScene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(folderId: command.FolderId, name: command.Name, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var sceneName = command.Name.Trim();
+        var duplicatedScene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(folderId: command.FolderId, keyword: sceneName, cancellationToken: cancellationToken).ConfigureAwait(false))
+            .FirstOrDefault(x => x.Name == sceneName);
 
         if (duplicatedScene != null)
             throw new Exception($"AddKnowledgeScene Scene [{command.Name}] already exists in this folder.");
@@ -222,7 +224,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         if (scene == null) throw new Exception($"UpdateKnowledgeScene Scene [{command.Id}] does not exist.");
         
-        var duplicatedScene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(folderId: command.FolderId, name: command.Name, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var sceneName = command.Name?.Trim();
+        var duplicatedScene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(folderId: command.FolderId, keyword: sceneName, cancellationToken: cancellationToken).ConfigureAwait(false))
+            .FirstOrDefault(x => x.Name == sceneName);
 
         if (duplicatedScene != null && duplicatedScene.Id != command.Id)
             throw new Exception($"UpdateKnowledgeScene Scene [{command.Name}] already exists in this folder.");
