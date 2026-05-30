@@ -19,7 +19,9 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task DeleteKnowledgeSceneFolderAsync(KnowledgeSceneFolder folder, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, List<int> sceneIds = null, string keyword = null, string name = null, CancellationToken cancellationToken = default);
+    Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, string keyword = null, string name = null, CancellationToken cancellationToken = default);
+
+    Task<List<KnowledgeScene>> GetKnowledgeScenesByIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
 
     Task DeleteKnowledgeScenesAsync(List<KnowledgeScene> scenes, bool forceSave = true, CancellationToken cancellationToken = default);
     
@@ -41,12 +43,9 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task DeleteKnowledgeSceneHistoryItemsAsync(List<KnowledgeSceneHistoryItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
     
-    Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsAsync(
-        int? sceneId = null,
-        List<int> sceneIds = null,
-        List<string> names = null,
-        string keyword = null,
-        CancellationToken cancellationToken = default);
+    Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdAsync(int sceneId, CancellationToken cancellationToken = default);
+
+    Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
     
     Task UpdateKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -56,7 +55,9 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task UpdateKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> items, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(List<int> sceneIds = null, int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default);
+    Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default);
+
+    Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesBySceneIdsAsync(List<int> sceneIds, int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -115,15 +116,12 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, List<int> sceneIds = null, string keyword = null, string name = null, CancellationToken cancellationToken = default)
+    public async Task<List<KnowledgeScene>> GetKnowledgeScenesAsync(int? folderId = null, string keyword = null, string name = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<KnowledgeScene>();
 
         if (folderId.HasValue)
             query = query.Where(x => x.FolderId == folderId.Value);
-
-        if (sceneIds is { Count: > 0 })
-            query = query.Where(x => sceneIds.Contains(x.Id));
 
         if (!string.IsNullOrWhiteSpace(name))
             query = query.Where(x => x.Name == name.Trim());
@@ -132,6 +130,19 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             query = query.Where(x => x.Name.Contains(keyword.Trim()));
 
         return await query.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<KnowledgeScene>> GetKnowledgeScenesByIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default)
+    {
+        var distinctSceneIds = (sceneIds ?? []).Where(x => x > 0).Distinct().ToList();
+        if (distinctSceneIds.Count == 0)
+            return new List<KnowledgeScene>();
+
+        return await _repository.Query<KnowledgeScene>()
+            .Where(x => distinctSceneIds.Contains(x.Id))
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<(int Count, List<KnowledgeSceneHistory> Histories)> GetKnowledgeSceneHistoriesAsync(int? sceneId = null, int? historyId = null, int? pageIndex = null, int? pageSize = null, CancellationToken cancellationToken = default)
@@ -240,41 +251,55 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsAsync(int? sceneId = null, List<int> sceneIds = null, List<string> names = null, string keyword = null, CancellationToken cancellationToken = default)
+    public async Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdAsync(int sceneId, CancellationToken cancellationToken = default)
     {
-        var query = _repository.Query<KnowledgeSceneItem>();
+        if (sceneId <= 0)
+            return new List<KnowledgeSceneItem>();
 
-        if (sceneId.HasValue)
-            query = query.Where(x => x.SceneId == sceneId.Value);
-
-        if (sceneIds is { Count: > 0 })
-            query = query.Where(x => sceneIds.Contains(x.SceneId));
-
-        if (names is { Count: > 0 })
-        {
-            var distinctNames = names.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
-            if (distinctNames.Count == 0)
-                return new List<KnowledgeSceneItem>();
-
-            query = query.Where(x => distinctNames.Contains(x.Name));
-        }
-
-        if (!string.IsNullOrWhiteSpace(keyword))
-            query = query.Where(x => x.Name.Contains(keyword.Trim()));
-
-        return await query
+        return await _repository.Query<KnowledgeSceneItem>()
+            .Where(x => x.SceneId == sceneId)
             .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
             .ThenBy(x => x.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
     }
 
-    public async Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(List<int> sceneIds = null, int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default)
+    public async Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default)
+    {
+        var distinctSceneIds = (sceneIds ?? []).Where(x => x > 0).Distinct().ToList();
+        if (distinctSceneIds.Count == 0)
+            return new List<KnowledgeSceneItem>();
+
+        return await _repository.Query<KnowledgeSceneItem>()
+            .Where(x => distinctSceneIds.Contains(x.SceneId))
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesAsync(int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default)
+    {
+        return await QueryKnowledgeSceneCompanies(companyId, storeId, isApplied, isCompanyAuthorization)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<List<KnowledgeSceneCompany>> GetKnowledgeSceneCompaniesBySceneIdsAsync(List<int> sceneIds, int? companyId = null, int? storeId = null, bool? isApplied = null, bool? isCompanyAuthorization = null, CancellationToken cancellationToken = default)
+    {
+        var distinctSceneIds = (sceneIds ?? []).Where(x => x > 0).Distinct().ToList();
+        if (distinctSceneIds.Count == 0)
+            return new List<KnowledgeSceneCompany>();
+
+        return await QueryKnowledgeSceneCompanies(companyId, storeId, isApplied, isCompanyAuthorization)
+            .Where(x => distinctSceneIds.Contains(x.SceneId))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private IQueryable<KnowledgeSceneCompany> QueryKnowledgeSceneCompanies(int? companyId, int? storeId, bool? isApplied, bool? isCompanyAuthorization)
     {
         var query = _repository.Query<KnowledgeSceneCompany>();
-
-        if (sceneIds is { Count: > 0 })
-            query = query.Where(x => sceneIds.Contains(x.SceneId));
 
         if (companyId.HasValue)
             query = query.Where(x => x.CompanyId == companyId.Value);
@@ -288,7 +313,7 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         if (isCompanyAuthorization.HasValue)
             query = isCompanyAuthorization.Value ? query.Where(x => x.StoreId == null) : query.Where(x => x.StoreId != null);
 
-        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+        return query;
     }
 
     public async Task AddKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default)

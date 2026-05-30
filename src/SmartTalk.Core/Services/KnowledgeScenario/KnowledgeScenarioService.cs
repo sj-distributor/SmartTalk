@@ -140,7 +140,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(folderId: command.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var sceneIds = scenes.Select(x => x.Id).ToList();
-        var knowledgeSceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(sceneIds: sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var knowledgeSceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
         var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
         
@@ -218,7 +218,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         if (folder == null) throw new Exception($"UpdateKnowledgeScene Folder [{command.FolderId}] does not exist.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [command.Id], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([command.Id], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (scene == null) throw new Exception($"UpdateKnowledgeScene Scene [{command.Id}] does not exist.");
         
@@ -244,7 +244,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         Log.Information("UpdateKnowledgeSceneAsync updated scene. SceneId={@SceneId}, SceneFolderId={@SceneFolderId}, SceneName={@SceneName}", scene.Id, scene.FolderId, scene.Name);
 
-        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(sceneId: scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         await SnapshotKnowledgeSceneAsync(scene, sceneItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
         sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems));
@@ -259,14 +259,14 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (command.Id <= 0) throw new Exception("DeleteKnowledgeScene Id is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [command.Id], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([command.Id], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (scene == null)
             throw new Exception($"DeleteKnowledgeScene Scene [{command.Id}] does not exist.");
 
-        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(sceneId: scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var (_, histories) = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoriesAsync(sceneId: scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var historyItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoryItemsAsync(histories.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
-        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync([scene.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync([scene.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
         var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(scene.Id, cancellationToken).ConfigureAwait(false);
         var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
 
@@ -335,7 +335,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     private async Task<bool> SyncKnowledgeSceneItemsAsync(KnowledgeScene scene, List<KnowledgeSceneItemDto> items, CancellationToken cancellationToken)
     {
         var targetItems = items ?? new List<KnowledgeSceneItemDto>();
-        var existingItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(sceneId: scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var existingItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var existingById = existingItems.ToDictionary(x => x.Id);
 
         var requestIds = targetItems.Where(x => x.Id > 0).Select(x => x.Id).Distinct().ToList();
@@ -413,7 +413,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (request.FolderId <= 0) throw new Exception("GetKnowledgeScenes FolderId is required.");
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(folderId: request.FolderId, keyword: request.Keyword, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(sceneIds: scenes.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(scenes.Select(x => x.Id).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         var sceneItemMap = sceneItems.GroupBy(x => x.SceneId).ToDictionary(x => x.Key, x => x.ToList());
         
         Log.Information("GetKnowledgeScenesAsync completed. FolderId={FolderId}, SceneCount={Count}", request.FolderId, scenes.Count);
@@ -436,12 +436,12 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (request.Id <= 0) throw new Exception("GetKnowledgeScene Id is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [request.Id], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([request.Id], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (scene == null)
             throw new Exception($"GetKnowledgeScene Scene [{request.Id}] does not exist.");
 
-        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsAsync(sceneId: request.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var knowledges = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(request.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
        
         sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(knowledges));
@@ -461,7 +461,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneHistory SceneId is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [request.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([request.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (scene == null)
             throw new Exception($"GetKnowledgeSceneHistory Scene [{request.SceneId}] does not exist.");
 
@@ -544,7 +544,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         var sceneIds = sceneCompanies.Select(x => x.SceneId).Distinct().ToList();
         Log.Information("GetKnowledgeSceneMarket authorized scene ids {@SceneIds}", sceneIds);
-        return await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private static List<KnowledgeScene> FilterMarketScenes(List<KnowledgeScene> scenes, List<KnowledgeSceneCompany> storeApplications, string keyword, KnowledgeSceneMarketType marketType)
@@ -585,11 +585,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneCompanies SceneId is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [request.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([request.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (scene == null)
             throw new Exception($"GetKnowledgeSceneCompanies Scene [{request.SceneId}] does not exist.");
 
-        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [request.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync([request.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new GetKnowledgeSceneCompaniesResponse
         {
@@ -602,7 +602,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (request.SceneId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges SceneId is required.");
         if (request.StoreId <= 0) throw new Exception("GetKnowledgeSceneRelatedKnowledges StoreId is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [request.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([request.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (scene == null)
             throw new Exception($"GetKnowledgeSceneRelatedKnowledges Scene [{request.SceneId}] does not exist.");
@@ -623,7 +623,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (command.SceneId <= 0) throw new Exception("SaveKnowledgeSceneRelatedKnowledges SceneId is required.");
         if (command.StoreId <= 0) throw new Exception("SaveKnowledgeSceneRelatedKnowledges StoreId is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (scene == null)
             throw new Exception($"SaveKnowledgeSceneRelatedKnowledges Scene [{command.SceneId}] does not exist.");
@@ -682,14 +682,14 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (store == null)
             throw new Exception($"Store [{storeId}] does not exist.");
 
-        var companyAuthorization = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(
-            sceneIds: [sceneId], companyId: store.CompanyId, isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var companyAuthorization = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync(
+            [sceneId], companyId: store.CompanyId, isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (companyAuthorization == null)
             throw new Exception($"Scene [{sceneId}] is not authorized for Company [{store.CompanyId}].");
 
-        var storeApplication = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(
-            sceneIds: [sceneId], storeId: storeId, isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var storeApplication = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync(
+            [sceneId], storeId: storeId, isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         if (storeApplication == null || !storeApplication.IsApplied)
             throw new Exception($"Scene [{sceneId}] is not applied for Store [{storeId}].");
@@ -699,13 +699,13 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     {
         if (command.SceneId <= 0) throw new Exception("SaveKnowledgeSceneCompanies SceneId is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (scene == null)
             throw new Exception($"SaveKnowledgeSceneCompanies Scene [{command.SceneId}] does not exist.");
 
         var targetCompanyIds = (command.CompanyIds ?? []).Where(x => x > 0).Distinct().ToList();
 
-        var currentCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var currentCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync([command.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var currentCompanyIdSet = currentCompanies.Select(x => x.CompanyId).ToHashSet();
         var targetCompanyIdSet = targetCompanyIds.ToHashSet();
@@ -725,7 +725,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var storeApplicationsToDelete = companiesToDelete.Count == 0
             ? []
-            : await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+            : await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync([command.SceneId], isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false);
       
         storeApplicationsToDelete = storeApplicationsToDelete
             .Where(x => companiesToDelete.Any(c => c.CompanyId == x.CompanyId))
@@ -743,7 +743,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (companiesToAdd.Count != 0)
             await _knowledgeScenarioDataProvider.AddKnowledgeSceneCompaniesAsync(companiesToAdd, true, cancellationToken).ConfigureAwait(false);
 
-        var latestCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var latestCompanies = await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync([command.SceneId], isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new SaveKnowledgeSceneCompaniesResponse
         {
@@ -757,7 +757,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (command.CompanyId <= 0) throw new Exception("UpdateKnowledgeSceneCompany CompanyId is required.");
         if (command.StoreId <= 0) throw new Exception("UpdateKnowledgeSceneCompany StoreId is required.");
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(sceneIds: [command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([command.SceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (scene == null)
             throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] does not exist.");
 
@@ -765,11 +765,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (store == null || store.CompanyId != command.CompanyId)
             throw new Exception($"Store [{command.StoreId}] does not belong to Company [{command.CompanyId}].");
         
-        var sceneCompany = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], companyId: command.CompanyId, isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var sceneCompany = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync([command.SceneId], companyId: command.CompanyId, isCompanyAuthorization: true, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (sceneCompany == null)
             throw new Exception($"UpdateKnowledgeSceneCompany Scene [{command.SceneId}] is not authorized for Company [{command.CompanyId}].");
 
-        var sceneStore = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesAsync(sceneIds: [command.SceneId], storeId: command.StoreId, isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
+        var sceneStore = (await _knowledgeScenarioDataProvider.GetKnowledgeSceneCompaniesBySceneIdsAsync([command.SceneId], storeId: command.StoreId, isCompanyAuthorization: false, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
         if (sceneStore == null)
         {
             sceneStore = new KnowledgeSceneCompany
