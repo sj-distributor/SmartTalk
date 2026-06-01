@@ -131,19 +131,22 @@ public partial class PhoneOrderProcessJobService
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
       
-        var contentTexts = completion.Content
-            .Select(content => content.Text)
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .ToList();
+        if (completion.Content.Count>0)
+        {
+            var contentTexts = completion.Content
+                .Select(content => content.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
             
-        Log.Information(
-            "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
-            record.Id,
-            record.SessionId,
-            agent.Id,
-            aiSpeechAssistant?.Id,
-            aiSpeechAssistant?.Name,
-            contentTexts);
+            Log.Information(
+                "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
+                record.Id,
+                record.SessionId,
+                agent.Id,
+                aiSpeechAssistant?.Id,
+                aiSpeechAssistant?.Name,
+                contentTexts);
+        }
         
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
