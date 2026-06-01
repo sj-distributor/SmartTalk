@@ -5,6 +5,7 @@ using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
+using SmartTalk.Core.Services.SjFood;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RealtimeAiV2;
@@ -33,19 +34,22 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IRealtimeAiService _realtimeAiService;
+    private readonly ISjFoodQuotationService _sjFoodQuotationService;
 
     public AiKidRealtimeServiceV2(
         ISmartiesClient smartiesClient,
         IAttachmentService attachmentService,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        IRealtimeAiService realtimeAiService)
+        IRealtimeAiService realtimeAiService,
+        ISjFoodQuotationService sjFoodQuotationService)
     {
         _smartiesClient = smartiesClient;
         _attachmentService = attachmentService;
         _backgroundJobClient = backgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _realtimeAiService = realtimeAiService;
+        _sjFoodQuotationService = sjFoodQuotationService;
     }
 
     public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
@@ -251,8 +255,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         }
     }
 
-    private static string DefaultPriceLine => $"{Random.Shared.Next(1, 21)}元";
-    
     private async Task<RealtimeAiFunctionCallResult> ProcessProductPriceAsync(
         RealtimeAiWssFunctionCallData functionCallData,
         Domain.AISpeechAssistant.AiSpeechAssistant assistant,
@@ -268,13 +270,23 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             };
         }
 
-        var price = DefaultPriceLine;
+        var phoneNumber = assistant?.AnsweringNumber;
+        var quotation = await _sjFoodQuotationService
+            .QueryPriceByPhoneAndProductAsync(phoneNumber, args.ProductName, null, cancellationToken)
+            .ConfigureAwait(false);
         
-        var priceLine = $"{args.ProductName}：{price}";
+        if (!string.IsNullOrWhiteSpace(quotation?.SapId))
+        {
+            Log.Information("Get product price success. PhoneNumber: {PhoneNumber}, SapId: {SapId}, ProductName: {ProductName}, PriceLine: {PriceLine}",
+                phoneNumber, quotation.SapId, args.ProductName, quotation.Message);
+        }
+        else
+        {
+            Log.Information("Get product price finished. PhoneNumber: {PhoneNumber}, ProductName: {ProductName}, PriceLine: {PriceLine}",
+                phoneNumber, args.ProductName, quotation?.Message);
+        }
         
-        Log.Information("Get product price: {@productName}:{@DefaultPriceLine}", args.ProductName, price);
-
-        return new RealtimeAiFunctionCallResult { Output = priceLine };
+        return new RealtimeAiFunctionCallResult { Output = quotation?.Message };
     }
 
     private async Task<string> BuildResolvedPromptAsync(
