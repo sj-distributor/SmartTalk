@@ -58,19 +58,7 @@ public class BuildKnowledgeTests
                 new AiSpeechAssistantKnowledgeVariableCache { Filter = "1002", CacheValue = "到货1002" }
             ]);
 
-        var sut = new AiSpeechAssistantConnectService(
-            clock: null!,
-            mapper: mapper,
-            posDataProvider: null!,
-            salesDataProvider: salesDataProvider,
-            agentDataProvider: null!,
-            aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
-            ffmpegService: null!,
-            posUtilService: null!,
-            realtimeAiService: null!,
-            openaiClient: null!,
-            smartiesClient: null!,
-            backgroundJobClient: null!);
+        var sut = CreateSut(mapper, salesDataProvider, aiSpeechAssistantDataProvider);
 
         SetContext(sut, new AiSpeechAssistantConnectContext
         {
@@ -110,5 +98,27 @@ public class BuildKnowledgeTests
         contextField.ShouldNotBeNull();
 
         contextField!.SetValue(sut, context);
+    }
+
+    private static AiSpeechAssistantConnectService CreateSut(params object[] dependencies)
+    {
+        var constructor = typeof(AiSpeechAssistantConnectService).GetConstructors().Single();
+        var arguments = constructor
+            .GetParameters()
+            .Select(parameter => ResolveDependency(parameter.ParameterType, dependencies))
+            .ToArray();
+
+        return (AiSpeechAssistantConnectService)constructor.Invoke(arguments);
+    }
+
+    private static object ResolveDependency(Type dependencyType, object[] dependencies)
+    {
+        var dependency = dependencies.FirstOrDefault(dependencyType.IsInstanceOfType);
+        if (dependency != null) return dependency;
+
+        if (dependencyType.IsInterface || dependencyType.IsAbstract)
+            return Substitute.For([dependencyType], []);
+
+        return null!;
     }
 }
