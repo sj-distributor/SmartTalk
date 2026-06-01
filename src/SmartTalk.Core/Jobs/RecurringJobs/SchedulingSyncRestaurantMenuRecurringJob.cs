@@ -4,7 +4,7 @@ using SmartTalk.Messages.Commands.Restaurant;
 
 namespace SmartTalk.Core.Jobs.RecurringJobs;
 
-public class SchedulingSyncRestaurantMenuRecurringJob
+public class SchedulingSyncRestaurantMenuRecurringJob : IRecurringJob
 {
     private readonly IMediator _mediator;
 
