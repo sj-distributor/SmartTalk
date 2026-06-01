@@ -129,10 +129,18 @@ public partial class PhoneOrderProcessJobService
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
+        var analyzeReport = completion.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information(
+            "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, Report: {Report}",
+            record.Id,
+            record.SessionId,
+            agent.Id,
+            aiSpeechAssistant?.Id,
+            aiSpeechAssistant?.Name,
+            analyzeReport);
       
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
+        record.TranscriptionText = analyzeReport;
 
         var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
