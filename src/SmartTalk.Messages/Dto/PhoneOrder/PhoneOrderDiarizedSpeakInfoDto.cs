@@ -2,7 +2,7 @@ using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Dto.PhoneOrder;
 
-public class PhoneOrderOpenAiSpeakInfoDto
+public class PhoneOrderDiarizedSpeakInfoDto
 {
     public double StartTime { get; set; }
 
