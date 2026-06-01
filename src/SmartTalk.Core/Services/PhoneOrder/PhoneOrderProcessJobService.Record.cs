@@ -107,7 +107,7 @@ public partial class PhoneOrderProcessJobService
             Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
         }
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         var callSubjectCn = "通话主题:";
         var callSubjectEn = "Conversation topic:";
@@ -263,7 +263,7 @@ public partial class PhoneOrderProcessJobService
     {
         var timezone = !string.IsNullOrWhiteSpace(agent.Timezone)
             ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone)
-            : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            : PstTimeZone.Get();
         var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
@@ -437,7 +437,7 @@ public partial class PhoneOrderProcessJobService
                 .ConfigureAwait(false);
         if (!extractedOrders.Any()) return;
 
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
 
         foreach (var storeOrder in extractedOrders)

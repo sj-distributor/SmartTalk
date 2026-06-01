@@ -101,6 +101,14 @@ public partial class RealtimeAiService
 
         _ctx.IsAiSpeaking = true;
 
+        // Empty item_id must not clobber a previously-tracked id from earlier in the same turn.
+        if (!string.IsNullOrEmpty(aiAudioData.ItemId))
+            _ctx.LastAssistantItemId = aiAudioData.ItemId;
+
+        // Anchor is set once per turn — first delta wins so subsequent deltas don't shift it.
+        if (!_ctx.ResponseStartTimestampTwilio.HasValue && _ctx.LatestMediaTimestamp.HasValue)
+            _ctx.ResponseStartTimestampTwilio = _ctx.LatestMediaTimestamp;
+
         var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
         await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
@@ -113,7 +121,36 @@ public partial class RealtimeAiService
         if (_ctx.Options.IdleFollowUp != null)
             _inactivityTimerManager.StopTimer(_ctx.SessionId);
 
+        // `clear` first (time-critical playback stop), truncate after (history correction).
         await SendToClientAsync(_ctx.ClientAdapter.BuildSpeechDetectedMessage(_ctx.SessionId)).ConfigureAwait(false);
+        await SendBargeInTruncateIfApplicableAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sends a provider truncate when item_id, stream clock, and per-turn anchor are
+    /// all set. Skipped silently otherwise. Clears per-turn state after sending so a
+    /// second speech-detected in the same turn cannot re-truncate the same item.
+    /// </summary>
+    private async Task SendBargeInTruncateIfApplicableAsync()
+    {
+        var itemId = _ctx.LastAssistantItemId;
+        var clock = _ctx.LatestMediaTimestamp;
+        var anchor = _ctx.ResponseStartTimestampTwilio;
+
+        if (string.IsNullOrEmpty(itemId) || !clock.HasValue || !anchor.HasValue) return;
+
+        var elapsedMs = Math.Max(0L, clock.Value - anchor.Value);
+
+        var truncateMessage = _ctx.ProviderAdapter.BuildTruncateMessage(itemId, elapsedMs);
+
+        if (truncateMessage != null)
+        {
+            await SendToProviderAsync(truncateMessage).ConfigureAwait(false);
+            Log.Information("[RealtimeAi] Barge-in truncate sent, SessionId: {SessionId}, ItemId: {ItemId}, AudioEndMs: {AudioEndMs}", _ctx.SessionId, itemId, elapsedMs);
+        }
+
+        _ctx.LastAssistantItemId = null;
+        _ctx.ResponseStartTimestampTwilio = null;
     }
 
     private async Task OnAiTurnCompletedAsync()
@@ -122,6 +159,10 @@ public partial class RealtimeAiService
 
         _ctx.Round += 1;
         _ctx.IsAiSpeaking = false;
+
+        // Clear per-turn barge-in state. LatestMediaTimestamp keeps its value (running clock).
+        _ctx.LastAssistantItemId = null;
+        _ctx.ResponseStartTimestampTwilio = null;
 
         var idleFollowUp = _ctx.Options.IdleFollowUp;
 
