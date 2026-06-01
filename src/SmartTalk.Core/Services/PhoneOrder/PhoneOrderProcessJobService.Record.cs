@@ -208,18 +208,24 @@ public partial class PhoneOrderProcessJobService
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text, MaxOutputTokenCount = 16384};
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
-        var analyzeReport = completion.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
+      
+        var contentTexts = completion.Content
+            .Select(content => content.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToList();
+            
         Log.Information(
-            "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, Report: {Report}",
+            "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
             record.Id,
             record.SessionId,
             agent.Id,
             aiSpeechAssistant?.Id,
             aiSpeechAssistant?.Name,
-            analyzeReport);
-      
+            contentTexts);
+        
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = analyzeReport;
+        record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
         
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
