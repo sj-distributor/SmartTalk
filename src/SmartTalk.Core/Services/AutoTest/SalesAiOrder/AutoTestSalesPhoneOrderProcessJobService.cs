@@ -618,9 +618,20 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
 
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
+        Log.Information(
+            "Start generating auto test sales record analyze report. AssistantId: {AssistantId}, AssistantName: {AssistantName}, Model: {Model}, AudioBytes: {AudioBytes}",
+            assistant.Id,
+            assistant.Name,
+            "gpt-audio-2025-08-28",
+            audio?.Length ?? 0);
+
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         var report = completion.Content.FirstOrDefault()?.Text;
-        Log.Information("sales record analyze report:" + report);
+        Log.Information(
+            "Generated auto test sales record analyze report. AssistantId: {AssistantId}, AssistantName: {AssistantName}, Report: {Report}",
+            assistant.Id,
+            assistant.Name,
+            report);
 
         var soldToIds = new List<string>();
         if (!string.IsNullOrEmpty(assistant.Name)) soldToIds = assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -645,9 +656,20 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
 
         var audioData = BinaryData.FromBytes(audioContent);
+        var analyzePrompt = aiSpeechAssistant.CustomRecordAnalyzePrompt
+            .Replace("#{call_from}", "")
+            .Replace("#{current_time}", currentTime ?? "")
+            .Replace("#{customer_items}", customerItemsString);
+
+        Log.Information(
+            "Auto test sales record analyze prompt. AssistantId: {AssistantId}, AssistantName: {AssistantName}, Prompt: {Prompt}",
+            aiSpeechAssistant.Id,
+            aiSpeechAssistant.Name,
+            analyzePrompt);
+
         List<ChatMessage> messages =
         [
-            new SystemChatMessage(( aiSpeechAssistant.CustomRecordAnalyzePrompt).Replace("#{call_from}", "").Replace("#{current_time}", currentTime ?? "").Replace("#{customer_items}", customerItemsString)),
+            new SystemChatMessage(analyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];

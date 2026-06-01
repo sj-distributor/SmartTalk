@@ -128,6 +128,17 @@ public partial class PhoneOrderProcessJobService
  
         ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
 
+        Log.Information(
+            "Start generating sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, Model: {Model}, AudioBytes: {AudioBytes}, NetworkTimeoutSeconds: {NetworkTimeoutSeconds}",
+            record.Id,
+            record.SessionId,
+            agent.Id,
+            aiSpeechAssistant?.Id,
+            aiSpeechAssistant?.Name,
+            "gpt-audio-2025-08-28",
+            audioContent?.Length ?? 0,
+            networkTimeout.TotalSeconds);
+
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         var analyzeReport = completion.Content.FirstOrDefault()?.Text ?? "";
         Log.Information(
@@ -379,9 +390,7 @@ public partial class PhoneOrderProcessJobService
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+        var analyzePrompt = (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
                   "分析報告的格式如下：" +
                   "交談主題：xxx\n\n " +
@@ -391,13 +400,25 @@ public partial class PhoneOrderProcessJobService
                   "待辦事件: \n1.xxx\n2.xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
-                .Replace("#{call_from}", callFrom ?? "")
-                .Replace("#{current_time}", currentTime ?? "")
-                .Replace("#{call_to}", callTo ?? "")
-                .Replace("#{customer_items}", customerItemsString ?? "")
-                .Replace("#{call_subject_cn}", callSubjectCn)
-                .Replace("#{call_subject_us}", callSubjectEn)
-                .Replace("#{menu_items}", menuItems ?? "")),
+            .Replace("#{call_from}", callFrom ?? "")
+            .Replace("#{current_time}", currentTime ?? "")
+            .Replace("#{call_to}", callTo ?? "")
+            .Replace("#{customer_items}", customerItemsString ?? "")
+            .Replace("#{call_subject_cn}", callSubjectCn)
+            .Replace("#{call_subject_us}", callSubjectEn)
+            .Replace("#{menu_items}", menuItems ?? "");
+
+        Log.Information(
+            "Sales record analyze prompt. RecordId: {RecordId}, CallSid: {CallSid}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, Prompt: {Prompt}",
+            record.Id,
+            record.SessionId,
+            aiSpeechAssistant?.Id,
+            aiSpeechAssistant?.Name,
+            analyzePrompt);
+
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(analyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
             new UserChatMessage("幫我根據錄音生成分析報告：")
         ];
