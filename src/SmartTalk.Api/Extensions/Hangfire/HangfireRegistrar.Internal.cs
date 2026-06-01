@@ -3,6 +3,7 @@ using Hangfire.Throttling;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Jobs;
+using SmartTalk.Core.Jobs.RecurringJobs;
 using SmartTalk.Core.Services.Jobs;
 
 namespace SmartTalk.Api.Extensions.Hangfire;
@@ -105,6 +106,13 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
 
         foreach (var type in recurringJobTypes)
         {
+            if (type == typeof(SchedulingSyncRestaurantMenuRecurringJob))
+            {
+                backgroundJobClient.RemoveRecurringJobIfExists(nameof(SchedulingSyncRestaurantMenuRecurringJob));
+                Log.Information("Recurring job disabled and removed: {JobId}", nameof(SchedulingSyncRestaurantMenuRecurringJob));
+                continue;
+            }
+
             var job = (IRecurringJob)app.ApplicationServices.GetRequiredService(type);
 
             if (string.IsNullOrEmpty(job.CronExpression))
