@@ -192,14 +192,18 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             parameters["type"] ??= "object";
 
             var properties = parameters["properties"] as JObject ?? new JObject();
-            if (properties["product_name"] == null)
+            properties["product_name"] ??= new JObject
             {
-                properties["product_name"] = new JObject
-                {
-                    ["type"] = "string",
-                    ["description"] = "The product/dish name the user asked about."
-                };
-            }
+                ["type"] = "string",
+                ["description"] = "The product/dish name the user asked about."
+            };
+
+            properties["customer_hint"] ??= new JObject
+            {
+                ["type"] = "string",
+                ["description"] =
+                    "Any customer-identifying detail explicitly mentioned by the customer, such as SAP customer ID, customer/guest name, street or brand street, header note/remark, contact name, contact identity, or restaurant/store related clue. Do not guess; only include details the customer actually said."
+            };
 
             var required = parameters["required"] as JArray ?? new JArray();
             if (!required.Any(x => string.Equals(x?.ToString(), "product_name", StringComparison.Ordinal)))

@@ -211,6 +211,7 @@ public class SjFoodQuotationResult
 
 public class SjFoodCustomerMatchHints
 {
+    public string CustomerHint { get; init; }
     public string SapId { get; init; }
     public string CustomerName { get; init; }
     public string Street { get; init; }
@@ -222,6 +223,7 @@ public class SjFoodCustomerMatchHints
 
     public IEnumerable<string> GetCustomerIdentityHints()
     {
+        yield return CustomerHint;
         yield return SapId;
         yield return SapId?.TrimStart('0');
         yield return CustomerName;

@@ -134,6 +134,7 @@ public partial class AiSpeechAssistantConnectService
     {
         return new SjFoodCustomerMatchHints
         {
+            CustomerHint = FirstString(token, "customer_hint", "customerHint", "customer_identifier", "customerIdentifier"),
             SapId = FirstString(token, "customer_id", "customerId", "sap_id", "sapId"),
             CustomerName = FirstString(token, "customer_name", "customerName", "guest_name", "guestName")
                            ?? token.SelectToken("customer.name")?.Value<string>()
