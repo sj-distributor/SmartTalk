@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
+using SmartTalk.Core.Services.RealtimeAiV2.Recording;
 using SmartTalk.Core.Services.RealtimeAiV2.Wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
@@ -29,9 +30,15 @@ public class RealtimeAiSessionContext
     public bool IsProviderResponseInProgress;
     public bool HasPendingProviderResponseTrigger;
 
-    // Recording
-    public MemoryStream AudioBuffer { get; set; }
-    public SemaphoreSlim BufferLock { get; } = new(1, 1);
+    // Barge-in state: item_id of the in-flight assistant turn + stream-time anchor.
+    // Both cleared after the truncate is sent or the turn completes.
+    public string LastAssistantItemId { get; set; }
+    public long? LatestMediaTimestamp { get; set; }
+    public long? ResponseStartTimestampTwilio { get; set; }
+
+    // Recording — buffer encapsulates the previous (MemoryStream + SemaphoreSlim)
+    // pair behind a single interface; PR 3.2 will swap implementations via env var.
+    public IRecordingBuffer AudioBuffer { get; set; }
 
     // Transcriptions
     public ConcurrentQueue<(AiSpeechAssistantSpeaker Speaker, string Text)> Transcriptions { get; } = new();

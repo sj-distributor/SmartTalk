@@ -16,7 +16,11 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
     
     string BuildTextUserMessage(string text, string sessionId);
 
-    object BuildInterruptMessage(string lastAssistantItemIdToInterrupt);
+    /// <summary>
+    /// Builds the provider truncate message at user barge-in. Returns null when the
+    /// provider has no equivalent; the caller skips sending on null.
+    /// </summary>
+    string BuildTruncateMessage(string itemId, long audioEndMs);
 
     string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output);
 
