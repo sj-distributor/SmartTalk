@@ -1,3 +1,5 @@
+using SmartTalk.Core.Services.AiSpeechAssistant;
+
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
@@ -14,5 +16,9 @@ public partial class AiSpeechAssistantConnectService
 
         _ctx.FunctionCalls = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistantId], _ctx.Assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+
+        _ctx.Prompt = AiSpeechAssistantComplaintInfoHelper.AppendPromptInstructionIfEnabled(
+            _ctx.Prompt,
+            _ctx.FunctionCalls.Select(x => x.Name));
     }
 }
