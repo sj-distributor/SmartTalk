@@ -57,6 +57,7 @@ public partial class AiSpeechAssistantConnectService
             Knowledge = _ctx.Knowledge,
             LastPrompt = _ctx.Prompt,
             OrderItems = _ctx.OrderItems,
+            ComplaintInfo = _ctx.ComplaintInfo,
             UserInfo = _ctx.UserInfo,
             LastUserInfo = _ctx.LastUserInfo,
             IsTransfer = _ctx.IsTransfer,

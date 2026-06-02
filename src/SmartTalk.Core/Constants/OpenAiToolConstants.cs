@@ -20,6 +20,7 @@ public static class OpenAiToolConstants
     public const string RepeatOrder = "repeat_order";
     public const string SatisfyOrder = "satisfy_order";
     
+    public const string CollectComplaintInfo = "collect_complaint_info";
     public const string Complaint = "complaint";
     public const string DeliveryTracking = "delivery_tracking";
     public const string DriverDeliveryRelatedCommunication = "driver_delivery_related_communication";

@@ -19,6 +19,7 @@ public partial class AiSpeechAssistantConnectService
             OpenAiToolConstants.ConfirmOrder => ProcessConfirmOrder(functionCallData),
             OpenAiToolConstants.ConfirmCustomerInformation => ProcessConfirmCustomerInformation(functionCallData),
             OpenAiToolConstants.ConfirmPickupTime => ProcessConfirmPickupTime(functionCallData),
+            OpenAiToolConstants.CollectComplaintInfo => ProcessCollectComplaintInfo(functionCallData),
             OpenAiToolConstants.Hangup => ProcessHangup(cancellationToken),
             OpenAiToolConstants.RepeatOrder or OpenAiToolConstants.SatisfyOrder => await ProcessRepeatOrderAsync(actions, cancellationToken).ConfigureAwait(false),
             OpenAiToolConstants.GetProductPrice => await ProcessProductPriceAsync(functionCallData, actions, cancellationToken).ConfigureAwait(false),
