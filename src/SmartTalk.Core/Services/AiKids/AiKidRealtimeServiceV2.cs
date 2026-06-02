@@ -1,6 +1,7 @@
 using System.Text;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
@@ -11,6 +12,7 @@ using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Commands.Attachments;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
@@ -61,6 +63,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         var greetings = assistant.Knowledge?.Greetings;
         var orderRecordType = command.OrderRecordType;
         var assistantId = assistant.Id;
+        var complaintInfo = new AiSpeechAssistantComplaintInfoDto();
 
         var options = new RealtimeSessionOptions
         {
@@ -88,6 +91,11 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             {
                 if (!string.IsNullOrEmpty(greetings))
                     await actions.SendTextToProviderAsync($"Greet the user with: {greetings}").ConfigureAwait(false);
+            },
+            OnFunctionCallAsync = (functionCall, _) =>
+            {
+                var result = ProcessFunctionCall(functionCall, ref complaintInfo);
+                return Task.FromResult(result);
             },
             OnRecordingCompleteAsync = async (sessionId, wavBytes) =>
             {
@@ -143,6 +151,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             .GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
                 [assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
 
+        resolvedPrompt = AiSpeechAssistantComplaintInfoHelper.AppendPromptInstructionIfEnabled(
+            resolvedPrompt, functionCalls.Select(x => x.Name));
+
         var configs = functionCalls
             .Where(x => !string.IsNullOrWhiteSpace(x.Content))
             .Select(x => (x.Type, Config: JsonConvert.DeserializeObject<object>(x.Content)))
@@ -162,6 +173,33 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 .ToList(),
             TurnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).Config,
             InputAudioNoiseReduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction).Config
+        };
+    }
+
+    private static RealtimeAiFunctionCallResult ProcessFunctionCall(
+        RealtimeAiWssFunctionCallData functionCall,
+        ref AiSpeechAssistantComplaintInfoDto complaintInfo)
+    {
+        if (!string.Equals(functionCall?.FunctionName, OpenAiToolConstants.CollectComplaintInfo, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        AiSpeechAssistantComplaintInfoDto incoming = null;
+
+        try
+        {
+            incoming = JsonConvert.DeserializeObject<AiSpeechAssistantComplaintInfoDto>(functionCall.ArgumentsJson);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[AiKidRealtimeV2] Deserialize complaint info failed. Arguments: {Arguments}", functionCall.ArgumentsJson);
+        }
+
+        complaintInfo = AiSpeechAssistantComplaintInfoHelper.Merge(complaintInfo, incoming);
+
+        return new RealtimeAiFunctionCallResult
+        {
+            Output = AiSpeechAssistantComplaintInfoHelper.BuildFunctionOutput(complaintInfo),
+            ShouldTriggerResponse = true
         };
     }
 
