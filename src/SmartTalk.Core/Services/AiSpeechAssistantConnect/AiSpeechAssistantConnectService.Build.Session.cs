@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SmartTalk.Core.Constants;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.AiSpeechAssistant;
@@ -15,7 +16,6 @@ public partial class AiSpeechAssistantConnectService
     private RealtimeSessionOptions BuildSessionOptions()
     {
         var assistant = _ctx.Assistant;
-        //var tools = BuildTools();
 
         return new RealtimeSessionOptions
         {
@@ -31,10 +31,7 @@ public partial class AiSpeechAssistantConnectService
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
                 Prompt = _ctx.Prompt,
-                Tools = _ctx.FunctionCalls
-                    .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
-                    .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
-                    .ToList(),
+                Tools = BuildTools(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
@@ -62,6 +59,60 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
+    private List<object> BuildTools()
+    {
+        var tools = _ctx.FunctionCalls
+            .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
+            .Select(x => JsonConvert.DeserializeObject<JObject>(x.Content))
+            .Where(x => x != null)
+            .Cast<object>()
+            .ToList();
+
+        if (_ctx.Assistant.ModelProvider == RealtimeAiProvider.OpenAi)
+            EnsureGetProductPriceSchema(tools);
+
+        return tools;
+    }
+
+    private static void EnsureGetProductPriceSchema(List<object> tools)
+    {
+        foreach (var tool in tools.OfType<JObject>())
+        {
+            var name = tool.Value<string>("name");
+            if (!string.Equals(name, OpenAiToolConstants.GetProductPrice, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            tool["type"] ??= "function";
+
+            var parameters = tool["parameters"] as JObject ?? new JObject();
+            parameters["type"] ??= "object";
+
+            var properties = parameters["properties"] as JObject ?? new JObject();
+            properties["product_name"] ??= new JObject
+            {
+                ["type"] = "string",
+                ["description"] = "The product name the customer asked about."
+            };
+
+            properties["customer_hint"] ??= new JObject
+            {
+                ["type"] = "string",
+                ["description"] =
+                    "Any customer-identifying detail explicitly mentioned by the customer, such as SAP customer ID, customer/guest name, street or brand street, header note/remark, contact name, contact identity, or restaurant/store related clue. Do not guess; only include details the customer actually said."
+            };
+
+            var required = parameters["required"] as JArray ?? new JArray();
+            if (!required.Any(x => string.Equals(x?.ToString(), "product_name", StringComparison.Ordinal)))
+                required.Add("product_name");
+
+            parameters["properties"] = properties;
+            parameters["required"] = required;
+            parameters["additionalProperties"] ??= false;
+
+            tool["parameters"] = parameters;
+        }
+    }
+    
     /// <summary>
     /// Logs per-turn OpenAI token usage with assistant + call context so cost reports
     /// can be reconstructed from structured Serilog properties. Intentionally fire-and-
