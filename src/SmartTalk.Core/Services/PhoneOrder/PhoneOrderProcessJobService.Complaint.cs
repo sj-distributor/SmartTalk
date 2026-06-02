@@ -5,6 +5,7 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -21,7 +22,7 @@ public partial class PhoneOrderProcessJobService
         var complaint = await ExtractComplaintFeedbackAsync(reportText, cancellationToken).ConfigureAwait(false);
         var customerIds = ParseCustomerIds(aiSpeechAssistant?.Name);
         var orders = customerIds.Count > 0
-            ? await GetComplaintInvoiceOrdersAsync(customerIds, cancellationToken).ConfigureAwait(false)
+            ? await GetComplaintInvoiceOrdersAsync(customerIds, 7, cancellationToken).ConfigureAwait(false)
             : new List<ComplaintInvoiceOrder>();
         var matchResult = MatchComplaintInvoiceOrders(complaint, orders, customerIds.Count > 0);
 
@@ -76,7 +77,7 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task<List<ComplaintInvoiceOrder>> GetComplaintInvoiceOrdersAsync(List<string> customerIds, CancellationToken cancellationToken)
+    private async Task<List<ComplaintInvoiceOrder>> GetComplaintInvoiceOrdersAsync(List<string> customerIds, int daysWindow, CancellationToken cancellationToken)
     {
         try
         {
@@ -84,7 +85,7 @@ public partial class PhoneOrderProcessJobService
                 new GetOrderInformationByCustomerIdRequestDto { CustomerIds = customerIds },
                 cancellationToken).ConfigureAwait(false);
 
-            return BuildComplaintInvoiceOrders(response?.Data);
+            return BuildComplaintInvoiceOrders(response?.Data, daysWindow);
         }
         catch (Exception ex)
         {
@@ -93,12 +94,18 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private static List<ComplaintInvoiceOrder> BuildComplaintInvoiceOrders(List<GetOrderInformationByCustomerIdItemDto> items)
+    private static List<ComplaintInvoiceOrder> BuildComplaintInvoiceOrders(List<GetOrderInformationByCustomerIdItemDto> items, int daysWindow)
     {
         if (items == null || items.Count == 0) return new List<ComplaintInvoiceOrder>();
 
+        var pacificToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PstTimeZone.Get()).Date;
+        var startDate = pacificToday.AddDays(-daysWindow + 1);
+
         return items
-            .Where(x => !string.IsNullOrWhiteSpace(x.InvNumber))
+            .Where(x => !string.IsNullOrWhiteSpace(x.InvNumber) &&
+                        x.InvDate.HasValue &&
+                        x.InvDate.Value.Date >= startDate &&
+                        x.InvDate.Value.Date <= pacificToday)
             .GroupBy(x => x.InvNumber.Trim())
             .Select(g =>
             {
