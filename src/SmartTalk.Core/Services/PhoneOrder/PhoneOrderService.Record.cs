@@ -708,14 +708,16 @@ public partial class PhoneOrderService
                 .ToDictionary(g => g.Key, g => g.First().Language ?? string.Empty);
         }
 
-        var (utcStart, utcEnd) = GetCompanyCallReportUtcRange(request.ReportType);
+        var (utcStart, utcEnd) = ConvertChinaDateRangeToUtcRange(request.StartDate, request.EndDate);
 
         var records = assistantIds.Count == 0
             ? []
             : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("GetPhoneOrderCompanyCallReportAsync records count{@Count}", records.Count);
+        
         var reportRows = BuildCompanyCallReportRows(records, assistantIds, assistantNameMap, assistantLanguageMap, latestRecords, daysWindow);
-        var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
+        var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderCompanyCallReportResponse { Data = fileUrl };
     }
@@ -784,6 +786,9 @@ public partial class PhoneOrderService
 
                 var scenarioCounts = Enum.GetValues<DialogueScenarios>()
                     .ToDictionary(scenario => scenario, scenario => groupRecords.Count(x => x.Scenario == scenario));
+
+                Log.Information(
+                    "Company call report row assistantId:{AssistantId}, customerId:{CustomerId}, totalCalls:{TotalCalls}, invalidCalls:{InvalidCalls}, recordIds:{RecordIds}", assistantId, string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName, groupRecords.Count, scenarioCounts.GetValueOrDefault(DialogueScenarios.InvalidCall), groupRecords.Select(x => x.Id).ToList());
 
                 var daysSinceLastCallText = latestRecord == null
                     ? $"超过{daysWindow}天"
@@ -865,6 +870,19 @@ public partial class PhoneOrderService
         var weekEndUtc = weekStartUtc.AddDays(7);
 
         return (new DateTimeOffset(weekStartUtc), new DateTimeOffset(weekEndUtc));
+    }
+
+    private static (DateTimeOffset StartUtc, DateTimeOffset EndUtc) ConvertChinaDateRangeToUtcRange(DateTime startDate, DateTime endDate)
+    {
+        if (endDate <= startDate) throw new ArgumentException("EndDate must be greater than StartDate.");
+
+        var chinaZone = GetChinaTimeZone();
+        var chinaStart = DateTime.SpecifyKind(startDate, DateTimeKind.Unspecified);
+        var chinaEnd = DateTime.SpecifyKind(endDate, DateTimeKind.Unspecified);
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(chinaStart, chinaZone);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(chinaEnd, chinaZone);
+
+        return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
     }
 
     private static TimeZoneInfo GetChinaTimeZone()
@@ -981,45 +999,27 @@ public partial class PhoneOrderService
     }
 
     private async Task<string> ToCompanyCallReportExcelAsync(
-        IReadOnlyList<CompanyCallReportRow> rows, PhoneOrderCallReportType reportType, CancellationToken cancellationToken)
+        IReadOnlyList<CompanyCallReportRow> rows, CancellationToken cancellationToken)
     {
         using var workbook = new XLWorkbook();
         var ws = workbook.AddWorksheet("Sheet1");
 
         var scenarios = Enum.GetValues<DialogueScenarios>();
-        var prefix = reportType == PhoneOrderCallReportType.Daily
-            ? "当日"
-            : reportType == PhoneOrderCallReportType.LastWeek
-                ? "上周"
-                : "本周";
 
         var headers = new List<string>
         {
             "customer id",
-            "客人語種"
+            "客人語種",
+            "有效通話量合計（所有通話-無效通話）",
+            "AI下单数量"
         };
-
-        if (reportType == PhoneOrderCallReportType.Daily)
-        {
-            headers.Add("當日有效通話量合計（所有通話-無效通話）");
-        }
-        else
-        {
-            headers.Add($"{prefix}有call入 Sales");
-            headers.Add($"{prefix}有效通話量（下单+转接+咨询）");
-        }
-
-        headers.Add($"{prefix}AI下单数量");
 
         foreach (var scenario in scenarios)
         {
-            headers.Add($"{prefix}{scenario.GetDescription()}");
+            headers.Add(scenario.GetDescription());
         }
-
-        if (reportType == PhoneOrderCallReportType.Daily)
-        {
-            headers.Add("多久沒來電");
-        }
+        
+        headers.Add("多久沒來電");
 
         for (var col = 0; col < headers.Count; col++)
             ws.Cell(1, col + 1).Value = headers[col];
@@ -1037,34 +1037,16 @@ public partial class PhoneOrderService
             ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerId;
             ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerLanguage ?? string.Empty;
 
-            if (reportType == PhoneOrderCallReportType.Daily)
+            var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
+            ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
+            ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
+
+            foreach (var scenario in scenarios)
             {
-                var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
-
-                foreach (var scenario in scenarios)
-                {
-                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
-                }
-
-                ws.Cell(rowIndex + 2, colIndex).Value = row.DaysSinceLastCallText ?? string.Empty;
+                ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
             }
-            else
-            {
-                var orderCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Order);
-                var transferCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.TransferToHuman);
-                var inquiryCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Inquiry);
-
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls;
-                ws.Cell(rowIndex + 2, colIndex++).Value = orderCount + transferCount + inquiryCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
-
-                foreach (var scenario in scenarios)
-                {
-                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
-                }
-            }
+            
+            ws.Cell(rowIndex + 2, colIndex).Value = row.DaysSinceLastCallText ?? string.Empty;
         }
 
         ws.Columns().AdjustToContents();
