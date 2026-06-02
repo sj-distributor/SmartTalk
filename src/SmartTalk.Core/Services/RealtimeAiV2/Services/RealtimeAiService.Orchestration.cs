@@ -67,6 +67,11 @@ public partial class RealtimeAiService
         {
             var parsed = _ctx.ClientAdapter.ParseMessage(rawMessage);
 
+            // Advance the stream clock for every frame that carries a timestamp, including
+            // those we don't dispatch (e.g. video).
+            if (parsed.Timestamp.HasValue)
+                _ctx.LatestMediaTimestamp = parsed.Timestamp.Value;
+
             switch (parsed.Type)
             {
                 case RealtimeAiClientMessageType.Start:

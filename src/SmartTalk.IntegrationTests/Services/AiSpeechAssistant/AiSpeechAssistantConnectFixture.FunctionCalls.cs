@@ -530,7 +530,7 @@ public partial class AiSpeechAssistantConnectFixture
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
         openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
         {
-            type = "response.audio.delta",
+            type = "response.output_audio.delta",
             delta = "dGVzdGF1ZGlvZGF0YQ==",
             item_id = "item_delta_001"
         }));

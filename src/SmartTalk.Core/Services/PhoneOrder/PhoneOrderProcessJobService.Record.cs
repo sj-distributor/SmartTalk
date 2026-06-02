@@ -107,7 +107,7 @@ public partial class PhoneOrderProcessJobService
             Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
         }
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         var callSubjectCn = "通话主题:";
         var callSubjectEn = "Conversation topic:";
@@ -119,7 +119,7 @@ public partial class PhoneOrderProcessJobService
         var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
 
         var client = new ChatClient(
-            "gpt-4o-audio-preview",
+            "gpt-audio-2025-08-28",
             new ApiKeyCredential(_openAiSettings.ApiKey),
             new OpenAIClientOptions
             {
@@ -131,6 +131,23 @@ public partial class PhoneOrderProcessJobService
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
       
+        if (completion.Content.Count>0)
+        {
+            var contentTexts = completion.Content
+                .Select(content => content.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+            
+            Log.Information(
+                "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
+                record.Id,
+                record.SessionId,
+                agent.Id,
+                aiSpeechAssistant?.Id,
+                aiSpeechAssistant?.Name,
+                contentTexts);
+        }
+        
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
@@ -270,7 +287,7 @@ public partial class PhoneOrderProcessJobService
     {
         var timezone = !string.IsNullOrWhiteSpace(agent.Timezone)
             ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone)
-            : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            : PstTimeZone.Get();
         var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
@@ -444,7 +461,7 @@ public partial class PhoneOrderProcessJobService
                 .ConfigureAwait(false);
         if (!extractedOrders.Any()) return;
 
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
 
         foreach (var storeOrder in extractedOrders)
