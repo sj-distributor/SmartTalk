@@ -236,6 +236,13 @@ public partial class PhoneOrderProcessJobService
         record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
         record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
         
+        if (record.Scenario == DialogueScenarios.ComplaintFeedback)
+        {
+            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(complaintSection))
+                record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
+        }
+
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         var reports = new List<PhoneOrderRecordReport>();
