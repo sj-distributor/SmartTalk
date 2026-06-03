@@ -14,18 +14,20 @@ public class SjFoodQuotationServiceTests
     private readonly ISjFoodClient _sjFoodClient = Substitute.For<ISjFoodClient>();
 
     // 多个 CRM 客户共享同一个电话时，验证可以用 CRM 已返回的字段唯一定位 SAPID：
-    // customer_hint 原文、消费者姓名、Header note、街道/品牌街道、联系人姓名/身份。
+    // customer_hint 原文、消费者姓名、Header note、街道/品牌街道、仓库号、联系人姓名/身份。
     [Theory]
-    [InlineData(null, "Alice Chen", null, null, null, null, "100001")]
-    [InlineData("VIP hotpot", null, null, null, null, null, "100002")]
-    [InlineData(null, null, "VIP hotpot", null, null, null, "100002")]
-    [InlineData(null, null, null, "MAINSTREET", null, null, "100003")]
-    [InlineData(null, null, null, null, "manager", "amy", "100004")]
+    [InlineData(null, "Alice Chen", null, null, null, null, null, "100001")]
+    [InlineData("VIP hotpot", null, null, null, null, null, null, "100002")]
+    [InlineData(null, null, "VIP hotpot", null, null, null, null, "100002")]
+    [InlineData(null, null, null, "MAINSTREET", null, null, null, "100003")]
+    [InlineData(null, null, null, null, "1600", null, null, "100004")]
+    [InlineData(null, null, null, null, null, "manager", "amy", "100005")]
     public async Task QueryPriceByPhoneAndProductAsync_ShouldDisambiguateMultipleCustomersByCrmFields(
         string customerHint,
         string customerNameHint,
         string headerNoteHint,
         string streetHint,
+        string warehouseHint,
         string contactIdentityHint,
         string contactNameHint,
         string expectedSapId)
@@ -54,6 +56,11 @@ public class SjFoodQuotationServiceTests
                 new GetCustomersPhoneNumberDataDto
                 {
                     SapId = "100004",
+                    Warehouse = "1600"
+                },
+                new GetCustomersPhoneNumberDataDto
+                {
+                    SapId = "100005",
                     Contacts =
                     [
                         new ContactDto { Name = "Amy Chen", Identity = "Manager" }
@@ -73,6 +80,7 @@ public class SjFoodQuotationServiceTests
             CustomerName = customerNameHint,
             HeaderNote1 = headerNoteHint,
             Street = streetHint,
+            Warehouse = warehouseHint,
             ContactIdentity = contactIdentityHint,
             ContactName = contactNameHint
         }, cancellationToken);

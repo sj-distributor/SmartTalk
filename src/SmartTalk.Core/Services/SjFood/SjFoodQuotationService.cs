@@ -147,6 +147,7 @@ public class SjFoodQuotationService : ISjFoodQuotationService
         yield return customer.SapId?.TrimStart('0');
         yield return customer.CustomerName;
         yield return customer.Street;
+        yield return customer.Warehouse;
         yield return customer.HeaderNote1;
 
         if (customer.Contacts == null) yield break;
@@ -215,6 +216,7 @@ public class SjFoodCustomerMatchHints
     public string SapId { get; init; }
     public string CustomerName { get; init; }
     public string Street { get; init; }
+    public string Warehouse { get; init; }
     public string HeaderNote1 { get; init; }
     public string ContactName { get; init; }
     public string ContactIdentity { get; init; }
@@ -228,6 +230,7 @@ public class SjFoodCustomerMatchHints
         yield return SapId?.TrimStart('0');
         yield return CustomerName;
         yield return Street;
+        yield return Warehouse;
         yield return HeaderNote1;
         yield return ContactName;
         yield return ContactIdentity;
