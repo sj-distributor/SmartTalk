@@ -16,6 +16,7 @@ using SmartTalk.Core.Services.Infrastructure;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
+using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
@@ -49,6 +50,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
     private readonly IFfmpegService _ffmpegService;
     private readonly IPosUtilService _posUtilService;
     private readonly IRealtimeAiService _realtimeAiService;
+    private readonly MiniMaxTtsSettings _miniMaxTtsSettings;
 
     #endregion
 
@@ -71,6 +73,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
         IRealtimeAiService realtimeAiService, 
+        MiniMaxTtsSettings miniMaxTtsSettings,
         IOpenaiClient openaiClient, 
         ISmartiesClient smartiesClient, 
         ISmartTalkBackgroundJobClient backgroundJobClient)
@@ -85,6 +88,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _ffmpegService = ffmpegService;
         _posUtilService = posUtilService;
         _realtimeAiService = realtimeAiService;
+        _miniMaxTtsSettings = miniMaxTtsSettings;
         _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _backgroundJobClient = backgroundJobClient;

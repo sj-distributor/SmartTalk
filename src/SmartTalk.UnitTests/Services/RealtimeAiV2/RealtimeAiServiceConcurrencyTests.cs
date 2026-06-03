@@ -2,6 +2,7 @@ using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.BuiltIn;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -27,6 +28,7 @@ public class RealtimeAiServiceConcurrencyTests
         switcher1.WssClient(Arg.Any<RealtimeAiProvider>()).Returns(fakeWssClient1);
         switcher1.ClientAdapter(Arg.Any<RealtimeAiClient>()).Returns(clientAdapter1);
         switcher1.ProviderAdapter(Arg.Any<RealtimeAiProvider>()).Returns(providerAdapter1);
+        switcher1.TtsProvider(Arg.Any<RealtimeAiTtsProviderType>()).Returns(new BuiltInRealtimeAiTtsProvider());
         providerAdapter1.GetHeaders(Arg.Any<RealtimeAiServerRegion>()).Returns(new Dictionary<string, string>());
         providerAdapter1.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
 
@@ -41,6 +43,7 @@ public class RealtimeAiServiceConcurrencyTests
         switcher2.WssClient(Arg.Any<RealtimeAiProvider>()).Returns(fakeWssClient2);
         switcher2.ClientAdapter(Arg.Any<RealtimeAiClient>()).Returns(clientAdapter2);
         switcher2.ProviderAdapter(Arg.Any<RealtimeAiProvider>()).Returns(providerAdapter2);
+        switcher2.TtsProvider(Arg.Any<RealtimeAiTtsProviderType>()).Returns(new BuiltInRealtimeAiTtsProvider());
         providerAdapter2.GetHeaders(Arg.Any<RealtimeAiServerRegion>()).Returns(new Dictionary<string, string>());
         providerAdapter2.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
 

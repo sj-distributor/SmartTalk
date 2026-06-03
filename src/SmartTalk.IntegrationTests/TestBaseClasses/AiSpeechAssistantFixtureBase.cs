@@ -61,7 +61,8 @@ public class AiSpeechAssistantFixtureBase : TestBase
         builder.Register(ctx => new RealtimeAiSwitcher(
             [mock],
             ctx.Resolve<IEnumerable<IRealtimeAiClientAdapter>>(),
-            ctx.Resolve<IEnumerable<IRealtimeAiProviderAdapter>>()
+            ctx.Resolve<IEnumerable<IRealtimeAiProviderAdapter>>(),
+            ctx.Resolve<IEnumerable<SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.IRealtimeAiTtsProvider>>()
         )).As<IRealtimeAiSwitcher>();
     }
 }
