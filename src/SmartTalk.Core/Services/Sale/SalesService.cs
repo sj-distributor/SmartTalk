@@ -33,6 +33,23 @@ public class SalesService : ISalesService
         ["7"] = "周日"
     };
 
+    private static readonly Dictionary<string, string[]> TimezoneWarehouseMapping = new(StringComparer.Ordinal)
+    {
+        ["America/New_York"] = ["101A"],
+        ["America/Los_Angeles"] = ["101D", "1050", "1060", "1070", "1200", "1250", "1400", "1450", "1600", "1800"],
+        ["America/Chicago"] = ["101G", "101J", "102B"],
+        ["America/Denver"] = ["101H", "102H"]
+    };
+
+    private static readonly Dictionary<string, string> WarehouseTimezoneLookup = TimezoneWarehouseMapping
+        .SelectMany(mapping => mapping.Value.Select(warehouse => new { Warehouse = warehouse, Timezone = mapping.Key }))
+        .ToDictionary(x => x.Warehouse, x => x.Timezone, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly char[] WarehouseCodeSeparators =
+    [
+        ' ', '\t', '\r', '\n', ',', '，', ';', '；', '/', '\\', '|', '、'
+    ];
+
     private readonly ICrmClient _crmClient;
     private readonly ISalesClient _salesClient;
 
@@ -272,6 +289,9 @@ public class SalesService : ISalesService
         customerInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
         customerInfo.AppendLine($"- 地址: {customer.Street}");
         customerInfo.AppendLine($"- 仓库: {customer.Warehouse}");
+        var timezone = ResolveWarehouseTimezone(customer.Warehouse);
+        if (!string.IsNullOrWhiteSpace(timezone))
+            customerInfo.AppendLine($"- 送货/截单时区: {timezone}");
         customerInfo.AppendLine($"- 备注: {customer.HeaderNote1}");
 
         if (customer.Contacts == null || customer.Contacts.Count == 0) return;
@@ -381,6 +401,32 @@ public class SalesService : ISalesService
             return "未配置";
 
         return $"{entry ?? "未配置"}-{leave ?? "未配置"}";
+    }
+
+    private static string ResolveWarehouseTimezone(string warehouse)
+    {
+        var warehouseCodes = ExtractWarehouseCodes(warehouse);
+        if (warehouseCodes.Count == 0) return null;
+
+        var timezones = warehouseCodes
+            .Select(code => WarehouseTimezoneLookup.TryGetValue(code, out var timezone) ? timezone : null)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return timezones.Count == 0 ? null : string.Join("、", timezones);
+    }
+
+    private static List<string> ExtractWarehouseCodes(string warehouse)
+    {
+        if (string.IsNullOrWhiteSpace(warehouse)) return [];
+
+        return warehouse
+            .Split(WarehouseCodeSeparators, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static string NormalizePhone(string phoneNumber)
