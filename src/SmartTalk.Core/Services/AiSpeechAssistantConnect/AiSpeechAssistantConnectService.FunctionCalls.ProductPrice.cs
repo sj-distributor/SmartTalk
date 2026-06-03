@@ -34,15 +34,27 @@ public partial class AiSpeechAssistantConnectService
             };
         }
 
-        if (_ctx.PriceCache.TryGetValue(args.ProductName, out var cached))
+        var cacheKey = BuildProductPriceCacheKey(args.ProductName, args.CustomerHints);
+        if (_ctx.PriceCache.TryGetValue(cacheKey, out var cached))
             return new RealtimeAiFunctionCallResult { Output = cached };
 
         var quotation = await _sjFoodQuotationService
             .QueryPriceByPhoneAndProductAsync(_ctx.From, args.ProductName, args.CustomerHints, cancellationToken)
             .ConfigureAwait(false);
 
-        _ctx.PriceCache[args.ProductName] = quotation?.Message;
+        _ctx.PriceCache[cacheKey] = quotation?.Message;
         return new RealtimeAiFunctionCallResult { Output = quotation?.Message };
+    }
+
+    public static string BuildProductPriceCacheKey(string productName, SjFoodCustomerMatchHints customerHints)
+    {
+        var hintKey = customerHints?.GetCustomerIdentityHints()?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .DefaultIfEmpty(string.Empty)
+            .Aggregate((current, next) => $"{current}|{next}");
+
+        return $"{productName?.Trim()}::{hintKey}";
     }
 
     private static ProductPriceArgs ParseProductPriceArgs(string argumentsJson)
@@ -144,6 +156,7 @@ public partial class AiSpeechAssistantConnectService
                      ?? token.SelectToken("store.address")?.Value<string>()
                      ?? token.SelectToken("restaurant.address")?.Value<string>()
                      ?? token.SelectToken("restaurant.street")?.Value<string>(),
+            Warehouse = FirstString(token, "warehouse", "warehouse_id", "warehouseId"),
             HeaderNote1 = FirstString(token, "header_note", "headerNote", "header_note_1", "headerNote1"),
             ContactName = FirstString(token, "contact_name", "contactName", "guest_name", "guestName")
                           ?? token.SelectToken("contact.name")?.Value<string>()
