@@ -4,6 +4,7 @@ using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -46,6 +47,7 @@ public partial class AiSpeechAssistantConnectService
             {
                 ProfileId = _ctx.Assistant.Id.ToString()
             },
+            TtsConfig = BuildTtsConfig(assistant),
             WebSocket = _ctx.TwilioWebSocket,
             Region = RealtimeAiServerRegion.US,
             EnableRecording = true,
@@ -59,6 +61,15 @@ public partial class AiSpeechAssistantConnectService
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
             OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };
+    }
+
+    private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)
+    {
+        return _miniMaxTtsSettings.BuildRealtimeAiTtsConfig(
+            assistant.Id,
+            assistant.ModelProvider,
+            assistant.ModelVoice,
+            _miniMaxTtsSettings.SampleRate);
     }
 
     /// <summary>

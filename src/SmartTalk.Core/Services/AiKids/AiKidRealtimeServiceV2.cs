@@ -8,6 +8,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Commands.Attachments;
@@ -16,6 +17,7 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.AiKids;
@@ -32,19 +34,22 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IRealtimeAiService _realtimeAiService;
+    private readonly MiniMaxTtsSettings _miniMaxTtsSettings;
 
     public AiKidRealtimeServiceV2(
         ISmartiesClient smartiesClient,
         IAttachmentService attachmentService,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        IRealtimeAiService realtimeAiService)
+        IRealtimeAiService realtimeAiService,
+        MiniMaxTtsSettings miniMaxTtsSettings)
     {
         _smartiesClient = smartiesClient;
         _attachmentService = attachmentService;
         _backgroundJobClient = backgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _realtimeAiService = realtimeAiService;
+        _miniMaxTtsSettings = miniMaxTtsSettings;
     }
 
     public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
@@ -52,6 +57,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         var assistant = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Could not find assistant by id: {command.AssistantId}");
+
+        var forceChinese = command.OrderRecordType == PhoneOrderRecordType.TestLink;
+        var ttsSampleRate = forceChinese ? 24000 : _miniMaxTtsSettings.SampleRate;
 
         var timer = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantTimerByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
@@ -69,6 +77,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 Client = RealtimeAiClient.Default
             },
             ModelConfig = modelConfig,
+            TtsConfig = BuildTtsConfig(assistant, ttsSampleRate),
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
                 ProfileId = assistant.Id.ToString()
@@ -132,6 +141,16 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         };
 
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
+    }
+
+    private RealtimeAiTtsConfig BuildTtsConfig(Domain.AISpeechAssistant.AiSpeechAssistant assistant, int sampleRate)
+    {
+        return _miniMaxTtsSettings.BuildRealtimeAiTtsConfig(
+            assistant.Id,
+            assistant.ModelProvider,
+            assistant.ModelVoice,
+            sampleRate,
+            sourceSampleRate: sampleRate);
     }
 
     private async Task<RealtimeAiModelConfig> BuildModelConfigAsync(

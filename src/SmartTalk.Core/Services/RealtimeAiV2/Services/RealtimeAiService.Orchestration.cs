@@ -149,35 +149,58 @@ public partial class RealtimeAiService
     private async Task<string> TranscodeAudioAsync(string base64Input, AudioSource source)
     {
         var clientCodec = _ctx.ClientAdapter.NativeAudioCodec;
-        var providerCodec = _ctx.ProviderAdapter.GetPreferredCodec(clientCodec);
+        var providerCodec = source == AudioSource.Provider
+            ? _ctx.TtsProvider.OutputCodec
+            : _ctx.ProviderAdapter.GetPreferredCodec(clientCodec);
         var (sourceCodec, targetCodec) = source == AudioSource.Client ? (clientCodec, providerCodec) : (providerCodec, clientCodec);
+        var sourceSampleRate = ResolveAudioSampleRate(sourceCodec, source);
+        var targetSampleRate = ResolveAudioSampleRate(targetCodec, source == AudioSource.Client ? AudioSource.Provider : AudioSource.Client);
 
-        var rawBytes = await RecordAudioIfRequiredAsync(base64Input, sourceCodec, source).ConfigureAwait(false);
+        var rawBytes = await RecordAudioIfRequiredAsync(base64Input, sourceCodec, source, sourceSampleRate).ConfigureAwait(false);
 
-        if (sourceCodec == targetCodec) return base64Input;
+        if (sourceCodec == targetCodec && sourceSampleRate == targetSampleRate) return base64Input;
 
         rawBytes ??= Convert.FromBase64String(base64Input);
-        
-        return Convert.ToBase64String(AudioCodecConverter.Convert(rawBytes, sourceCodec, targetCodec));
+
+        var pcm16 = sourceCodec == RealtimeAiAudioCodec.PCM16
+            ? rawBytes
+            : AudioCodecConverter.Convert(rawBytes, sourceCodec, RealtimeAiAudioCodec.PCM16);
+
+        if (sourceSampleRate != targetSampleRate)
+            pcm16 = AudioCodecConverter.Resample(pcm16, sourceSampleRate, targetSampleRate);
+
+        var outputBytes = targetCodec == RealtimeAiAudioCodec.PCM16
+            ? pcm16
+            : AudioCodecConverter.Convert(pcm16, RealtimeAiAudioCodec.PCM16, targetCodec);
+
+        return Convert.ToBase64String(outputBytes);
+    }
+
+    private int ResolveAudioSampleRate(RealtimeAiAudioCodec codec, AudioSource source)
+    {
+        if (source == AudioSource.Provider)
+            return _ctx.TtsProvider.OutputSampleRate;
+
+        return AudioCodecConverter.GetSampleRate(codec);
     }
 
     /// <summary>
     /// Decides whether recording should happen, decodes and writes to buffer if so.
     /// Returns decoded bytes for reuse by codec conversion, or null if no decode occurred.
     /// </summary>
-    private async Task<byte[]> RecordAudioIfRequiredAsync(string base64Input, RealtimeAiAudioCodec sourceCodec, AudioSource source)
+    private async Task<byte[]> RecordAudioIfRequiredAsync(string base64Input, RealtimeAiAudioCodec sourceCodec, AudioSource source, int sourceSampleRate)
     {
         if (!_ctx.Options.EnableRecording) return null;
         if (source == AudioSource.Client && _ctx.IsAiSpeaking) return null;
 
         var rawBytes = Convert.FromBase64String(base64Input);
         
-        await WriteToAudioBufferAsync(rawBytes, sourceCodec).ConfigureAwait(false);
+        await WriteToAudioBufferAsync(rawBytes, sourceCodec, sourceSampleRate).ConfigureAwait(false);
         
         return rawBytes;
     }
 
-    private async Task WriteToAudioBufferAsync(byte[] data, RealtimeAiAudioCodec sourceCodec)
+    private async Task WriteToAudioBufferAsync(byte[] data, RealtimeAiAudioCodec sourceCodec, int sourceSampleRate)
     {
         if (!_ctx.Options.EnableRecording) return;
 
@@ -191,7 +214,7 @@ public partial class RealtimeAiService
         var buffer = _ctx.AudioBuffer;
         if (buffer is null) return;
 
-        var pcmData = AudioCodecConverter.ConvertForRecording(data, sourceCodec);
+        var pcmData = AudioCodecConverter.ConvertForRecording(data, sourceCodec, sourceSampleRate);
 
         await buffer.WriteAsync(pcmData).ConfigureAwait(false);
     }

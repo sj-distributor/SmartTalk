@@ -95,6 +95,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec)
     {
         var modelConfig = options.ModelConfig;
+        var useExternalTts = options.TtsConfig is { ProviderType: not RealtimeAiTtsProviderType.BuiltIn };
 
         // GA session.update payload (post 2026-05-07):
         // - new required `session.type` field ("realtime" | "transcription")
@@ -110,7 +111,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
             {
                 type = "realtime",
                 instructions = modelConfig.Prompt,
-                output_modalities = new[] { "audio" },
+                output_modalities = useExternalTts ? new[] { "text" } : new[] { "audio" },
                 // null for every assistant without a MaxResponseOutputTokens row; the
                 // caller's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23)
                 // strips the key entirely, so OpenAI uses its server-side default
@@ -146,7 +147,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                         turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
                         noise_reduction = modelConfig.InputAudioNoiseReduction
                     },
-                    output = new
+                    output = useExternalTts ? null : new
                     {
                         format = ConvertCodecToGaFormat(clientCodec),
                         // Single source of truth for the default; SupportedVoices documents
@@ -312,6 +313,32 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 case "response.created":
                     return Result(RealtimeAiWssEventType.ResponseStarted);
 
+                case "response.output_text.delta":
+                    var textDelta = root.TryGetProperty("delta", out var textDeltaProp) ? textDeltaProp.GetString() : null;
+                    return Result(RealtimeAiWssEventType.ResponseTextDelta, new RealtimeAiWssTextData { Text = textDelta });
+
+                case "response.output_text.done":
+                    var textDone = root.TryGetProperty("text", out var textDoneProp) ? textDoneProp.GetString() : null;
+                    return Result(RealtimeAiWssEventType.ResponseTextDone, new RealtimeAiWssTextData { Text = textDone });
+
+                case "response.content_part.added":
+                    var partDelta = ExtractTextFromContentPart(root, "part");
+                    return string.IsNullOrWhiteSpace(partDelta)
+                        ? Result(RealtimeAiWssEventType.Unknown, eventType)
+                        : Result(RealtimeAiWssEventType.ResponseTextDelta, new RealtimeAiWssTextData { Text = partDelta });
+
+                case "response.content_part.done":
+                    var partDone = ExtractTextFromContentPart(root, "part");
+                    return string.IsNullOrWhiteSpace(partDone)
+                        ? Result(RealtimeAiWssEventType.Unknown, eventType)
+                        : Result(RealtimeAiWssEventType.ResponseTextDone, new RealtimeAiWssTextData { Text = partDone });
+
+                case "response.output_item.done":
+                    var itemText = ExtractTextFromOutputItem(root);
+                    return string.IsNullOrWhiteSpace(itemText)
+                        ? Result(RealtimeAiWssEventType.Unknown, eventType)
+                        : Result(RealtimeAiWssEventType.ResponseTextDone, new RealtimeAiWssTextData { Text = itemText });
+
                 case "input_audio_buffer.speech_started":
                     return Result(RealtimeAiWssEventType.SpeechDetected);
 
@@ -333,9 +360,12 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     // the same provider message. Consumers handle the variant they care
                     // about and read Usage off the event independently.
                     var usage = ExtractUsage(root);
+                    var completedText = functionCalls == null ? ExtractCompletedText(root) : null;
                     var doneEvent = functionCalls != null
                         ? Result(RealtimeAiWssEventType.FunctionCallSuggested, functionCalls)
-                        : Result(RealtimeAiWssEventType.ResponseTurnCompleted);
+                        : string.IsNullOrWhiteSpace(completedText)
+                            ? Result(RealtimeAiWssEventType.ResponseTurnCompleted)
+                            : Result(RealtimeAiWssEventType.ResponseTurnCompleted, new RealtimeAiWssTextData { Text = completedText });
                     doneEvent.Usage = usage;
                     return doneEvent;
 
@@ -392,6 +422,94 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         }
 
         return results;
+    }
+
+    private static string ExtractCompletedText(JsonElement root)
+    {
+        if (root.TryGetProperty("response", out var responseRoot) &&
+            responseRoot.TryGetProperty("output_text", out var outputTextProp) &&
+            outputTextProp.ValueKind == JsonValueKind.String)
+        {
+            var outputText = outputTextProp.GetString();
+            if (!string.IsNullOrWhiteSpace(outputText))
+                return outputText;
+        }
+
+        if (!root.TryGetProperty("response", out var response) ||
+            !response.TryGetProperty("output", out var output) ||
+            output.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var chunks = new List<string>();
+        foreach (var item in output.EnumerateArray())
+        {
+            if (!item.TryGetProperty("type", out var typeProp) || typeProp.GetString() != "message")
+                continue;
+
+            if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
+                continue;
+
+            foreach (var contentItem in content.EnumerateArray())
+            {
+                var text = ExtractTextFromContent(contentItem);
+                if (!string.IsNullOrWhiteSpace(text))
+                    chunks.Add(text);
+            }
+        }
+
+        return chunks.Count == 0 ? null : string.Join(" ", chunks);
+    }
+
+    private static string ExtractTextFromOutputItem(JsonElement root)
+    {
+        if (!root.TryGetProperty("item", out var item) || item.ValueKind != JsonValueKind.Object)
+            return null;
+
+        if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var chunks = new List<string>();
+        foreach (var contentItem in content.EnumerateArray())
+        {
+            var text = ExtractTextFromContent(contentItem);
+            if (!string.IsNullOrWhiteSpace(text))
+                chunks.Add(text);
+        }
+
+        return chunks.Count == 0 ? null : string.Join(" ", chunks);
+    }
+
+    private static string ExtractTextFromContentPart(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var part) || part.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return ExtractTextFromContent(part);
+    }
+
+    private static string ExtractTextFromContent(JsonElement contentElement)
+    {
+        if (!contentElement.TryGetProperty("type", out var typeProp)) return null;
+
+        var contentType = typeProp.GetString();
+        if (contentType is not ("output_text" or "text" or "audio"))
+            return null;
+
+        if (contentElement.TryGetProperty("text", out var textProp))
+        {
+            var text = textProp.GetString();
+            if (!string.IsNullOrWhiteSpace(text))
+                return text;
+        }
+
+        if (contentElement.TryGetProperty("transcript", out var transcriptProp))
+        {
+            var transcript = transcriptProp.GetString();
+            if (!string.IsNullOrWhiteSpace(transcript))
+                return transcript;
+        }
+
+        return null;
     }
 
     private static string ExtractErrorMessage(JsonElement root)
