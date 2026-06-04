@@ -41,7 +41,7 @@ public class DistributeSpeechMaticsCallbackCommandHandler : ICommandHandler<Dist
         switch (job.Scenario)
         {
             case SpeechMaticsJobScenario.Released:
-                _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.HandleReleasedSpeechMaticsDiarizedTranscribeCallBackAsync(job.JobId, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
+                _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.HandleReleasedSpeechMaticsCallBackAsync(job.JobId, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
                 break;
             
             case SpeechMaticsJobScenario.TestingSalesPhoneOrder:

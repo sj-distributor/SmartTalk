@@ -10,11 +10,7 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderService
 {
-    Task<(string GoalText, string Tip, List<PhoneOrderConversation> Conversations)> PhoneOrderDiarizedTranscriptionAsync(List<PhoneOrderDiarizedSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken);
-
     Task ProcessPhoneOrderDiarizedTranscriptionAsync(List<PhoneOrderDiarizedSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken);
-
-    TranscriptionLanguage SelectLanguageEnum(string language);
 }
 
 public partial class PhoneOrderService
@@ -121,7 +117,7 @@ public partial class PhoneOrderService
         return Task.FromResult((goalTextsString, conversations.FirstOrDefault()?.Question ?? goalTextsString, conversations));
     }
 
-    public async Task PersistPhoneOrderDiarizedTranscriptionAsync(PhoneOrderRecord record, string goalText, string transcript, List<PhoneOrderConversation> conversations, CancellationToken cancellationToken)
+    private async Task PersistPhoneOrderDiarizedTranscriptionAsync(PhoneOrderRecord record, string goalText, string transcript, List<PhoneOrderConversation> conversations, CancellationToken cancellationToken)
     {
         var persistableConversations = conversations.Count != 0
             ? conversations

@@ -10,7 +10,7 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial interface IPhoneOrderProcessJobService
 {
-    Task HandleReleasedSpeechMaticsDiarizedTranscribeCallBackAsync(string jobId, CancellationToken cancellationToken);
+    Task HandleReleasedDiarizedTranscribeAsync(int recordId, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderProcessJobService
@@ -35,17 +35,20 @@ public partial class PhoneOrderProcessJobService
     {
         "and", "or", "with", "without", "plus", "of", "for", "to", "then", "also"
     };
-
-    public async Task HandleReleasedSpeechMaticsDiarizedTranscribeCallBackAsync(string jobId, CancellationToken cancellationToken)
+    
+    public async Task HandleReleasedDiarizedTranscribeAsync(int recordId, CancellationToken cancellationToken)
     {
-        if (jobId == null) return;
-
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByTranscriptionJobIdAsync(jobId, cancellationToken).ConfigureAwait(false);
+        var record = (await _phoneOrderDataProvider.GetPhoneOrderRecordAsync(recordId, cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
 
         Log.Information("Get Phone order record : {@record}", record);
 
         if (record == null) return;
 
+        await ProcessReleasedDiarizedTranscribeAsync(record, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ProcessReleasedDiarizedTranscribeAsync(PhoneOrderRecord record, CancellationToken cancellationToken)
+    {
         try
         {
             record.Status = PhoneOrderRecordStatus.Transcription;
@@ -61,7 +64,7 @@ public partial class PhoneOrderProcessJobService
 
             if (normalizedSpeakInfos.Count == 0)
             {
-                Log.Warning("Diarized transcription generated no valid segments. RecordId: {RecordId}, JobId: {JobId}", record.Id, jobId);
+                Log.Warning("Diarized transcription generated no valid segments. RecordId: {RecordId}", record.Id);
             }
 
             await _phoneOrderService.ProcessPhoneOrderDiarizedTranscriptionAsync(normalizedSpeakInfos, record, cancellationToken).ConfigureAwait(false);

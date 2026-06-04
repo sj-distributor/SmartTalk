@@ -32,7 +32,6 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
-using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
@@ -50,7 +49,6 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Smarties;
-using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -84,10 +82,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPosUtilService _posUtilService;
     private readonly IPhoneOrderService _phoneOrderService;
-    private readonly IPhoneOrderProcessJobService _phoneOrderProcessJobService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
-    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IFileTextExtractor _fileTextExtractor;
@@ -122,10 +118,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPosDataProvider posDataProvider,
         IPosUtilService posUtilService,
         IPhoneOrderService phoneOrderService,
-        IPhoneOrderProcessJobService phoneOrderProcessJobService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
-        ISpeechMaticsService speechMaticsService,
         ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
         IFileTextExtractor fileTextExtractor,
@@ -155,13 +149,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _posUtilService = posUtilService;
         _agentDataProvider = agentDataProvider;
         _phoneOrderService = phoneOrderService;
-        _phoneOrderProcessJobService = phoneOrderProcessJobService;
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
         _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
-        _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
