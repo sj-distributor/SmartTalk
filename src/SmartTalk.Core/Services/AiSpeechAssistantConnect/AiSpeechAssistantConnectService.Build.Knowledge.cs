@@ -25,6 +25,7 @@ public partial class AiSpeechAssistantConnectService
         await ResolveCustomerInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
+        await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
 
         Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
     }
@@ -486,5 +487,14 @@ public partial class AiSpeechAssistantConnectService
         return prompt
             .Replace("#{delivery_info}", value)
             .Replace("#{CRM_路线_送货日数据}", value);
+    }
+    
+    private async Task ResolveItemDescriptionAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.Prompt.Contains("#{HiFood_商品_术语库需求}", StringComparison.OrdinalIgnoreCase) ) return;
+
+        var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
+        
+        _ctx.Prompt = _ctx.Prompt.Replace("#{HiFood_商品_术语库需求}", cache?.ModelDescription?.Trim() ?? string.Empty);
     }
 }
