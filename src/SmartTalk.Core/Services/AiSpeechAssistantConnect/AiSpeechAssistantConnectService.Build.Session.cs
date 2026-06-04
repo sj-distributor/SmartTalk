@@ -100,7 +100,7 @@ public partial class AiSpeechAssistantConnectService
             {
                 ["type"] = "string",
                 ["description"] =
-                    "Any customer-identifying detail explicitly mentioned by the customer, such as SAP customer ID, customer/guest name, street or brand street, header note/remark, contact name, contact identity, or restaurant/store related clue. Do not guess; only include details the customer actually said."
+                    "Any customer-identifying detail explicitly mentioned by the customer, such as restaurant/customer name, street address, warehouse number, header note/remark, contact name, contact role, or restaurant/store related clue. Do not guess; only include details the customer actually said."
             };
 
             var required = parameters["required"] as JArray ?? new JArray();

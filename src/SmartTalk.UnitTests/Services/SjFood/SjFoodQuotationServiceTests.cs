@@ -148,6 +148,45 @@ public class SjFoodQuotationServiceTests
         await _sjFoodClient.DidNotReceiveWithAnyArgs().GetCustomerAiQuotationAsync(default, default);
     }
 
+    // 多个 CRM 客户无法唯一确认时，返回给 AI 的提示应引导它询问用户知道的信息，
+    // 例如街道、仓库号、联系人，而不是要求用户提供内部 SAPID。
+    [Fact]
+    public async Task QueryPriceByPhoneAndProductAsync_ShouldAskForCustomerKnownHints_WhenMultipleCustomersCannotBeResolved()
+    {
+        var sut = new SjFoodQuotationService(_crmClient, _sjFoodClient);
+        var cancellationToken = CancellationToken.None;
+
+        _crmClient.GetCrmTokenAsync(cancellationToken).Returns("crm-token");
+        _crmClient.GetCustomersByPhoneNumberAsync(Arg.Any<GetCustmoersByPhoneNumberRequestDto>(), "crm-token", cancellationToken)
+            .Returns([
+                new GetCustomersPhoneNumberDataDto
+                {
+                    SapId = "102126",
+                    CustomerName = "MALABS",
+                    Street = "2075 N CAPITOL AVE",
+                    Warehouse = "1200",
+                    Contacts = [new ContactDto { Name = "SERENA", Identity = "老闆" }]
+                },
+                new GetCustomersPhoneNumberDataDto
+                {
+                    SapId = "106991",
+                    CustomerName = "THAI SMILE CUISINE",
+                    Street = "534 4TH ST",
+                    Warehouse = "1600",
+                    Contacts = [new ContactDto { Name = "ABC", Identity = "未知" }]
+                }
+            ]);
+
+        var result = await sut.QueryPriceByPhoneAndProductAsync("+14084026529", "鸡脾肉", null, cancellationToken);
+
+        result.SapId.ShouldBeNull();
+        result.Message.ShouldContain("street address");
+        result.Message.ShouldContain("warehouse number");
+        result.Message.ShouldContain("contact name");
+        result.Message.ShouldNotContain("SAP");
+        await _sjFoodClient.DidNotReceiveWithAnyArgs().GetCustomerAiQuotationAsync(default, default);
+    }
+
     public static IEnumerable<object[]> UnresolvedCustomerCasesAsObjectArray() =>
         UnresolvedCustomerCases().Select(x => new object[] { x.Customers, x.Hints, x.ProductName });
 
