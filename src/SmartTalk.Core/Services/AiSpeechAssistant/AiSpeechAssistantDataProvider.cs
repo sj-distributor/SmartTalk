@@ -202,7 +202,13 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return (result.assistant, result.knowledge, result.userProfile);
+        // Use null-conditional access so a no-match (FirstOrDefaultAsync returns null on the
+        // anonymous projection) yields a (null, null, null) tuple instead of NRE'ing on
+        // `result.assistant`. Callers that assume non-null tuple elements (V1) keep their
+        // existing crash semantics — they will now NRE on the next deref of the returned
+        // null instead of inside this method, which is functionally equivalent. Callers that
+        // null-check (V2's LoadAssistantInfoAsync) can react cleanly.
+        return (result?.assistant, result?.knowledge, result?.userProfile);
     }
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken)

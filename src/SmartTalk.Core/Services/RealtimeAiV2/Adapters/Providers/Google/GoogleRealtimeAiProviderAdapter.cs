@@ -99,21 +99,8 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return JsonSerializer.Serialize(message);
     }
     
-    public object BuildInterruptMessage(string lastAssistantItemIdToInterrupt)
-    {
-        if (!string.IsNullOrEmpty(lastAssistantItemIdToInterrupt))
-        {
-            var message = new
-            {
-                type = "conversation.interrupt",
-                item_id_to_interrupt = lastAssistantItemIdToInterrupt
-            };
-            return message;
-        }
-
-        Log.Warning("[RealtimeAi] Cannot build interrupt message, missing item ID");
-        return null;
-    }
+    // Google's Live API handles barge-in via its own server-side VAD; no client-sent truncate.
+    public string BuildTruncateMessage(string itemId, long audioEndMs) => null;
 
     public string BuildFunctionCallReplyMessage(RealtimeAiWssFunctionCallData functionCall, string output)
     {

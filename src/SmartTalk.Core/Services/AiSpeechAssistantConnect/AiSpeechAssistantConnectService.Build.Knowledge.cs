@@ -1,9 +1,13 @@
 using Serilog;
+using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.STT;
+using AiSpeechAssistantEntity = SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant;
+using AiSpeechAssistantKnowledgeEntity = SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledge;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -32,92 +36,218 @@ public partial class AiSpeechAssistantConnectService
 
         Log.Information("[AiAssistant] Assistant matched, AssistantId: {AssistantId}, HasProfile: {HasProfile}, From: {From}, To: {To}", assistant?.Id, userProfile != null, _ctx.From, _ctx.To);
 
+        EnsureAssistantInfoComplete(assistant, knowledge);
+
         _ctx.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _ctx.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-        
+
         _ctx.Prompt = string.Join("\n\n", new[]
             {
                 _ctx.Knowledge.Prompt?.Trim(),
                 _ctx.Knowledge.ScenePrompt?.Trim()
             }
             .Where(x => !string.IsNullOrWhiteSpace(x)));
+
         _ctx.UserProfileJson = userProfile?.ProfileJson;
+    }
+
+    /// <summary>
+    /// Validates that the data provider returned both an assistant and an active knowledge entry.
+    /// Throws <see cref="AiAssistantNotAvailableException"/> with an actionable message — the
+    /// existing <c>ConnectAsync</c> try/catch catches this exception type cleanly and closes
+    /// the Twilio WebSocket; raw <c>NullReferenceException</c> would otherwise escape and leave
+    /// the call hanging.
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static void EnsureAssistantInfoComplete(AiSpeechAssistantEntity assistant, AiSpeechAssistantKnowledgeEntity knowledge)
+    {
+        if (assistant == null)
+            throw new AiAssistantNotAvailableException("No assistant configured for caller/DID");
+
+        if (knowledge == null)
+            throw new AiAssistantNotAvailableException($"No active knowledge for assistant {assistant.Id}");
     }
 
     private void ResolveStaticPromptVariables()
     {
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
 
-        _ctx.Prompt = _ctx.Prompt
-            .Replace("#{user_profile}", string.IsNullOrEmpty(_ctx.UserProfileJson) ? " " : _ctx.UserProfileJson)
+        _ctx.Prompt = ResolveStaticTokens(_ctx.Prompt, _ctx.UserProfileJson, _ctx.From, pstTime);
+    }
+
+    /// <summary>
+    /// Pure version of static token replacement, isolated for unit testability.
+    /// Returns the prompt unchanged if it is null or empty (no tokens to replace),
+    /// matching the safe-no-op contract callers expect.
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static string ResolveStaticTokens(string prompt, string userProfileJson, string from, DateTimeOffset pstTime)
+    {
+        if (string.IsNullOrEmpty(prompt)) return prompt;
+
+        return prompt
+            .Replace("#{user_profile}", string.IsNullOrEmpty(userProfileJson) ? " " : userProfileJson)
             .Replace("#{current_time}", pstTime.ToString("yyyy-MM-dd HH:mm:ss"))
-            .Replace("#{customer_phone}", _ctx.From.StartsWith("+1") ? _ctx.From[2..] : _ctx.From)
+            .Replace("#{customer_phone}", FormatCustomerPhone(from))
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
     }
 
+    /// <summary>
+    /// Formats the caller phone number for inclusion in the prompt:
+    /// strips the leading <c>+1</c> for North American numbers, returns the rest verbatim,
+    /// and returns empty string for null/empty input (anonymous Twilio caller edge case).
+    /// Public static; not intended for external use.
+    /// </summary>
+    public static string FormatCustomerPhone(string from)
+    {
+        if (string.IsNullOrEmpty(from)) return string.Empty;
+
+        // NOTE: matching the original behaviour exactly — `string.StartsWith(string)` uses
+        // CurrentCulture comparison. For ASCII "+1" the result is identical to Ordinal,
+        // but we preserve the original to avoid any culture-dependent surprise.
+        return from.StartsWith("+1") ? from[2..] : from;
+    }
+
+    // ── Greeting ──────────────────────────────────────────────────────────
+    //
+    // Each ResolveX preserves the original check-fetch-apply order so the
+    // cross-token cascade (see ShouldResolveCrossTokenCascade_* in the
+    // KnowledgeBase fixture) continues to work: any token literal an earlier
+    // Resolve injects into _ctx.Prompt is processed by a later Resolve.
+    // Internal split into FetchX + ApplyX is a pure structural refactor —
+    // no externally observable change, byte-equivalent prompt output.
+
+    private sealed record GreetingFetchResult(string FetchedGreeting);
+
     private async Task ResolveGreetingAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.NumberId.HasValue || !_ctx.Prompt.Contains("#{greeting}")) return;
+        var fetched = await FetchGreetingAsync(cancellationToken).ConfigureAwait(false);
+        ApplyGreeting(fetched);
+    }
 
-        var greeting = await _smartiesClient
+    private async Task<GreetingFetchResult> FetchGreetingAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.NumberId.HasValue || !_ctx.Prompt.Contains("#{greeting}")) return null;
+
+        var response = await _smartiesClient
             .GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest { Id = _ctx.NumberId.Value }, cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrEmpty(greeting.Data.Number.Greeting))
-            _ctx.Knowledge.Greetings = greeting.Data.Number.Greeting;
-        
+        return new GreetingFetchResult(response.Data.Number.Greeting);
+    }
+
+    private void ApplyGreeting(GreetingFetchResult result)
+    {
+        if (result == null) return;
+
+        if (!string.IsNullOrEmpty(result.FetchedGreeting))
+            _ctx.Knowledge.Greetings = result.FetchedGreeting;
+
         _ctx.Prompt = _ctx.Prompt.Replace("#{greeting}", _ctx.Knowledge.Greetings ?? string.Empty);
     }
 
+    // ── Customer items (HiFood / customer_items) ──────────────────────────
+
     private async Task ResolveCustomerItemsAsync(CancellationToken cancellationToken)
     {
+        var fetched = await FetchCustomerItemsAsync(cancellationToken).ConfigureAwait(false);
+        ApplyCustomerItems(fetched);
+    }
+
+    private async Task<string> FetchCustomerItemsAsync(CancellationToken cancellationToken)
+    {
         var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
-        
         var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
-        
-        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return;
 
-        var soldToIds = !string.IsNullOrEmpty(_ctx.Assistant.Name) ? _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : [];
-        if (soldToIds.Count == 0) return;
+        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return null;
 
-        var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+        var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(_ctx.Assistant.Name, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
-        var value = customerItems.Count > 0
+        return customerItems.Count > 0
             ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50))
             : " ";
+    }
+
+    private void ApplyCustomerItems(string value)
+    {
+        if (value == null) return;
 
         _ctx.Prompt = _ctx.Prompt
             .Replace("#{customer_items}", value)
             .Replace("{HiFood_商品_商品数据}", value);
     }
 
+    // ── Menu items ────────────────────────────────────────────────────────
+
+    private sealed record MenuItemsFetchResult(string MenuItems);
+
     private async Task ResolveMenuItemsAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase)) return;
+        var fetched = await FetchMenuItemsAsync(cancellationToken).ConfigureAwait(false);
+        ApplyMenuItems(fetched);
+    }
+
+    private async Task<MenuItemsFetchResult> FetchMenuItemsAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.Prompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase)) return null;
 
         var menuItems = await GenerateMenuItemsAsync(cancellationToken).ConfigureAwait(false);
 
-        _ctx.Prompt = _ctx.Prompt.Replace("#{menu_items}", menuItems ?? "");
+        // Wrap so a null/empty fetch result is still distinguishable from "fetch was skipped".
+        return new MenuItemsFetchResult(menuItems);
     }
+
+    private void ApplyMenuItems(MenuItemsFetchResult result)
+    {
+        if (result == null) return;
+
+        _ctx.Prompt = _ctx.Prompt.Replace("#{menu_items}", result.MenuItems ?? "");
+    }
+
+    // ── Customer info (CRM / customer_info) ───────────────────────────────
 
     private async Task ResolveCustomerInfoAsync(CancellationToken cancellationToken)
     {
+        var fetched = await FetchCustomerInfoAsync(cancellationToken).ConfigureAwait(false);
+        ApplyCustomerInfo(fetched);
+    }
+
+    private async Task<string> FetchCustomerInfoAsync(CancellationToken cancellationToken)
+    {
         var hasCustomerInfoToken = _ctx.Prompt.Contains("#{customer_info}", StringComparison.OrdinalIgnoreCase);
-        
         var hasCrmCustomerToken = _ctx.Prompt.Contains("{CRM_客户_客户数据}", StringComparison.OrdinalIgnoreCase);
-        
-        if (!hasCustomerInfoToken && !hasCrmCustomerToken) return;
+
+        if (!hasCustomerInfoToken && !hasCrmCustomerToken) return null;
 
         var cache = await _salesDataProvider.GetCustomerInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
 
-        var value = cache?.CacheValue?.Trim() ?? " ";
+        return cache?.CacheValue?.Trim() ?? " ";
+    }
+
+    private void ApplyCustomerInfo(string value)
+    {
+        if (value == null) return;
 
         _ctx.Prompt = _ctx.Prompt
             .Replace("#{customer_info}", value)
             .Replace("{CRM_客户_客户数据}", value);
     }
 
+    // ── POS prompt variables (products + store hours) ─────────────────────
+
+    private sealed record PosPromptFetchResult(
+        bool NeedProducts,
+        bool NeedStoreHours,
+        List<PosMenuProductBriefDto> Products,
+        string StoreHours);
+
     private async Task ResolvePosPromptVariablesAsync(CancellationToken cancellationToken)
+    {
+        var fetched = await FetchPosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
+        ApplyPosPromptVariables(fetched);
+    }
+
+    private async Task<PosPromptFetchResult> FetchPosPromptVariablesAsync(CancellationToken cancellationToken)
     {
         var needProducts = HasPromptToken("{POS_菜单_商品名称}")
                            || HasPromptToken("{POS_菜单_商品类别}")
@@ -127,25 +257,33 @@ public partial class AiSpeechAssistantConnectService
                            || HasPromptToken("{POS_菜单_菜单时间}");
         var needStoreHours = HasPromptToken("{POS_店铺信息_营业时间}");
 
-        if (!needProducts && !needStoreHours) return;
+        if (!needProducts && !needStoreHours) return null;
 
         var language = ResolvePosPromptLanguage();
         var products = needProducts
             ? await _posUtilService.GetPosMenuProductBriefsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
-            : [];
+            : new List<PosMenuProductBriefDto>();
 
-        ResolvePosMenuProductNames(products);
-        ResolvePosMenuProductCategories(products);
-        ResolvePosMenuProductSpecifications(products);
-        ResolvePosMenuProductTaxes(products);
-        ResolvePosMenuProductPrices(products);
-        ResolvePosMenuProductTimes(products);
+        var storeHours = needStoreHours
+            ? await _posUtilService.GetPosStoreTimePeriodsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
+            : null;
 
-        if (needStoreHours)
-        {
-            var storeHours = await _posUtilService.GetPosStoreTimePeriodsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false);
-            ResolvePosStoreBusinessHours(storeHours);
-        }
+        return new PosPromptFetchResult(needProducts, needStoreHours, products, storeHours);
+    }
+
+    private void ApplyPosPromptVariables(PosPromptFetchResult result)
+    {
+        if (result == null) return;
+
+        ResolvePosMenuProductNames(result.Products);
+        ResolvePosMenuProductCategories(result.Products);
+        ResolvePosMenuProductSpecifications(result.Products);
+        ResolvePosMenuProductTaxes(result.Products);
+        ResolvePosMenuProductPrices(result.Products);
+        ResolvePosMenuProductTimes(result.Products);
+
+        if (result.NeedStoreHours)
+            ResolvePosStoreBusinessHours(result.StoreHours);
     }
 
     private void ResolvePosMenuProductNames(List<PosMenuProductBriefDto> products)
@@ -297,11 +435,56 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
+    // ── Delivery info (CRM 送货日 / delivery_info) ─────────────────────────
+
+    private sealed record DeliveryInfoFetchResult(string DeliveryValue);
+
     private async Task ResolveDeliveryInfoAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) || !_ctx.Prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase)) return;
+        var fetched = await FetchDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
+        ApplyDeliveryInfo(fetched);
+    }
+
+    private async Task<DeliveryInfoFetchResult> FetchDeliveryInfoAsync(CancellationToken cancellationToken)
+    {
+        if (!HasDeliveryInfoToken(_ctx.Prompt)) return null;
 
         var cache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_info}", cache?.CacheValue?.Trim() ?? " ");
+
+        return new DeliveryInfoFetchResult(cache?.CacheValue?.Trim());
+    }
+
+    private void ApplyDeliveryInfo(DeliveryInfoFetchResult result)
+    {
+        if (result == null) return;
+
+        _ctx.Prompt = ApplyDeliveryInfoTokens(_ctx.Prompt, result.DeliveryValue);
+    }
+
+    /// <summary>
+    /// Returns true if the prompt contains either delivery info token literal.
+    /// Tokens are pinned: <c>#{delivery_info}</c> (English) or <c>#{CRM_路线_送货日数据}</c> (Chinese).
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static bool HasDeliveryInfoToken(string prompt) =>
+        !string.IsNullOrEmpty(prompt) &&
+        (prompt.Contains("#{delivery_info}", StringComparison.OrdinalIgnoreCase) ||
+         prompt.Contains("#{CRM_路线_送货日数据}", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Replaces both delivery info tokens with the given value.
+    /// Null/empty <paramref name="deliveryValue"/> becomes a single space placeholder
+    /// (preserves V2's existing <c>?? " "</c> semantic so the model never sees a literal token).
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static string ApplyDeliveryInfoTokens(string prompt, string deliveryValue)
+    {
+        if (string.IsNullOrEmpty(prompt)) return prompt;
+
+        var value = string.IsNullOrEmpty(deliveryValue) ? " " : deliveryValue;
+
+        return prompt
+            .Replace("#{delivery_info}", value)
+            .Replace("#{CRM_路线_送货日数据}", value);
     }
 }

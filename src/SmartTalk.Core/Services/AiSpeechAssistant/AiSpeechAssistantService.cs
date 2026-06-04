@@ -269,7 +269,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
         var finalPrompt = _aiSpeechAssistantKnowledgePromptService.BuildFinalPrompt(knowledge)
@@ -288,11 +288,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
-            var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-
-            if (soldToIds.Any())
+            if (!string.IsNullOrWhiteSpace(assistant.Name))
             {
-                var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+                var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(assistant.Name, cancellationToken).ConfigureAwait(false);
 
                 var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
@@ -1301,7 +1299,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var utcNow = DateTimeOffset.UtcNow;
 
-        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstZone = PstTimeZone.Get();
 
         var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
         
