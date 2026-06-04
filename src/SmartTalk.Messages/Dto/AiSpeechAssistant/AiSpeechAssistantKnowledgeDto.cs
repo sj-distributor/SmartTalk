@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Dto.KnowledgeScenario;
+
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
 
 public class AiSpeechAssistantKnowledgeDto
@@ -9,6 +11,8 @@ public class AiSpeechAssistantKnowledgeDto
     public string Json { get; set; }
     
     public string Prompt { get; set; }
+
+    public string ScenePrompt { get; set; }
     
     public string Version { get; set; }
     
@@ -29,4 +33,8 @@ public class AiSpeechAssistantKnowledgeDto
     public string ModelLanguage { get; set; }
     
     public List<AiSpeechAssistantKnowledgeCopyRelatedDto> KnowledgeCopyRelateds { get; set; }
+
+    public List<AiSpeechAssistantKnowledgeSceneRelationDto> SceneRelations { get; set; } = new();
+
+    public List<KnowledgeSceneItemDto> SceneItems { get; set; } = new();
 }

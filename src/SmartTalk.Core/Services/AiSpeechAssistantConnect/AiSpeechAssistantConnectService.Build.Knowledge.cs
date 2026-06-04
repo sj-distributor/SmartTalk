@@ -41,7 +41,13 @@ public partial class AiSpeechAssistantConnectService
         _ctx.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _ctx.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
 
-        _ctx.Prompt = _ctx.Knowledge.Prompt;
+        _ctx.Prompt = string.Join("\n\n", new[]
+            {
+                _ctx.Knowledge.Prompt?.Trim(),
+                _ctx.Knowledge.ScenePrompt?.Trim()
+            }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+
         _ctx.UserProfileJson = userProfile?.ProfileJson;
     }
 
