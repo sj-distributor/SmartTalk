@@ -14,8 +14,7 @@ public interface ISjFoodQuotationService : IScopedDependency
 public class SjFoodQuotationService : ISjFoodQuotationService
 {
     private const string MissingProductMessage = "Missing product_name. Ask the user which product they want the price for.";
-    private const string MissingCustomerMessage = "Unable to identify exactly one CRM customer for this phone number, so do not quote a price yet. Ask the customer for one more identifier: restaurant/customer name, street or brand street, header note/remark, contact name, contact identity, or SAP customer ID, then call get_product_price again with that detail.";
-    private const string MultipleCustomersMessage = "This phone number is linked to multiple CRM customers, so do not quote a price yet. Ask which restaurant/customer they mean, preferably restaurant name, street or brand street, header note/remark, contact name, contact identity, or SAP customer ID, then call get_product_price again with that detail.";
+    private const string MissingCustomerMessage = "Unable to identify exactly one CRM customer for this phone number, so do not quote a price yet. Ask the customer for one more detail they likely know, such as restaurant/customer name, street address, warehouse number, header note/remark, contact name, or contact role, then call get_product_price again with that detail in customer_hint.";
     private const string NoMatchingPriceMessage = "No matching price available";
 
     private readonly ICrmClient _crmClient;
@@ -161,14 +160,45 @@ public class SjFoodQuotationService : ISjFoodQuotationService
 
     private static string BuildCustomerDisambiguationMessage(List<GetCustomersPhoneNumberDataDto> customers, SjFoodCustomerMatchHints customerHints)
     {
-        var validCustomerCount = customers?.Count(x => !string.IsNullOrWhiteSpace(x.SapId)) ?? 0;
+        var validCustomers = customers?
+            .Where(x => !string.IsNullOrWhiteSpace(x.SapId))
+            .ToList() ?? [];
 
-        if (validCustomerCount == 0)
+        if (validCustomers.Count == 0)
             return MissingCustomerMessage;
 
+        var availableHintTypes = BuildAvailableCustomerHintTypes(validCustomers);
+        var hintTypesText = availableHintTypes.Count == 0
+            ? "restaurant/customer name, street address, warehouse number, header note/remark, contact name, or contact role"
+            : string.Join(", ", availableHintTypes);
+
         return customerHints?.HasAnyHint == true
-            ? MissingCustomerMessage
-            : MultipleCustomersMessage;
+            ? $"The detail provided still does not identify exactly one CRM customer, so do not quote a price yet. Ask the customer for another detail they likely know: {hintTypesText}. Then call get_product_price again with the new detail in customer_hint."
+            : $"This phone number is linked to multiple CRM customers, so do not quote a price yet. Ask the customer for one detail they likely know to identify the right account: {hintTypesText}. Then call get_product_price again with that detail in customer_hint.";
+    }
+
+    private static List<string> BuildAvailableCustomerHintTypes(List<GetCustomersPhoneNumberDataDto> customers)
+    {
+        var hintTypes = new List<string>();
+
+        AddIfAny(customers, x => x.CustomerName, "restaurant/customer name");
+        AddIfAny(customers, x => x.Street, "street address");
+        AddIfAny(customers, x => x.Warehouse, "warehouse number");
+        AddIfAny(customers, x => x.HeaderNote1, "header note/remark");
+
+        if (customers.Any(x => x.Contacts?.Any(c => !string.IsNullOrWhiteSpace(c.Name)) == true))
+            hintTypes.Add("contact name");
+
+        if (customers.Any(x => x.Contacts?.Any(c => !string.IsNullOrWhiteSpace(c.Identity)) == true))
+            hintTypes.Add("contact role");
+
+        return hintTypes;
+
+        void AddIfAny(IEnumerable<GetCustomersPhoneNumberDataDto> source, Func<GetCustomersPhoneNumberDataDto, string> selector, string label)
+        {
+            if (source.Any(x => !string.IsNullOrWhiteSpace(selector(x))))
+                hintTypes.Add(label);
+        }
     }
 
     private static string NormalizeMatchText(string value)
