@@ -15,6 +15,7 @@ using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.RetrievalDb.VectorDb;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.PhoneOrder;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Core.Settings.SpeechMatics;
@@ -49,6 +50,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly IRestaurantDataProvider _restaurantDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
+    private readonly OpenAiSettings _openAiSettings;
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
     private readonly SalesSetting _salesSetting;
 
@@ -72,10 +74,11 @@ public partial class PhoneOrderService : IPhoneOrderService
         IPhoneOrderDataProvider phoneOrderDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
-        TranscriptionCallbackSetting transcriptionCallbackSetting, 
-        ILinphoneDataProvider linphoneDataProvider, 
+        TranscriptionCallbackSetting transcriptionCallbackSetting,
         IAccountDataProvider accountDataProvider,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        OpenAiSettings openAiSettings,
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        ILinphoneDataProvider linphoneDataProvider)
     {
         _mapper = mapper;
         _currentUser = currentUser;
@@ -95,6 +98,9 @@ public partial class PhoneOrderService : IPhoneOrderService
         _phoneOrderUtilService = phoneOrderUtilService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
+        _speechMaticsDataProvider = speechMaticsDataProvider;
+        _openAiSettings = openAiSettings;
+        _transcriptionCallbackSetting = transcriptionCallbackSetting;
         _linphoneDataProvider = linphoneDataProvider;
         _accountDataProvider = accountDataProvider;
         _salesSetting = salesSetting;

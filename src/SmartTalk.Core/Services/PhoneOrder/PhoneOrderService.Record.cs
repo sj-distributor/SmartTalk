@@ -65,8 +65,6 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken);
 
     Task<UpdatePhoneOrderRecordTasksResponse> UpdatePhoneOrderRecordTasksAsync(UpdatePhoneOrderRecordTasksCommand command, CancellationToken cancellationToken);
-
-    TranscriptionLanguage SelectLanguageEnum(string language);
 }
 
 public partial class PhoneOrderService

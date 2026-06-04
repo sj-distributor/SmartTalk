@@ -114,7 +114,7 @@ public class OpenaiClient : IOpenaiClient
             headers: headers,
             isNeedToReadErrorContent: true).ConfigureAwait(false);
 
-        Log.Information("OpenAI diarized transcription response: {Response}", response);
+        Log.Information("Diarized transcription response: {Response}", response);
 
         return response;
     }
