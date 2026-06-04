@@ -82,7 +82,7 @@ public class SalesServiceCrmDeliveryTests
         _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
-        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", "crm-token", cancellationToken);
 
         result.CustomerInfo.ShouldContain("仓库: 1200");
         result.CustomerInfo.ShouldContain("送货/截单时区: America/Los_Angeles");
@@ -110,7 +110,7 @@ public class SalesServiceCrmDeliveryTests
         _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
             .Returns([]);
 
-        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", cancellationToken);
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", "crm-token", cancellationToken);
 
         result.CustomerInfo.ShouldContain("送货/截单时区: America/New_York、America/Chicago");
     }
