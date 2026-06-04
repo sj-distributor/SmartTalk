@@ -145,24 +145,31 @@ public partial class PhoneOrderService
 
     public async Task ProcessPhoneOrderDiarizedTranscriptionAsync(List<PhoneOrderDiarizedSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
-        var transcript = string.Join("\n", phoneOrderInfo.Where(x => !string.IsNullOrWhiteSpace(x.Text)).Select(x => $"{x.Speaker}: {x.Text}"));
+        try
+        {
+            var transcript = string.Join("\n", phoneOrderInfo.Where(x => !string.IsNullOrWhiteSpace(x.Text)).Select(x => $"{x.Speaker}: {x.Text}"));
 
-        var (goalText, _, conversations) = phoneOrderInfo.Count == 0
-            ? (string.Empty, string.Empty, new List<PhoneOrderConversation>())
-            : await PhoneOrderDiarizedTranscriptionAsync(phoneOrderInfo, record, cancellationToken).ConfigureAwait(false);
+            var (goalText, _, conversations) = phoneOrderInfo.Count == 0
+                ? (string.Empty, string.Empty, new List<PhoneOrderConversation>())
+                : await PhoneOrderDiarizedTranscriptionAsync(phoneOrderInfo, record, cancellationToken).ConfigureAwait(false);
 
-        var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken).ConfigureAwait(false);
-        var reportText = originalReport?.Report ?? record.TranscriptionText ?? string.Empty;
+            var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken).ConfigureAwait(false);
+            var reportText = originalReport?.Report ?? record.TranscriptionText ?? string.Empty;
 
-        var optimizedConversations = conversations.Count == 0
-            ? conversations
-            : await OptimizePhoneOrderDiarizedConversationsAsync(
-                phoneOrderInfo,
-                conversations,
-                reportText,
-                cancellationToken).ConfigureAwait(false);
+            var optimizedConversations = conversations.Count == 0
+                ? conversations
+                : await OptimizePhoneOrderDiarizedConversationsAsync(
+                    phoneOrderInfo,
+                    conversations,
+                    reportText,
+                    cancellationToken).ConfigureAwait(false);
 
-        await PersistPhoneOrderDiarizedTranscriptionAsync(record, goalText, transcript, optimizedConversations, cancellationToken).ConfigureAwait(false);
+            await PersistPhoneOrderDiarizedTranscriptionAsync(record, goalText, transcript, optimizedConversations, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Error("Process phone order diarized transcription error: {@Error}", e);
+        }
     }
 
     private async Task<List<PhoneOrderConversation>> OptimizePhoneOrderDiarizedConversationsAsync(List<PhoneOrderDiarizedSpeakInfoDto> speakInfos, List<PhoneOrderConversation> draftConversations, string reportText, CancellationToken cancellationToken)

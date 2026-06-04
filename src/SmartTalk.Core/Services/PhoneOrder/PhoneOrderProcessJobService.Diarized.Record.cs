@@ -175,46 +175,58 @@ public partial class PhoneOrderProcessJobService
 
     private async Task<List<PhoneOrderDiarizedSpeakInfoDto>> TranscribePhoneOrderSegmentsByDiarizedAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        Log.Information("Starting diarized transcription. FileSize: {FileSize}", audioContent?.Length ?? 0);
-
-        var responseText = await _openaiClient.TranscribeDiarizedAudioAsync(audioContent, "recording.wav", cancellationToken).ConfigureAwait(false);
-
-        Log.Information("Diarized transcription response received. BodyPreview: {BodyPreview}", BuildResponsePreview(responseText));
-
-        if (string.IsNullOrWhiteSpace(responseText))
-            return [];
-
-        var payload = JObject.Parse(responseText);
-
-        if (payload["error"] is JObject error)
-            throw new InvalidOperationException($"Diarized transcription request failed. Body={BuildResponsePreview(error.ToString())}");
-
-        var segments = payload["segments"] as JArray;
-
-        if (segments == null || segments.Count == 0)
+        try
         {
-            Log.Warning(
-                "Diarized transcription returned no segments. PayloadPreview: {PayloadPreview}", BuildResponsePreview(responseText));
+            Log.Information("Starting diarized transcription. FileSize: {FileSize}", audioContent?.Length ?? 0);
+
+            var responseText = await _openaiClient.TranscribeDiarizedAudioAsync(audioContent, "recording.wav", cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Diarized transcription response received. BodyPreview: {BodyPreview}", BuildResponsePreview(responseText));
+
+            if (string.IsNullOrWhiteSpace(responseText))
+                return [];
+
+            var payload = JObject.Parse(responseText);
+
+            if (payload["error"] is JObject error)
+            {
+                Log.Warning("Diarized transcription request failed. Body={Body}", BuildResponsePreview(error.ToString()));
+                return [];
+            }
+
+            var segments = payload["segments"] as JArray;
+
+            if (segments == null || segments.Count == 0)
+            {
+                Log.Warning(
+                    "Diarized transcription returned no segments. PayloadPreview: {PayloadPreview}", BuildResponsePreview(responseText));
+                return [];
+            }
+
+            var speakInfos = segments
+                .OfType<JObject>()
+                .Select(x => new PhoneOrderDiarizedSpeakInfoDto
+                {
+                    StartTime = x.Value<double?>("start") ?? 0,
+                    EndTime = x.Value<double?>("end") ?? 0,
+                    Speaker = x.Value<string>("speaker") ?? string.Empty,
+                    Role = TryParseDiarizedRole(x.Value<string>("role"), out var role) ? role : null,
+                    RoleText = x.Value<string>("role")?.Trim() ?? string.Empty,
+                    Text = x.Value<string>("text")?.Trim() ?? string.Empty
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x.Text))
+                .ToList();
+
+            Log.Information("Diarized transcription parsed segments: {@SpeakInfos}", speakInfos);
+
+            return speakInfos;
+        }
+        catch (Exception e)
+        {
+            Log.Warning("Diarized transcription failed, returning no segments. Exception: {@Exception}", e);
+
             return [];
         }
-
-        var speakInfos = segments
-            .OfType<JObject>()
-            .Select(x => new PhoneOrderDiarizedSpeakInfoDto
-            {
-                StartTime = x.Value<double?>("start") ?? 0,
-                EndTime = x.Value<double?>("end") ?? 0,
-                Speaker = x.Value<string>("speaker") ?? string.Empty,
-                Role = TryParseDiarizedRole(x.Value<string>("role"), out var role) ? role : null,
-                RoleText = x.Value<string>("role")?.Trim() ?? string.Empty,
-                Text = x.Value<string>("text")?.Trim() ?? string.Empty
-            })
-            .Where(x => !string.IsNullOrWhiteSpace(x.Text))
-            .ToList();
-
-        Log.Information("Diarized transcription parsed segments: {@SpeakInfos}", speakInfos);
-
-        return speakInfos;
     }
 
     private static string BuildResponsePreview(string responseText, int maxLength = 1200)
