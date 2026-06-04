@@ -1,0 +1,35 @@
+using Mediator.Net.Contracts;
+using SmartTalk.Messages.Requests.Pos;
+using SmartTalk.Messages.Responses;
+
+namespace SmartTalk.Messages.Commands.Sales;
+
+public class SyncCrmSalesAutoCreateCommand : HasServiceProviderId, ICommand
+{
+    public DateTimeOffset? StartAt { get; set; }
+
+    public DateTimeOffset? EndAt { get; set; }
+
+    public bool IsInitialSync { get; set; }
+
+    public bool IsManual { get; set; }
+}
+
+public class SyncCrmSalesAutoCreateResponse : SmartTalkResponse<SyncCrmSalesAutoCreateResponseData>
+{
+}
+
+public class SyncCrmSalesAutoCreateResponseData
+{
+    public int TotalCount { get; set; }
+
+    public int CreatedStoreCount { get; set; }
+
+    public int CreatedAssistantCount { get; set; }
+
+    public int CreatedKnowledgeCount { get; set; }
+
+    public int AppliedSceneCount { get; set; }
+
+    public List<string> Warnings { get; set; } = new();
+}
