@@ -1718,16 +1718,23 @@ public partial class AiSpeechAssistantService
         if (isSyncUpdate)
             syncSourceKnowledgeIds.Add(copyFromKnowledge.Id);
 
-        foreach (var sourceKnowledgeId in syncSourceKnowledgeIds)
+        if (syncSourceKnowledgeIds.Count > 0)
         {
-            var sourceDetails = await _aiSpeechAssistantDataProvider
-                .GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledgeId, cancellationToken)
-                .ConfigureAwait(false);
+            var allSyncSourceDetails = await _aiSpeechAssistantDataProvider
+                .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(syncSourceKnowledgeIds.ToList(), cancellationToken)
+                .ConfigureAwait(false) ?? new List<AiSpeechAssistantKnowledgeDetail>();
 
-            if (sourceDetails == null || sourceDetails.Count == 0)
-                continue;
+            var syncSourceDetailLookup = allSyncSourceDetails
+                .GroupBy(x => x.KnowledgeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            AddDetails(sourceDetails, true, detailsForPrompt);
+            foreach (var sourceKnowledgeId in syncSourceKnowledgeIds)
+            {
+                if (!syncSourceDetailLookup.TryGetValue(sourceKnowledgeId, out var sourceDetails) || sourceDetails.Count == 0)
+                    continue;
+
+                AddDetails(sourceDetails, true, detailsForPrompt);
+            }
         }
 
         if (detailsForPrompt.Count == 0)
