@@ -141,11 +141,11 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
 
-    [Route("data/dashboard"), HttpGet]
+    [Route("data/dashboard"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderDataDashboardResponse))]
-    public async Task<IActionResult> GetPhoneOrderDataDashboardAsync([FromQuery] GetPhoneOrderDataDashboardRequest request)
+    public async Task<IActionResult> GetPhoneOrderDataDashboardAsync([FromBody] GetPhoneOrderDataDashboardCommand command)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderDataDashboardRequest, GetPhoneOrderDataDashboardResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<GetPhoneOrderDataDashboardCommand, GetPhoneOrderDataDashboardResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
