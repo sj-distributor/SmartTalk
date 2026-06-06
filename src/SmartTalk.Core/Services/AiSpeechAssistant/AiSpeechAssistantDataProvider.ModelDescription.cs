@@ -9,8 +9,6 @@ public partial interface IAiSpeechAssistantDataProvider
     
     Task<AiSpeechAssistantDescription> GetAiSpeechAssistantDescriptionAsync(string modelIds, CancellationToken cancellationToken = default);
 
-    Task<bool> IsAiSpeechAssistantDescriptionExistedAsync(string itemDescription, CancellationToken cancellationToken = default);
-
     Task AddAiSpeechAssistantDescriptionsAsync(List<AiSpeechAssistantDescription> modelDescriptions, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task UpdateAiSpeechAssistantDescriptionsAsync(List<AiSpeechAssistantDescription> modelDescriptions, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -37,13 +35,6 @@ public partial class AiSpeechAssistantDataProvider
         var query = await _repository.Query<AiSpeechAssistantDescription>().FirstOrDefaultAsync(x => x.ModelId == modelValue, cancellationToken).ConfigureAwait(false);
 
         return query;
-    }
-
-    public async Task<bool> IsAiSpeechAssistantDescriptionExistedAsync(string itemDescription, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(itemDescription)) return false;
-
-        return await _repository.Query<AiSpeechAssistantDescription>().AnyAsync(x => x.ModelValue ==itemDescription.Trim(), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiSpeechAssistantDescriptionsAsync(List<AiSpeechAssistantDescription> modelDescriptions, bool forceSave = true, CancellationToken cancellationToken = default)
