@@ -1,3 +1,7 @@
+using Serilog;
+using Smarties.Messages.DTO.OpenAi;
+using Smarties.Messages.Enums.OpenAi;
+using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -16,13 +20,57 @@ public partial class AiSpeechAssistantService
 {
     public async Task<CheckAiSpeechAssistantDescriptionExistsResponse> CheckAiSpeechAssistantDescriptionExistsAsync(CheckAiSpeechAssistantDescriptionExistsRequest request, CancellationToken cancellationToken)
     {
-        var result = await _aiSpeechAssistantDataProvider.IsAiSpeechAssistantDescriptionExistedAsync(request.ItemDescription, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(request.ItemDescription))
+            return new CheckAiSpeechAssistantDescriptionExistsResponse { Data = new CheckAiSpeechAssistantDescriptionExistsResponseData { Result = false } };
+
+        var allDescriptions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var descriptionList = allDescriptions.Aggregate(string.Empty, (current, description) => current + (string.IsNullOrWhiteSpace(description.ModelDescription)
+            ? description.ModelValue + "\n"
+            : $"{description.ModelValue}（{description.ModelDescription}）\n"));
+
+        if (string.IsNullOrWhiteSpace(descriptionList))
+            descriptionList = "（暂无维护的缩写，请仅凭物料名称判断）";
+
+        var systemPrompt =
+            "你是一名食品配送行业的物料描述理解助手。\n" +
+            "系统中维护了一批物料缩写列表，每行格式为：缩写 或 缩写（说明）。\n" +
+            "用户会输入一段包含物料编号和物料描述的字符串，例如：80011149 Goc Vang Jasmine Rice  20024746CW BF Chuck Eye Roll N/O。\n" +
+            "你的任务是：结合系统缩写列表，判断你能不能看懂这段物料描述。能判断（看懂）就返回 true，不能判断（看不懂）就返回 false。\n" +
+            "判断时请注意：\n" +
+            "1. 物料编号（纯数字或数字加字母组合，如 80011149、20024746CW）属于编号，不需要理解含义，直接忽略。\n" +
+            "2. 对于描述部分中出现的每一个词或缩写，你需要结合系统缩写列表以及食品配送行业的常识来理解其含义。\n" +
+            "3. 缩写匹配区分大小写（例如 n/o 与 N/O 视为不相同）。\n" +
+            "请只返回 true 或 false，不得包含任何其他内容。\n\n" +
+            "系统缩写列表：\n" + descriptionList;
+
+        Log.Information("Sending item description check prompt to GPT: {Prompt}", systemPrompt);
+
+        var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
+        {
+            Messages = new List<CompletionsRequestMessageDto>
+            {
+                new ()
+                {
+                    Role = "system",
+                    Content = new CompletionsStringContent(systemPrompt)
+                },
+                new ()
+                {
+                    Role = "user",
+                    Content = new CompletionsStringContent("物料描述字符串：\n" + request.ItemDescription.Trim() + "\n\n")
+                }
+            },
+            Model = OpenAiModel.Gpt4o
+        }, cancellationToken).ConfigureAwait(false);
+
+        Log.Information("GPT item description check result: {Result}", completionResult.Data.Response);
 
         return new CheckAiSpeechAssistantDescriptionExistsResponse
         {
             Data = new CheckAiSpeechAssistantDescriptionExistsResponseData
             {
-                Result = result
+                Result = bool.TryParse(completionResult.Data.Response, out var result) && result
             }
         };
     }
