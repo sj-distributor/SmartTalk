@@ -562,6 +562,13 @@ public partial class AiSpeechAssistantService
 
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
+
+        var crmAutoSyncAssistantIds = await _aiSpeechAssistantDataProvider
+            .GetCrmAutoSyncAssistantIdsAsync(command.AssistantIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (crmAutoSyncAssistantIds.Count > 0)
+            throw new Exception("CRM auto-sync assistants cannot be deleted.");
         
         var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantByIdsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 

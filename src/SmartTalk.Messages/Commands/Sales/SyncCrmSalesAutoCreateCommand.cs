@@ -6,12 +6,6 @@ namespace SmartTalk.Messages.Commands.Sales;
 
 public class SyncCrmSalesAutoCreateCommand : HasServiceProviderId, ICommand
 {
-    public DateTimeOffset? StartAt { get; set; }
-
-    public DateTimeOffset? EndAt { get; set; }
-
-    public bool IsInitialSync { get; set; }
-
     public bool IsManual { get; set; }
 }
 
@@ -30,6 +24,10 @@ public class SyncCrmSalesAutoCreateResponseData
     public int CreatedKnowledgeCount { get; set; }
 
     public int AppliedSceneCount { get; set; }
+
+    public int TransferredAssistantCount { get; set; }
+
+    public bool IsInitialRelease { get; set; }
 
     public List<string> Warnings { get; set; } = new();
 }

@@ -9,6 +9,8 @@ using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.Sales;
@@ -151,6 +153,14 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<KnowledgeCopyRelatedInfoDto>> GetKnowledgeCopyRelatedEnrichInfoAsync(List<int> assistantIds, CancellationToken cancellationToken);
 
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
+
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdsAsync(List<int> storeIds, CancellationToken cancellationToken = default);
+
+    Task<bool> HasCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default);
+
+    Task<CrmAutoSyncAssistantLocationDto> GetCrmAutoSyncAssistantByNameInCompanyAsync(int companyId, string assistantName, CancellationToken cancellationToken = default);
+
+    Task<List<int>> GetCrmAutoSyncAssistantIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default);
 
     Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedsAsync(List<int> knowledgeId, CancellationToken cancellationToken = default);
     
@@ -865,6 +875,72 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             select assistant;
         
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdsAsync(List<int> storeIds, CancellationToken cancellationToken = default)
+    {
+        if (storeIds == null || storeIds.Count == 0)
+            return new List<Domain.AISpeechAssistant.AiSpeechAssistant>();
+
+        var query = from posAgent in _repository.Query<PosAgent>()
+            join agentAssistant in _repository.Query<AgentAssistant>() on posAgent.AgentId equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            where storeIds.Contains(posAgent.StoreId)
+            select assistant;
+
+        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> HasCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default)
+    {
+        var query =
+            from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            where agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            select agentAssistant.AssistantId;
+
+        return await query.AnyAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CrmAutoSyncAssistantLocationDto> GetCrmAutoSyncAssistantByNameInCompanyAsync(
+        int companyId, string assistantName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(assistantName))
+            return null;
+
+        var query =
+            from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            where agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            where assistant.Name == assistantName
+            select new CrmAutoSyncAssistantLocationDto
+            {
+                AssistantId = assistant.Id,
+                StoreId = store.Id,
+                AgentId = agent.Id
+            };
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetCrmAutoSyncAssistantIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default)
+    {
+        if (assistantIds == null || assistantIds.Count == 0)
+            return new List<int>();
+
+        var query =
+            from assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>().Where(x => assistantIds.Contains(x.Id))
+            join agentAssistant in _repository.Query<AgentAssistant>() on assistant.Id equals agentAssistant.AssistantId
+            join agent in _repository.Query<Agent>() on agentAssistant.AgentId equals agent.Id
+            where agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+            select assistant.Id;
+
+        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedsAsync(List<int> knowledgeId, CancellationToken cancellationToken = default)

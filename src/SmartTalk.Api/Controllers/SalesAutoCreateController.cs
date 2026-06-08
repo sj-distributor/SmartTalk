@@ -2,7 +2,6 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartTalk.Messages.Commands.Sales;
-using SmartTalk.Messages.Requests.Sales;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -23,6 +22,7 @@ public class SalesAutoCreateController : ControllerBase
     public async Task<IActionResult> SyncCrmAsync([FromBody] SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken)
     {
         command.IsManual = true;
+        
         var response = await _mediator.SendAsync<SyncCrmSalesAutoCreateCommand, SyncCrmSalesAutoCreateResponse>(command, cancellationToken).ConfigureAwait(false);
         return Ok(response);
     }

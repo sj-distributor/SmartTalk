@@ -4,6 +4,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.Crm;
+using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
@@ -20,6 +21,8 @@ public interface ICrmClient : IScopedDependency
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
 
     Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
+
+    Task<List<CrmSalesAutoSyncCustomerDto>> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default);
 }
 
 public class CrmClient : ICrmClient
@@ -133,5 +136,35 @@ public class CrmClient : ICrmClient
         };
 
         return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+    }
+
+    public async Task<List<CrmSalesAutoSyncCustomerDto>> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default)
+    {
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info";
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        var page = startPage > 0 ? startPage : 1;
+        var result = new List<CrmSalesAutoSyncCustomerDto>();
+
+        while (true)
+        {
+            var pagedUrl = $"{url}?page={page}";
+            var response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+            if (response?.Data == null || response.Data.Count == 0)
+                break;
+
+            result.AddRange(response.Data);
+
+            if (response.CurrentPage >= response.LastPage)
+                break;
+
+            page++;
+        }
+
+        return result;
     }
 }

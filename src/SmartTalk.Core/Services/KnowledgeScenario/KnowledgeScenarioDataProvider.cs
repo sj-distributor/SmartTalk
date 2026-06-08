@@ -65,6 +65,12 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
     
     Task UpdateKnowledgeSceneCompanyAsync(KnowledgeSceneCompany knowledgeSceneCompany, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(List<int> sceneIds = null, string language = null, bool? isActive = null, CancellationToken cancellationToken = default);
+
+    Task AddKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task UpdateKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
+
     Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int storeId, string keyword, CancellationToken cancellationToken = default);
 }
 
@@ -382,6 +388,50 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
     public async Task UpdateKnowledgeSceneCompanyAsync(KnowledgeSceneCompany knowledgeSceneCompany, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.UpdateAsync(knowledgeSceneCompany, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(
+        List<int> sceneIds = null,
+        string language = null,
+        bool? isActive = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<KnowledgeSceneLanguageMapping>();
+
+        if (sceneIds is { Count: > 0 })
+        {
+            var distinctSceneIds = sceneIds.Where(x => x > 0).Distinct().ToList();
+            query = query.Where(x => distinctSceneIds.Contains(x.SceneId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            var normalizedLanguage = language.Trim();
+            query = query.Where(x => x.Language == normalizedLanguage);
+        }
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (mappings.Count != 0)
+            await _repository.InsertAllAsync(mappings, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (mappings.Count != 0)
+            await _repository.UpdateAllAsync(mappings, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

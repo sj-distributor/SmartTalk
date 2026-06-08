@@ -23,6 +23,8 @@ public interface ISalesDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeVariableCache> GetCustomerInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
 
     Task<AiSpeechAssistantKnowledgeVariableCache> GetDeliveryInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
+
+    Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class SalesDataProvider : ISalesDataProvider
@@ -107,6 +109,14 @@ public class SalesDataProvider : ISalesDataProvider
     public async Task<AiSpeechAssistantKnowledgeVariableCache> GetDeliveryInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
     {
         return await GetPhoneScopedCacheByPhoneNumberAsync(DeliveryInfoCacheKey, phoneNumber, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(run, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task UpsertPhoneScopedCacheAsync(
