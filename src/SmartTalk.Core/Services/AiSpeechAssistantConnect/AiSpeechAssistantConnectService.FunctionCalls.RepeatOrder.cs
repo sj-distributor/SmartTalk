@@ -21,18 +21,18 @@ public partial class AiSpeechAssistantConnectService
 
         try
         {
-            await SendRepeatOrderHoldOnAudioAsync(actions).ConfigureAwait(false);
+            // Gray switch: BuildTtsConfig returns non-null only when MiniMax TTS is enabled for
+            // this assistant (same gate that drives the live call's voice), so the repeat-order
+            // voice matches the call. Disabled → keep the existing gpt-audio voice path.
+            var ttsConfig = BuildTtsConfig(_ctx.Assistant);
+            if (ttsConfig == null)
+                await SendRepeatOrderHoldOnAudioAsync(actions).ConfigureAwait(false);
 
             var recordedAudio = await actions.GetRecordedAudioSnapshotAsync().ConfigureAwait(false);
 
             if (recordedAudio is { Length: > 0 })
             {
                 var audioData = BinaryData.FromBytes(recordedAudio);
-
-                // Gray switch: BuildTtsConfig returns non-null only when MiniMax TTS is enabled for
-                // this assistant (same gate that drives the live call's voice), so the repeat-order
-                // voice matches the call. Disabled → keep the existing gpt-audio voice path.
-                var ttsConfig = BuildTtsConfig(_ctx.Assistant);
 
                 if (ttsConfig != null)
                     await SendRepeatOrderWithMiniMaxAsync(audioData, ttsConfig, actions, cancellationToken).ConfigureAwait(false);
