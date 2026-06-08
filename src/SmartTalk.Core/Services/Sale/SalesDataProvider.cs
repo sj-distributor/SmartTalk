@@ -12,6 +12,8 @@ public interface ISalesDataProvider : IScopedDependency
     
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
     
+    Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken);
+
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
     Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
@@ -53,7 +55,26 @@ public class SalesDataProvider : ISalesDataProvider
 
         if (type.HasValue) query = query.Where(s => s.Type == type.Value);
 
-        return await query.FirstOrDefaultAsync(cancellationToken);
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(assistantName))
+            return [];
+
+        var filters = assistantName
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var trimmedAssistantName = assistantName.Trim();
+        if (!filters.Contains(trimmedAssistantName, StringComparer.OrdinalIgnoreCase))
+            filters.Add(trimmedAssistantName);
+
+        return await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, filters, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
@@ -111,6 +132,19 @@ public class SalesDataProvider : ISalesDataProvider
         return await GetPhoneScopedCacheByPhoneNumberAsync(DeliveryInfoCacheKey, phoneNumber, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetKnowledgeVariableCachesByFiltersAsync(
+        string cacheKey,
+        List<string> filters,
+        CancellationToken cancellationToken)
+    {
+        if (filters == null || filters.Count == 0) return [];
+
+        return await _repository.Query<AiSpeechAssistantKnowledgeVariableCache>()
+            .Where(x => x.CacheKey == cacheKey && filters.Contains(x.Filter))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+    
     public async Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         await _repository.InsertAsync(run, cancellationToken).ConfigureAwait(false);

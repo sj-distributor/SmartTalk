@@ -392,7 +392,7 @@ public class AiSpeechAssistantController : ControllerBase
     {
         var response = await _mediator.SendAsync<UpdateAiSpeechAssistantDynamicConfigCommand, UpdateAiSpeechAssistantDynamicConfigResponse>(command)
             .ConfigureAwait(false);
-
+                                                                                                                                                                                                                                                                                         
         return Ok(response);
     }
     
@@ -401,6 +401,24 @@ public class AiSpeechAssistantController : ControllerBase
     public async Task<IActionResult> AddAiSpeechAssistantKnowledgeDetailAsync([FromBody] AddAiSpeechAssistantKnowledgeDetailCommand command)
     {
         var response = await _mediator.SendAsync<AddAiSpeechAssistantKnowledgeDetailCommand, AddAiSpeechAssistantKnowledgeDetailResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("description/sync"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SyncAiSpeechAssistantDescriptionsResponse))]
+    public async Task<IActionResult> SyncAiSpeechAssistantDescriptionsAsync([FromBody] SyncAiSpeechAssistantDescriptionCommand command)
+    {
+        var response = await _mediator.SendAsync<SyncAiSpeechAssistantDescriptionCommand, SyncAiSpeechAssistantDescriptionsResponse>(command).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("description/exist"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(CheckAiSpeechAssistantDescriptionExistsResponse))]
+    public async Task<IActionResult> CheckAiSpeechAssistantDescriptionExistsAsync([FromQuery] CheckAiSpeechAssistantDescriptionExistsRequest request)
+    {
+        var response = await _mediator.RequestAsync<CheckAiSpeechAssistantDescriptionExistsRequest, CheckAiSpeechAssistantDescriptionExistsResponse>(request).ConfigureAwait(false);
 
         return Ok(response);
     }

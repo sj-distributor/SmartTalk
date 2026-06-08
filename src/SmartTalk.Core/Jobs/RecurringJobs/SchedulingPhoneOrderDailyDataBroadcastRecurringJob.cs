@@ -1,5 +1,6 @@
 ﻿using Mediator.Net;
 using SmartTalk.Core.Settings.PhoneOrder;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.PhoneOrder;
 
 namespace SmartTalk.Core.Jobs.RecurringJobs;
@@ -24,5 +25,5 @@ public class SchedulingPhoneOrderDailyDataBroadcastRecurringJob : IRecurringJob
     
     public string CronExpression => _cronExpressionSetting.Value;
     
-    public TimeZoneInfo TimeZone => TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+    public TimeZoneInfo TimeZone => PstTimeZone.Get();
 }
