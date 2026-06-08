@@ -443,12 +443,12 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         CancellationToken cancellationToken)
     {
         var existingKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
-            targetAssistantId, isActive: true, cancellationToken).ConfigureAwait(false);
+            assistantId: targetAssistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (existingKnowledge != null)
             return;
 
         var sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
-            sourceAssistantId, isActive: true, cancellationToken).ConfigureAwait(false);
+            assistantId: sourceAssistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (sourceKnowledge == null)
             return;
 

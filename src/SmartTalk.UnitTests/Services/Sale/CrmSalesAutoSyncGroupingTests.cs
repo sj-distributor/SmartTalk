@@ -1,4 +1,5 @@
 using SmartTalk.Core.Services.Sale;
+using Xunit;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
