@@ -23,6 +23,8 @@ public interface ICrmClient : IScopedDependency
     Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
 
     Task<List<CrmSalesAutoSyncCustomerDto>> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default);
+
+    Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default);
 }
 
 public class CrmClient : ICrmClient
@@ -166,5 +168,20 @@ public class CrmClient : ICrmClient
         }
 
         return result;
+    }
+
+    public async Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sapId))
+            throw new ArgumentException("sapId cannot be null or empty.", nameof(sapId));
+
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customer-sales-follow-info-by-sap-id?sap_id={Uri.EscapeDataString(sapId.Trim())}";
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        return await _httpClient.GetAsync<CrmSalesAutoSyncCustomerDto>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
     }
 }

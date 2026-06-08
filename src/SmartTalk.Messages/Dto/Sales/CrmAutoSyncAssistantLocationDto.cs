@@ -7,4 +7,6 @@ public class CrmAutoSyncAssistantLocationDto
     public int StoreId { get; set; }
 
     public int AgentId { get; set; }
+
+    public string Name { get; set; }
 }

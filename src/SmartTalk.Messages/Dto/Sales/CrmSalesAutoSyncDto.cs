@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using SmartTalk.Messages.Dto.Crm;
 
 namespace SmartTalk.Messages.Dto.Sales;
 
@@ -18,6 +19,9 @@ public class CrmSalesAutoSyncCustomerDto
 
     [JsonProperty("language")]
     public string Language { get; set; }
+
+    [JsonProperty("contacts")]
+    public List<ContactDto> Contacts { get; set; }
 }
 
 public class CrmSalesAutoSyncPagedResponseDto
@@ -36,4 +40,15 @@ public class CrmSalesAutoSyncPagedResponseDto
 
     [JsonProperty("data")]
     public List<CrmSalesAutoSyncCustomerDto> Data { get; set; } = new();
+}
+
+public class CrmSalesAutoSyncCustomerGroup
+{
+    public string SalesKey { get; set; }
+
+    public List<CrmSalesAutoSyncCustomerDto> Customers { get; set; } = new();
+
+    public List<string> CustomerIds { get; set; } = new();
+
+    public string Language { get; set; }
 }

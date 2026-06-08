@@ -160,6 +160,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
 
     Task<CrmAutoSyncAssistantLocationDto> GetCrmAutoSyncAssistantByNameInCompanyAsync(int companyId, string assistantName, CancellationToken cancellationToken = default);
 
+    Task<List<CrmAutoSyncAssistantLocationDto>> GetCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default);
+
     Task<List<int>> GetCrmAutoSyncAssistantIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default);
 
     Task<List<AiSpeechAssistantKnowledgeCopyRelated>> GetKnowledgeCopyRelatedsAsync(List<int> knowledgeId, CancellationToken cancellationToken = default);
@@ -928,10 +930,32 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             {
                 AssistantId = assistant.Id,
                 StoreId = store.Id,
-                AgentId = agent.Id
+                AgentId = agent.Id,
+                Name = assistant.Name
             };
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<CrmAutoSyncAssistantLocationDto>> GetCrmAutoSyncAssistantsInCompanyAsync(
+        int companyId, CancellationToken cancellationToken = default)
+    {
+        var query =
+            from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
+            join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            where agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            select new CrmAutoSyncAssistantLocationDto
+            {
+                AssistantId = assistant.Id,
+                StoreId = store.Id,
+                AgentId = agent.Id,
+                Name = assistant.Name
+            };
+
+        return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<int>> GetCrmAutoSyncAssistantIdsAsync(List<int> assistantIds, CancellationToken cancellationToken = default)
