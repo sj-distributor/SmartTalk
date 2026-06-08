@@ -15,6 +15,7 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Infrastructure;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.Messages.Dto.Agent;
@@ -51,6 +52,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
     private readonly IPosUtilService _posUtilService;
     private readonly IRealtimeAiService _realtimeAiService;
     private readonly MiniMaxTtsSettings _miniMaxTtsSettings;
+    private readonly IMiniMaxTtsSynthesizer _miniMaxTtsSynthesizer;
 
     #endregion
 
@@ -72,10 +74,11 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         ISjFoodQuotationService sjFoodQuotationService,
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
-        IRealtimeAiService realtimeAiService, 
+        IRealtimeAiService realtimeAiService,
         MiniMaxTtsSettings miniMaxTtsSettings,
-        IOpenaiClient openaiClient, 
-        ISmartiesClient smartiesClient, 
+        IMiniMaxTtsSynthesizer miniMaxTtsSynthesizer,
+        IOpenaiClient openaiClient,
+        ISmartiesClient smartiesClient,
         ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _clock = clock;
@@ -89,6 +92,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _posUtilService = posUtilService;
         _realtimeAiService = realtimeAiService;
         _miniMaxTtsSettings = miniMaxTtsSettings;
+        _miniMaxTtsSynthesizer = miniMaxTtsSynthesizer;
         _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _backgroundJobClient = backgroundJobClient;

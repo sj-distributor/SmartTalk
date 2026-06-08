@@ -16,6 +16,8 @@ public interface IOpenaiClient : IScopedDependency
     Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken);
 
     Task<string> TranscribeDiarizedAudioAsync(byte[] audioData, string fileName, CancellationToken cancellationToken);
+
+    Task<string> GenerateTextChatCompletionFromAudioAsync(BinaryData audioData, string prompt, CancellationToken cancellationToken);
 }
 
 public class OpenaiClient : IOpenaiClient
@@ -117,5 +119,31 @@ public class OpenaiClient : IOpenaiClient
         Log.Information("Diarized transcription response: {Response}", response);
 
         return response;
+    }
+
+    /// <summary>
+    /// Audio-in → text-out variant of <see cref="GenerateAudioChatCompletionAsync"/>. Uses the same
+    /// gpt-audio model and prompt to understand the recorded order, but requests the text-only
+    /// modality so the caller can voice it through a separate TTS provider (e.g. MiniMax) instead of
+    /// the model's built-in voice. No audio is generated, so the audio-output cost is not incurred.
+    /// </summary>
+    public async Task<string> GenerateTextChatCompletionFromAudioAsync(BinaryData audioData, string prompt, CancellationToken cancellationToken)
+    {
+        ChatClient client = new("gpt-audio-1.5", _openAiSettings.ApiKey);
+        List<ChatMessage> messages =
+        [
+            new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
+            new UserChatMessage(prompt)
+        ];
+
+        ChatCompletionOptions options = new() { ResponseModalities = ChatResponseModalities.Text };
+
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
+
+        var text = completion.Content.FirstOrDefault()?.Text;
+
+        Log.Information("Analyze record to repeat order text: {RepeatOrderText}", text);
+
+        return text;
     }
 }
