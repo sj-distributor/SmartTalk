@@ -55,6 +55,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
     private readonly IPosDataProvider _posDataProvider;
     private readonly SalesSetting _salesSetting;
     private readonly IFileTextExtractor _fileTextExtractor;
+    private readonly IAiSpeechAssistantKnowledgePromptService _aiSpeechAssistantKnowledgePromptService;
 
     public AiSpeechAssistantProcessJobService(
         IMapper mapper,
@@ -68,7 +69,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         IRestaurantDataProvider restaurantDataProvider,
         IPhoneOrderDataProvider phoneOrderDataProvider,
         IAiSpeechAssistantDataProvider speechAssistantDataProvider,
-        IFileTextExtractor fileTextExtractor)
+        IFileTextExtractor fileTextExtractor,
+        IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService)
     {
         _mapper = mapper;
         _vectorDb = vectorDb;
@@ -82,6 +84,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         _restaurantDataProvider = restaurantDataProvider;
         _speechAssistantDataProvider = speechAssistantDataProvider;
         _fileTextExtractor = fileTextExtractor;
+        _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
     }
 
     public async Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
@@ -232,6 +235,9 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         foreach (var knowledge in activeKnowledges)
         {
+            var originalPrompt = knowledge.Prompt ?? string.Empty;
+            var originalScenePrompt = knowledge.ScenePrompt ?? string.Empty;
+
             relatedLookup.TryGetValue(knowledge.Id, out var relateds);
             relateds ??= [];
             
@@ -240,20 +246,31 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             if (details == null || !details.Any())
             {
                 Log.Warning("KnowledgeId={KnowledgeId} has no details, skipping prompt generation", knowledge.Id);
-                continue;
             }
-
-            if (!TryMergeNormalizedJson(knowledge.Id, knowledge.Json, relateds.Select(x => x.CopyKnowledgePoints), out var mergedJson))
+            else if (!TryMergeNormalizedJson(knowledge.Id, knowledge.Json, relateds.Select(x => x.CopyKnowledgePoints), out _))
             {
                 Log.Warning("Sync knowledge prompt skipped update due to merge failure. KnowledgeId={KnowledgeId}", knowledge.Id);
-                continue;
+            }
+            else
+            {
+                var newPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
+
+                if (!string.Equals(knowledge.Prompt ?? string.Empty, newPrompt, StringComparison.Ordinal))
+                {
+                    knowledge.Prompt = newPrompt;
+                }
             }
 
-            var newPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
+            var newScenePrompt = await _aiSpeechAssistantKnowledgePromptService.GenerateScenePromptAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
 
-            if (!string.Equals(knowledge.Prompt ?? string.Empty, newPrompt, StringComparison.Ordinal))
+            if (!string.Equals(knowledge.ScenePrompt ?? string.Empty, newScenePrompt, StringComparison.Ordinal))
             {
-                knowledge.Prompt = newPrompt;
+                knowledge.ScenePrompt = newScenePrompt;
+            }
+
+            if (!string.Equals(originalPrompt, knowledge.Prompt ?? string.Empty, StringComparison.Ordinal) ||
+                !string.Equals(originalScenePrompt, knowledge.ScenePrompt ?? string.Empty, StringComparison.Ordinal))
+            {
                 updates.Add(knowledge);
             }
         }

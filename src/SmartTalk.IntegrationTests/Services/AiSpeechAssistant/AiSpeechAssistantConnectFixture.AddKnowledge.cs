@@ -5,13 +5,16 @@ using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Data;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.EventHandling;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
 using Xunit;
 
 namespace SmartTalk.IntegrationTests.Services.AiSpeechAssistant;
@@ -149,6 +152,242 @@ public partial class AiSpeechAssistantConnectFixture
                 x.KnowledgeName == "FileDetail" &&
                 x.Content == fileUrl &&
                 x.FileName == "menu.pdf").ShouldBeTrue();
+        });
+    }
+
+    [Fact]
+    public async Task ShouldKeepSceneItemsWhenAddingKnowledgeVersion()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+
+        int assistantId = 0;
+        int previousKnowledgeId = 0;
+        int sceneId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = $"SceneKnowledgeAssistant-{caseId}",
+                AnsweringNumber = $"+1556{caseId[..6]}",
+                ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy",
+                IsDefault = true,
+                IsDisplay = true,
+                ModelLanguage = "English"
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            assistantId = assistant.Id;
+
+            var previousKnowledge = new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistantId,
+                Json = "{}",
+                Prompt = "old prompt",
+                IsActive = true,
+                Version = "1.0",
+                Greetings = "hello old",
+                CreatedBy = 1,
+                ModelLanguage = "English"
+            };
+            await repository.InsertAsync(previousKnowledge);
+            await unitOfWork.SaveChangesAsync();
+
+            previousKnowledgeId = previousKnowledge.Id;
+
+            var folder = new KnowledgeSceneFolder { Name = $"Folder-{caseId}" };
+            await repository.InsertAsync(folder);
+            await unitOfWork.SaveChangesAsync();
+
+            var scene = new KnowledgeScene
+            {
+                FolderId = folder.Id,
+                Name = $"Scene-{caseId}",
+                Description = "desc",
+                Version = "1.0",
+                Status = KnowledgeSceneStatus.Published
+            };
+            await repository.InsertAsync(scene);
+            await unitOfWork.SaveChangesAsync();
+
+            sceneId = scene.Id;
+
+            await repository.InsertAsync(new KnowledgeSceneItem
+            {
+                SceneId = sceneId,
+                Name = $"Item-{caseId}",
+                Type = KnowledgeSceneItemType.Text,
+                Content = $"Scene content {caseId}"
+            });
+
+            await repository.InsertAsync(new AiSpeechAssistantKnowledgeSceneRelation
+            {
+                KnowledgeId = previousKnowledgeId,
+                SceneId = sceneId,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            await unitOfWork.SaveChangesAsync();
+        });
+
+        AddAiSpeechAssistantKnowledgeResponse response = null;
+
+        await Run<IMediator>(async mediator =>
+        {
+            response = await mediator.SendAsync<AddAiSpeechAssistantKnowledgeCommand, AddAiSpeechAssistantKnowledgeResponse>(
+                new AddAiSpeechAssistantKnowledgeCommand
+                {
+                    AssistantId = assistantId,
+                    Json = $"{{\"base_key\":\"base_value_{caseId}\"}}",
+                    Language = "English",
+                    Details = []
+                });
+        }, builder =>
+        {
+            var eventHandlingService = Substitute.For<IEventHandlingService>();
+            eventHandlingService.HandlingEventAsync(Arg.Any<AiSpeechAssistantKnowledgeAddedEvent>(), Arg.Any<CancellationToken>())
+                .Returns(Task.CompletedTask);
+
+            builder.RegisterInstance(eventHandlingService).As<IEventHandlingService>();
+        });
+
+        response.ShouldNotBeNull();
+        response.Data.ShouldNotBeNull();
+
+        await RunWithUnitOfWork<IMediator, IRepository>(async (mediator, repository) =>
+        {
+            var relation = await repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
+                .SingleOrDefaultAsync(x => x.KnowledgeId == response.Data.Id && x.SceneId == sceneId);
+            relation.ShouldNotBeNull();
+
+            var knowledge = await mediator.RequestAsync<GetAiSpeechAssistantKnowledgeRequest, GetAiSpeechAssistantKnowledgeResponse>(
+                new GetAiSpeechAssistantKnowledgeRequest { AssistantId = assistantId });
+
+            knowledge.Data.ShouldNotBeNull();
+            knowledge.Data.Id.ShouldBe(response.Data.Id);
+            knowledge.Data.SceneItems.Count.ShouldBe(1);
+            knowledge.Data.SceneItems.Single().Name.ShouldBe($"Item-{caseId}");
+            knowledge.Data.ScenePrompt.ShouldContain($"Scene content {caseId}");
+        });
+    }
+
+    [Fact]
+    public async Task ShouldKeepSceneItemsWhenSwitchingKnowledgeVersion()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+
+        int assistantId = 0;
+        int activeKnowledgeId = 0;
+        int targetKnowledgeId = 0;
+        int sceneId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = $"SwitchSceneAssistant-{caseId}",
+                AnsweringNumber = $"+1557{caseId[..6]}",
+                ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy",
+                IsDefault = true,
+                IsDisplay = true,
+                ModelLanguage = "English"
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            assistantId = assistant.Id;
+
+            var activeKnowledge = new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistantId,
+                Json = "{}",
+                Prompt = "active prompt",
+                IsActive = true,
+                Version = "1.0",
+                CreatedBy = 1,
+                ModelLanguage = "English"
+            };
+
+            var targetKnowledge = new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistantId,
+                Json = "{}",
+                Prompt = "target prompt",
+                IsActive = false,
+                Version = "1.1",
+                CreatedBy = 1,
+                ModelLanguage = "English"
+            };
+
+            await repository.InsertAsync(activeKnowledge);
+            await repository.InsertAsync(targetKnowledge);
+            await unitOfWork.SaveChangesAsync();
+
+            activeKnowledgeId = activeKnowledge.Id;
+            targetKnowledgeId = targetKnowledge.Id;
+
+            var folder = new KnowledgeSceneFolder { Name = $"Folder-{caseId}" };
+            await repository.InsertAsync(folder);
+            await unitOfWork.SaveChangesAsync();
+
+            var scene = new KnowledgeScene
+            {
+                FolderId = folder.Id,
+                Name = $"Scene-{caseId}",
+                Description = "desc",
+                Version = "1.0",
+                Status = KnowledgeSceneStatus.Published
+            };
+            await repository.InsertAsync(scene);
+            await unitOfWork.SaveChangesAsync();
+
+            sceneId = scene.Id;
+
+            await repository.InsertAsync(new KnowledgeSceneItem
+            {
+                SceneId = sceneId,
+                Name = $"SwitchItem-{caseId}",
+                Type = KnowledgeSceneItemType.Text,
+                Content = $"Switch scene content {caseId}"
+            });
+
+            await repository.InsertAsync(new AiSpeechAssistantKnowledgeSceneRelation
+            {
+                KnowledgeId = activeKnowledgeId,
+                SceneId = sceneId,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            await unitOfWork.SaveChangesAsync();
+        });
+
+        await RunWithUnitOfWork<IMediator, IRepository>(async (mediator, repository) =>
+        {
+            var response = await mediator.SendAsync<SwitchAiSpeechAssistantKnowledgeVersionCommand, SwitchAiSpeechAssistantKnowledgeVersionResponse>(
+                new SwitchAiSpeechAssistantKnowledgeVersionCommand
+                {
+                    AssistantId = assistantId,
+                    KnowledgeId = targetKnowledgeId
+                });
+
+            response.ShouldNotBeNull();
+            response.Data.ShouldNotBeNull();
+            response.Data.Id.ShouldBe(targetKnowledgeId);
+            response.Data.SceneItems.Count.ShouldBe(1);
+            response.Data.SceneItems.Single().Name.ShouldBe($"SwitchItem-{caseId}");
+            response.Data.ScenePrompt.ShouldContain($"Switch scene content {caseId}");
+
+            var relation = await repository.Query<AiSpeechAssistantKnowledgeSceneRelation>()
+                .SingleOrDefaultAsync(x => x.KnowledgeId == targetKnowledgeId && x.SceneId == sceneId);
+            relation.ShouldNotBeNull();
+
+            var targetKnowledge = await repository.Query<AiSpeechAssistantKnowledge>()
+                .SingleOrDefaultAsync(x => x.Id == targetKnowledgeId);
+            targetKnowledge.ShouldNotBeNull();
+            targetKnowledge.ScenePrompt.ShouldContain($"Switch scene content {caseId}");
         });
     }
 }

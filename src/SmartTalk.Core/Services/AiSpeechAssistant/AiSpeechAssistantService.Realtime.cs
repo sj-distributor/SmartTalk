@@ -70,10 +70,12 @@ public partial class AiSpeechAssistantService
         if (knowledge == null) 
             throw new Exception($"Could not found the knowledge by id: {command.AssistantId.Value}");
 
-        if (!string.IsNullOrWhiteSpace(command.CustomPrompt) && !string.IsNullOrWhiteSpace(knowledge.Prompt))
-            prompt += $"\n\n{knowledge.Prompt}";
+        var knowledgePrompt = _aiSpeechAssistantKnowledgePromptService.BuildFinalPrompt(knowledge);
+
+        if (!string.IsNullOrWhiteSpace(command.CustomPrompt) && !string.IsNullOrWhiteSpace(knowledgePrompt))
+            prompt += $"\n\n{knowledgePrompt}";
         else
-            prompt = knowledge.Prompt;
+            prompt = knowledgePrompt;
 
         return prompt;
     }

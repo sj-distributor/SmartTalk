@@ -193,7 +193,12 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-        var finalPrompt = assistant.Knowledge.Prompt
+        var finalPrompt = string.Join("\n\n", new[]
+            {
+                assistant.Knowledge.Prompt?.Trim(),
+                assistant.Knowledge.ScenePrompt?.Trim()
+            }
+            .Where(x => !string.IsNullOrWhiteSpace(x)))
             .Replace("#{current_time}", currentTime)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 
