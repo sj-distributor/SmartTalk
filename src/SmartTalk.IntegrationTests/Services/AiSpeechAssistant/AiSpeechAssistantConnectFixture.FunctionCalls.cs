@@ -1,6 +1,7 @@
 using System.Text;
 using Autofac;
 using Mediator.Net;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using NSubstitute;
 using Shouldly;
@@ -11,7 +12,10 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 using SmartTalk.Core.Services.Timer;
+using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.IntegrationTests.Mocks;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Agent;
@@ -723,6 +727,128 @@ public partial class AiSpeechAssistantConnectFixture
         twilioMessages.Any(m => m.Contains("\"event\":\"media\"")).ShouldBeTrue();
 
         await mockOpenaiClient.Received(1).GenerateAudioChatCompletionAsync(
+            Arg.Any<BinaryData>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShouldProcessRepeatOrderWithMiniMaxVoice_WhenMiniMaxEnabledForAssistant()
+    {
+        int assistantId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true,
+                CustomRepeatOrderPrompt = "Please repeat the order."
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            assistantId = assistant.Id;
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "You are a test assistant.", IsActive = true, Version = "1.0"
+            });
+            await repository.InsertAsync(new AiSpeechAssistantFunctionCall
+            {
+                AssistantId = assistant.Id, Name = "repeat_order",
+                Content = "{\"type\":\"function\",\"name\":\"repeat_order\"}",
+                Type = AiSpeechAssistantSessionConfigType.Tool,
+                ModelProvider = RealtimeAiProvider.OpenAi, IsActive = true
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_REPEAT_MINIMAX", streamSid = "MZ_REPEAT_MINIMAX" }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "media",
+            media = new { payload = Convert.ToBase64String(new byte[160]) }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueSendTriggeredMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+        openaiWs.EnqueueSendTriggeredMessage(JsonConvert.SerializeObject(new
+        {
+            type = "response.done",
+            response = new
+            {
+                output = new[]
+                {
+                    new
+                    {
+                        type = "function_call",
+                        name = "repeat_order",
+                        call_id = "call_repeat_minimax_001",
+                        arguments = "{}"
+                    }
+                }
+            }
+        }));
+
+        var mockOpenaiClient = Substitute.For<IOpenaiClient>();
+        mockOpenaiClient.GenerateTextChatCompletionFromAudioAsync(
+            Arg.Any<BinaryData>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns("Your order is one large pizza.");
+
+        var mockSynthesizer = Substitute.For<IMiniMaxTtsSynthesizer>();
+        mockSynthesizer.SynthesizeStreamingAsync(
+                Arg.Any<RealtimeAiTtsConfig>(), Arg.Any<string>(), Arg.Any<Func<byte[], Task>>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var onChunk = callInfo.Arg<Func<byte[], Task>>();
+                return onChunk(new byte[] { 1, 2, 3, 4 });
+            });
+
+        var miniMaxConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string>
+            {
+                ["MiniMaxTts:Enabled"] = "true",
+                ["MiniMaxTts:AssistantId"] = assistantId.ToString(),
+                ["MiniMaxTts:ApiKey"] = "test-minimax-key"
+            })
+            .Build();
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber, To = TestDidNumber, Host = TestHost, TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            builder.RegisterInstance(mockOpenaiClient).As<IOpenaiClient>();
+            builder.RegisterInstance(mockSynthesizer).As<IMiniMaxTtsSynthesizer>();
+            builder.RegisterInstance(new MiniMaxTtsSettings(miniMaxConfig)).AsSelf().SingleInstance();
+            openaiWs.Register(builder);
+        });
+
+        var twilioMessages = twilioWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
+        twilioMessages.Any(m => m.Contains("\"event\":\"media\"")).ShouldBeTrue();
+
+        // Gray switch routed to MiniMax: text was produced from audio and voiced by MiniMax,
+        // and the gpt-audio voice path was NOT used.
+        await mockOpenaiClient.Received(1).GenerateTextChatCompletionFromAudioAsync(
+            Arg.Any<BinaryData>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await mockSynthesizer.Received(1).SynthesizeStreamingAsync(
+            Arg.Any<RealtimeAiTtsConfig>(), Arg.Any<string>(), Arg.Any<Func<byte[], Task>>(), Arg.Any<CancellationToken>());
+        await mockOpenaiClient.DidNotReceive().GenerateAudioChatCompletionAsync(
             Arg.Any<BinaryData>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
