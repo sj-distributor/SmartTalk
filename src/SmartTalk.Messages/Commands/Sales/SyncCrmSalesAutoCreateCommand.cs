@@ -27,7 +27,11 @@ public class SyncCrmSalesAutoCreateResponseData
 
     public int TransferredAssistantCount { get; set; }
 
+    public int DeactivatedAssistantCount { get; set; }
+
     public bool IsInitialRelease { get; set; }
+
+    public bool SkippedDueToInitialReleaseDay { get; set; }
 
     public List<string> Warnings { get; set; } = new();
 }

@@ -532,6 +532,9 @@ public partial class AiSpeechAssistantService
             throw new Exception("Do not have the store permission to operate");
         
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        await EnsureCrmAutoSyncAssistantNameUnchangedAsync(assistant.Id, assistant.Name, command.AssistantName, cancellationToken)
+            .ConfigureAwait(false);
         
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
@@ -551,6 +554,9 @@ public partial class AiSpeechAssistantService
     public async Task<UpdateAiSpeechAssistantDetailResponse> UpdateAiSpeechAssistantDetailAsync(UpdateAiSpeechAssistantDetailCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        await EnsureCrmAutoSyncAssistantNameUnchangedAsync(assistant.Id, assistant.Name, command.AssistantName, cancellationToken)
+            .ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
         
@@ -572,7 +578,7 @@ public partial class AiSpeechAssistantService
 
         if (crmAutoSyncAssistantIds.Count > 0)
             throw new Exception("CRM auto-sync assistants cannot be deleted.");
-        
+
         var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantByIdsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
@@ -588,6 +594,21 @@ public partial class AiSpeechAssistantService
         {
             Data = _mapper.Map<List<AiSpeechAssistantDto>>(assistants)
         };
+    }
+
+    private async Task EnsureCrmAutoSyncAssistantNameUnchangedAsync(
+        int assistantId, string currentName, string newName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(newName)
+            || string.Equals(currentName, newName, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var crmAutoSyncAssistantIds = await _aiSpeechAssistantDataProvider
+            .GetCrmAutoSyncAssistantIdsAsync([assistantId], cancellationToken)
+            .ConfigureAwait(false);
+
+        if (crmAutoSyncAssistantIds.Count > 0)
+            throw new Exception("CRM auto-sync assistants cannot be renamed.");
     }
 
     public async Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken)

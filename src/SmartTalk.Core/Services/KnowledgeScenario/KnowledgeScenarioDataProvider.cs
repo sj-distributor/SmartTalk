@@ -65,7 +65,7 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
     
     Task UpdateKnowledgeSceneCompanyAsync(KnowledgeSceneCompany knowledgeSceneCompany, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(List<int> sceneIds = null, string language = null, bool? isActive = null, CancellationToken cancellationToken = default);
+    Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, string language = null, bool? isActive = null, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -393,13 +393,12 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(
-        List<int> sceneIds = null,
-        string language = null,
-        bool? isActive = null,
-        CancellationToken cancellationToken = default)
+    public async Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, string language = null, bool? isActive = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<KnowledgeSceneLanguageMapping>();
+
+        if (companyId.HasValue)
+            query = query.Where(x => x.CompanyId == companyId.Value);
 
         if (sceneIds is { Count: > 0 })
         {

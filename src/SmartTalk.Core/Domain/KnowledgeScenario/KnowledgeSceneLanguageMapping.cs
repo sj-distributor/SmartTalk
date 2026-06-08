@@ -11,6 +11,9 @@ public class KnowledgeSceneLanguageMapping : IEntity
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
 
+    [Column("company_id")]
+    public int CompanyId { get; set; }
+
     [Column("scene_id")]
     public int SceneId { get; set; }
 
@@ -22,7 +25,4 @@ public class KnowledgeSceneLanguageMapping : IEntity
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-
-    [Column("updated_at")]
-    public DateTimeOffset? UpdatedAt { get; set; }
 }

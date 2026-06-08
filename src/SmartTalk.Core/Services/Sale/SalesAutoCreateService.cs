@@ -34,6 +34,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     private const int RetryDelaySeconds = 300;
 
     private static readonly TimeZoneInfo PacificTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+    private const string DefaultKnowledgeGreetings = "Hello, how can I help you today?";
 
     private readonly IMediator _mediator;
     private readonly ICrmClient _crmClient;
@@ -111,6 +112,8 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     {
         var customers = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
+        var customerIdLookup = CrmSalesAutoSyncGrouping.BuildCustomerIdLookup(customerGroups);
+        var activeCustomerIds = CrmSalesAutoSyncGrouping.BuildActiveCustomerIds(customers);
         var result = new SyncCrmSalesAutoCreateResponseData { TotalCount = customers.Count };
 
         var company = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
@@ -144,6 +147,12 @@ public class SalesAutoCreateService : ISalesAutoCreateService
 
             var store = await EnsureSalesStoreAsync(seedCustomer, company.Id, storeMap, result, cancellationToken).ConfigureAwait(false);
             await EnsureSalesAssistantAsync(command, store.Id, storeName, primaryLanguage, result, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (var salesBucket in customerGroups.GroupBy(x => x.SalesKey))
+        {
+            if (!storeMap.TryGetValue(salesBucket.Key, out var store))
+                continue;
 
             foreach (var mergedGroup in salesBucket)
             {
@@ -152,12 +161,21 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                     company.Id,
                     store.Id,
                     mergedGroup,
+                    customerIdLookup,
+                    storeMap,
                     existingCrmAssistants,
                     claimedAssistantIds,
                     result,
                     cancellationToken).ConfigureAwait(false);
             }
         }
+
+        await ReconcileInactiveCustomerAssistantsAsync(
+            activeCustomerIds,
+            existingCrmAssistants,
+            claimedAssistantIds,
+            result,
+            cancellationToken).ConfigureAwait(false);
 
         return new SyncCrmSalesAutoCreateResponse
         {
@@ -169,7 +187,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         CrmSalesAutoSyncCustomerDto customer, int companyId, Dictionary<string, Core.Domain.Pos.CompanyStore> storeMap,
         SyncCrmSalesAutoCreateResponseData result, CancellationToken cancellationToken)
     {
-        var storeName = $"{customer.SalesName} {customer.SalesGroup}";
+        var storeName = CrmSalesAutoSyncGrouping.BuildSalesKey(customer);
         if (storeMap.TryGetValue(storeName, out var store))
             return store;
 
@@ -213,11 +231,44 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         return await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(created.Data.Id, cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<Core.Domain.AISpeechAssistant.AiSpeechAssistant> EnsureCustomerKnowledgeAssistantAsync(
+        SyncCrmSalesAutoCreateCommand command,
+        int storeId,
+        string assistantName,
+        string language,
+        SyncCrmSalesAutoCreateResponseData result,
+        CancellationToken cancellationToken)
+    {
+        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken).ConfigureAwait(false);
+        var assistant = assistants.FirstOrDefault(x => x.Name == assistantName);
+        if (assistant != null)
+            return assistant;
+
+        var created = await _mediator.SendAsync<AddAiSpeechAssistantCommand, AddAiSpeechAssistantResponse>(new AddAiSpeechAssistantCommand
+        {
+            ServiceProviderId = command.ServiceProviderId,
+            StoreId = storeId,
+            AssistantName = assistantName,
+            Greetings = _salesAutoCreateSetting.DefaultAssistantGreetings,
+            AgentType = AgentType.Assistant,
+            SourceSystem = AgentSourceSystem.CrmAutoSync,
+            IsDisplay = false,
+            ModelLanguage = string.IsNullOrWhiteSpace(language) ? "English" : language.Trim(),
+            Channels = new List<AiSpeechAssistantChannel> { AiSpeechAssistantChannel.PhoneChat },
+            Details = new List<AiSpeechAssistantKnowledgeDetailDto>()
+        }, cancellationToken).ConfigureAwait(false);
+
+        result.CreatedAssistantCount++;
+        return await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(created.Data.Id, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task<Core.Domain.AISpeechAssistant.AiSpeechAssistant> EnsureMergedCustomerKnowledgeAsync(
         SyncCrmSalesAutoCreateCommand command,
         int companyId,
         int storeId,
         CrmSalesAutoSyncCustomerGroup mergedGroup,
+        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
+        Dictionary<string, Core.Domain.Pos.CompanyStore> storeMap,
         List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
         HashSet<int> claimedAssistantIds,
         SyncCrmSalesAutoCreateResponseData result,
@@ -231,6 +282,8 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             storeId,
             customerAssistantName,
             mergedGroup,
+            customerIdLookup,
+            storeMap,
             existingCrmAssistants,
             claimedAssistantIds,
             result,
@@ -246,7 +299,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             await _mediator.SendAsync<AddAiSpeechAssistantKnowledgeCommand, AddAiSpeechAssistantKnowledgeResponse>(new AddAiSpeechAssistantKnowledgeCommand
             {
                 AssistantId = customerAssistant.Id,
-                Greetings = _salesAutoCreateSetting.DefaultAssistantGreetings ?? "Hello, how can I help you today?",
+                Greetings = _salesAutoCreateSetting.DefaultAssistantGreetings ?? DefaultKnowledgeGreetings,
                 Json = "{}",
                 Language = mergedGroup.Language,
                 Premise = $"CRM Customer Knowledge {string.Join("/", mergedGroup.CustomerIds)}",
@@ -261,24 +314,45 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                 cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
+        await ApplySourceScenesToCustomerAssistantAsync(
+            storeId,
+            customerAssistant.Id,
+            seedCustomer,
+            mergedGroup.CustomerIds,
+            result,
+            cancellationToken).ConfigureAwait(false);
+
+        return customerAssistant;
+    }
+
+    private async Task ApplySourceScenesToCustomerAssistantAsync(
+        int storeId,
+        int assistantId,
+        CrmSalesAutoSyncCustomerDto seedCustomer,
+        IReadOnlyList<string> customerIds,
+        SyncCrmSalesAutoCreateResponseData result,
+        CancellationToken cancellationToken)
+    {
         var sourceSceneIds = await ResolveSourceSceneIdsAsync(storeId, seedCustomer, cancellationToken).ConfigureAwait(false);
         if (sourceSceneIds.Count == 0)
         {
             result.Warnings.Add(
-                $"Customer [{string.Join("/", mergedGroup.CustomerIds)}] language [{mergedGroup.Language}] has no source scene mapping yet.");
-            return customerAssistant;
+                $"Customer [{string.Join("/", customerIds)}] language [{seedCustomer.Language ?? "English"}] has no source scene mapping yet.");
+            return;
         }
+
+        var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (store == null)
+            return;
 
         foreach (var sceneId in sourceSceneIds)
         {
             var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([sceneId], cancellationToken).ConfigureAwait(false)).FirstOrDefault();
             if (scene == null || scene.Status != KnowledgeSceneStatus.Published)
             {
-                result.Warnings.Add($"Scene [{sceneId}] is unavailable for customer [{string.Join("/", mergedGroup.CustomerIds)}].");
+                result.Warnings.Add($"Scene [{sceneId}] is unavailable for customer [{string.Join("/", customerIds)}].");
                 continue;
             }
-
-            var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             await _mediator.SendAsync<UpdateKnowledgeSceneCompanyCommand, UpdateKnowledgeSceneCompanyResponse>(new UpdateKnowledgeSceneCompanyCommand
             {
@@ -292,13 +366,11 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             {
                 SceneId = sceneId,
                 StoreId = storeId,
-                AssistantIds = new List<int> { customerAssistant.Id }
+                AssistantIds = new List<int> { assistantId }
             }, cancellationToken).ConfigureAwait(false);
 
             result.AppliedSceneCount++;
         }
-
-        return customerAssistant;
     }
 
     private async Task<Core.Domain.AISpeechAssistant.AiSpeechAssistant> ResolveMergedCustomerAssistantAsync(
@@ -307,6 +379,8 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         int targetStoreId,
         string assistantName,
         CrmSalesAutoSyncCustomerGroup mergedGroup,
+        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
+        Dictionary<string, Core.Domain.Pos.CompanyStore> storeMap,
         List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
         HashSet<int> claimedAssistantIds,
         SyncCrmSalesAutoCreateResponseData result,
@@ -333,6 +407,23 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         var sameStoreMatch = FindBestMatchingAssistant(existingCrmAssistants, desiredIds, targetStoreId, claimedAssistantIds);
         if (sameStoreMatch != null)
         {
+            if (TryParseAssistantIds(sameStoreMatch.Name, out var existingIds)
+                && existingIds.IsSupersetOf(desiredIds)
+                && !existingIds.SetEquals(desiredIds))
+            {
+                await CopySplitCustomersBeforeShrinkAsync(
+                    command,
+                    existingIds.Except(desiredIds, StringComparer.OrdinalIgnoreCase),
+                    sameStoreMatch,
+                    mergedGroup.SalesKey,
+                    customerIdLookup,
+                    storeMap,
+                    existingCrmAssistants,
+                    claimedAssistantIds,
+                    result,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             claimedAssistantIds.Add(sameStoreMatch.AssistantId);
             if (!string.Equals(sameStoreMatch.Name, assistantName, StringComparison.OrdinalIgnoreCase))
             {
@@ -365,9 +456,15 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                 && existingIds.IsSupersetOf(desiredIds)
                 && !existingIds.SetEquals(desiredIds))
             {
-                var copiedAssistant = await EnsureSalesAssistantAsync(
+                var copiedAssistant = await EnsureCustomerKnowledgeAssistantAsync(
                     command, targetStoreId, assistantName, mergedGroup.Language, result, cancellationToken).ConfigureAwait(false);
-                await CopyCustomerKnowledgeAsync(crossStoreMatch.AssistantId, copiedAssistant.Id, mergedGroup, result, cancellationToken).ConfigureAwait(false);
+                await CopyCustomerKnowledgeAsync(
+                    crossStoreMatch.AssistantId,
+                    copiedAssistant.Id,
+                    targetStoreId,
+                    mergedGroup,
+                    result,
+                    cancellationToken).ConfigureAwait(false);
                 claimedAssistantIds.Add(copiedAssistant.Id);
                 existingCrmAssistants.Add(new CrmAutoSyncAssistantLocationDto
                 {
@@ -379,7 +476,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             }
         }
 
-        var createdAssistant = await EnsureSalesAssistantAsync(command, targetStoreId, assistantName, mergedGroup.Language, result, cancellationToken)
+        var createdAssistant = await EnsureCustomerKnowledgeAssistantAsync(command, targetStoreId, assistantName, mergedGroup.Language, result, cancellationToken)
             .ConfigureAwait(false);
         claimedAssistantIds.Add(createdAssistant.Id);
         existingCrmAssistants.Add(new CrmAutoSyncAssistantLocationDto
@@ -438,41 +535,184 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     private async Task CopyCustomerKnowledgeAsync(
         int sourceAssistantId,
         int targetAssistantId,
+        int targetStoreId,
         CrmSalesAutoSyncCustomerGroup mergedGroup,
         SyncCrmSalesAutoCreateResponseData result,
         CancellationToken cancellationToken)
     {
         var existingKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
             assistantId: targetAssistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (existingKnowledge != null)
-            return;
+        var knowledgeCreated = false;
 
-        var sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
-            assistantId: sourceAssistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (sourceKnowledge == null)
-            return;
-
-        var details = await _aiSpeechAssistantDataProvider
-            .GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledge.Id, cancellationToken)
-            .ConfigureAwait(false);
-
-        await _mediator.SendAsync<AddAiSpeechAssistantKnowledgeCommand, AddAiSpeechAssistantKnowledgeResponse>(new AddAiSpeechAssistantKnowledgeCommand
+        if (existingKnowledge == null)
         {
-            AssistantId = targetAssistantId,
-            Greetings = sourceKnowledge.Greetings ?? _salesAutoCreateSetting.DefaultAssistantGreetings ?? "Hello, how can I help you today?",
-            Json = sourceKnowledge.Json ?? "{}",
-            Language = mergedGroup.Language,
-            Premise = $"CRM Customer Knowledge {string.Join("/", mergedGroup.CustomerIds)}",
-            Details = details.Select(x => new AiSpeechAssistantKnowledgeDetailDto
+            var sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
+                assistantId: sourceAssistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (sourceKnowledge == null)
             {
-                KnowledgeName = x.KnowledgeName,
-                FormatType = x.FormatType,
-                Content = x.Content,
-                FileName = x.FileName
-            }).ToList()
-        }, cancellationToken).ConfigureAwait(false);
+                await ApplySourceScenesToCustomerAssistantAsync(
+                    targetStoreId,
+                    targetAssistantId,
+                    mergedGroup.Customers.First(),
+                    mergedGroup.CustomerIds,
+                    result,
+                    cancellationToken).ConfigureAwait(false);
+                return;
+            }
 
-        result.CreatedKnowledgeCount++;
+            var details = await _aiSpeechAssistantDataProvider
+                .GetKnowledgeDetailsByKnowledgeIdAsync(sourceKnowledge.Id, cancellationToken)
+                .ConfigureAwait(false);
+
+            await _mediator.SendAsync<AddAiSpeechAssistantKnowledgeCommand, AddAiSpeechAssistantKnowledgeResponse>(new AddAiSpeechAssistantKnowledgeCommand
+            {
+                AssistantId = targetAssistantId,
+                Greetings = sourceKnowledge.Greetings ?? _salesAutoCreateSetting.DefaultAssistantGreetings ?? DefaultKnowledgeGreetings,
+                Json = sourceKnowledge.Json ?? "{}",
+                Language = mergedGroup.Language,
+                Premise = $"CRM Customer Knowledge {string.Join("/", mergedGroup.CustomerIds)}",
+                Details = details.Select(x => new AiSpeechAssistantKnowledgeDetailDto
+                {
+                    KnowledgeName = x.KnowledgeName,
+                    FormatType = x.FormatType,
+                    Content = x.Content,
+                    FileName = x.FileName
+                }).ToList()
+            }, cancellationToken).ConfigureAwait(false);
+
+            result.CreatedKnowledgeCount++;
+            knowledgeCreated = true;
+        }
+
+        await ApplySourceScenesToCustomerAssistantAsync(
+            targetStoreId,
+            targetAssistantId,
+            mergedGroup.Customers.First(),
+            mergedGroup.CustomerIds,
+            result,
+            cancellationToken).ConfigureAwait(false);
+
+        if (knowledgeCreated)
+            return;
+
+        var activeKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
+            assistantId: targetAssistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (activeKnowledge != null)
+            return;
+
+        result.Warnings.Add(
+            $"Customer [{string.Join("/", mergedGroup.CustomerIds)}] copied assistant [{targetAssistantId}] has no active knowledge after scene sync.");
+    }
+
+    private async Task CopySplitCustomersBeforeShrinkAsync(
+        SyncCrmSalesAutoCreateCommand command,
+        IEnumerable<string> removedCustomerIds,
+        CrmAutoSyncAssistantLocationDto sourceAssistant,
+        string currentSalesKey,
+        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
+        Dictionary<string, Core.Domain.Pos.CompanyStore> storeMap,
+        List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
+        HashSet<int> claimedAssistantIds,
+        SyncCrmSalesAutoCreateResponseData result,
+        CancellationToken cancellationToken)
+    {
+        var processedTargetGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var removedCustomerId in removedCustomerIds)
+        {
+            if (!customerIdLookup.TryGetValue(removedCustomerId, out var targetGroup))
+                continue;
+
+            if (string.Equals(targetGroup.SalesKey, currentSalesKey, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var targetGroupKey = $"{targetGroup.SalesKey}|{CrmSalesAutoSyncGrouping.BuildAssistantName(targetGroup.CustomerIds, targetGroup.Language)}";
+            if (!processedTargetGroups.Add(targetGroupKey))
+                continue;
+
+            if (!storeMap.TryGetValue(targetGroup.SalesKey, out var targetStore))
+                continue;
+
+            var targetAssistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(targetGroup.CustomerIds, targetGroup.Language);
+            var copiedAssistant = await EnsureCustomerKnowledgeAssistantAsync(
+                command, targetStore.Id, targetAssistantName, targetGroup.Language, result, cancellationToken).ConfigureAwait(false);
+
+            await CopyCustomerKnowledgeAsync(
+                sourceAssistant.AssistantId,
+                copiedAssistant.Id,
+                targetStore.Id,
+                targetGroup,
+                result,
+                cancellationToken).ConfigureAwait(false);
+
+            claimedAssistantIds.Add(copiedAssistant.Id);
+            existingCrmAssistants.Add(new CrmAutoSyncAssistantLocationDto
+            {
+                AssistantId = copiedAssistant.Id,
+                StoreId = targetStore.Id,
+                Name = targetAssistantName
+            });
+        }
+    }
+
+    private async Task ReconcileInactiveCustomerAssistantsAsync(
+        HashSet<string> activeCustomerIds,
+        List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
+        HashSet<int> claimedAssistantIds,
+        SyncCrmSalesAutoCreateResponseData result,
+        CancellationToken cancellationToken)
+    {
+        foreach (var assistant in existingCrmAssistants.Where(x => !claimedAssistantIds.Contains(x.AssistantId)))
+        {
+            if (!CrmSalesAutoSyncGrouping.TryParseAssistantName(assistant.Name, out var existingIds, out var language))
+                continue;
+
+            var remainingIds = existingIds
+                .Where(activeCustomerIds.Contains)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (remainingIds.Count == 0)
+            {
+                await DeactivateCustomerAssistantKnowledgeAsync(assistant.AssistantId, cancellationToken).ConfigureAwait(false);
+                result.DeactivatedAssistantCount++;
+                result.Warnings.Add($"Assistant [{assistant.Name}] has no active CRM customers remaining; knowledge deactivated.");
+                continue;
+            }
+
+            if (remainingIds.Count == existingIds.Count)
+                continue;
+
+            var renamedAssistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(remainingIds, language);
+            await RenameCustomerAssistantAsync(assistant, renamedAssistantName, cancellationToken).ConfigureAwait(false);
+            assistant.Name = renamedAssistantName;
+        }
+    }
+
+    private async Task DeactivateCustomerAssistantKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
+    {
+        var activeKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
+            assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (activeKnowledge == null)
+            return;
+
+        activeKnowledge.IsActive = false;
+        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([activeKnowledge], cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public static bool IsSamePacificDay(DateTimeOffset left, DateTimeOffset right)
+    {
+        var leftDate = TimeZoneInfo.ConvertTime(left, PacificTimeZone).Date;
+        var rightDate = TimeZoneInfo.ConvertTime(right, PacificTimeZone).Date;
+        return leftDate == rightDate;
+    }
+
+    public static bool ShouldSkipAutomaticSyncForInitialReleaseDay(DateTimeOffset? latestInitialReleaseCreatedDate, DateTimeOffset now)
+    {
+        return latestInitialReleaseCreatedDate.HasValue
+            && IsSamePacificDay(latestInitialReleaseCreatedDate.Value, now);
     }
 
     private async Task TransferCustomerAssistantToStoreAsync(
@@ -504,8 +744,10 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             .Distinct()
             .ToList();
 
-        var language = string.IsNullOrWhiteSpace(customer.Language) ? "English" : customer.Language.Trim();
+        var language = CrmToAutoAddLanguageConverter.ResolveLanguageCodeOrDefault(
+            string.IsNullOrWhiteSpace(customer.Language) ? "English" : customer.Language);
         var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(
+            companyId: store.CompanyId,
             sceneIds: sceneIds,
             language: language,
             isActive: true,
@@ -515,7 +757,6 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             return mappings.Select(x => x.SceneId).Distinct().ToList();
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
-
         return scenes
             .Where(x => x.Status == KnowledgeSceneStatus.Published
                 && x.Name.Contains(language, StringComparison.OrdinalIgnoreCase))
