@@ -734,8 +734,8 @@ public partial class PhoneOrderProcessJobService
                     Content = new CompletionsStringContent(
                         "你需要帮我从电话录音报告中判断两个维度：\n" +
                         "1. 是否真人接听（IsHumanAnswered）：\n" +
-                        "   - 默认返回 true，表示是真人接听。\n" +
-                        "   - 当报告中包含转接语音信箱、系统提示、无人接听，或是 是AI 回复时，返回 false。表示非真人接听\n" +
+                        "   - 默认返回 true，表示是真人接听。报告中明确显示是真人接听时候也需要返回true\n" +
+                        "   - 当报告中 1.无法判断是否是真人；2.转接语音信箱、系统提示、无人接听；3.对面为重复系统音提示；4.生硬的AI回复，5.分析报告不完整，6.报告中明确显示非真人接听 都需要返回 false。表示非真人接听\n" +
                         "例子：" +
                         "“转接语音信箱“，“非真人接听”，“无人应答”，“对面为重复系统音提示”\n" +
                         "2. 客人态度是否友好（IsCustomerFriendly）：\n" +
