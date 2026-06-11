@@ -69,18 +69,49 @@ public class SalesServiceBuildCustomerItemsStringTests
                 ]
             });
 
+        salesClient.GetCustomerAiQuotationAsync(Arg.Any<GetCustomerAiQuotationRequestDto>(), Arg.Any<CancellationToken>())
+            .Returns(new GetCustomerAiQuotationResponseDto
+            {
+                Code = 200,
+                AiQuotationList =
+                [
+                    new AiQuotationDto
+                    {
+                        MaterialId = "20022998CW",
+                        SjAiCost = 12.5,
+                        KfOrOsAiCost = 10
+                    },
+                    new AiQuotationDto
+                    {
+                        MaterialId = "30033999AB",
+                        SjAiCost = 8.25
+                    }
+                ]
+            });
+
         var service = new SalesService(crmClient, salesClient);
 
         var result = await service.BuildCustomerItemsStringAsync(["C10001"], CancellationToken.None);
 
         result.ShouldContain("status: WAIT");
         result.ShouldContain("status: NORMAL");
+        result.ShouldContain("price: SJ价 12.5，KF/OS价 10");
+        result.ShouldContain("price: SJ价 8.25");
+        result.ShouldNotContain("materialId", Case.Sensitive);
 
         await salesClient.Received(1).QueryGoodsStatusAsync(
             Arg.Is<QueryGoodsStatusRequestDto>(x =>
                 x.List.Count == 2 &&
                 x.List.Any(i => i.Material == "20022998CW" && i.Plant == "1200" && i.Rtype == "ASK") &&
                 x.List.Any(i => i.Material == "30033999AB" && i.Plant == "1060" && i.Rtype == "ORD")),
+            Arg.Any<CancellationToken>());
+
+        await salesClient.Received(1).GetCustomerAiQuotationAsync(
+            Arg.Is<GetCustomerAiQuotationRequestDto>(x =>
+                x.CustomerId == "C10001" &&
+                x.MaterialIdList.Count == 2 &&
+                x.MaterialIdList.Contains("20022998CW") &&
+                x.MaterialIdList.Contains("30033999AB")),
             Arg.Any<CancellationToken>());
     }
 }

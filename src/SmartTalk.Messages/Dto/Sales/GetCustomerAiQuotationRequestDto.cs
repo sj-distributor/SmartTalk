@@ -1,14 +1,14 @@
 using Newtonsoft.Json;
 
-namespace SmartTalk.Messages.Dto.SjFood;
+namespace SmartTalk.Messages.Dto.Sales;
 
 public class GetCustomerAiQuotationRequestDto
 {
     [JsonProperty("customerId")]
     public string CustomerId { get; set; }
 
-    [JsonProperty("productNameList")]
-    public List<string> ProductNameList { get; set; } = [];
+    [JsonProperty("materialIdList")]
+    public List<string> MaterialIdList { get; set; } = [];
 }
 
 public class GetCustomerAiQuotationResponseDto
