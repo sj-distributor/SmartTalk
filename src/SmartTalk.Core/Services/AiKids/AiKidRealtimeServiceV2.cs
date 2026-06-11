@@ -6,7 +6,6 @@ using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
-using SmartTalk.Core.Services.SjFood;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RealtimeAiV2;
@@ -40,7 +39,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IRealtimeAiService _realtimeAiService;
-    private readonly ISjFoodQuotationService _sjFoodQuotationService;
     private readonly MiniMaxTtsSettings _miniMaxTtsSettings;
 
     public AiKidRealtimeServiceV2(
@@ -49,16 +47,13 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         IRealtimeAiService realtimeAiService,
-        ISjFoodQuotationService sjFoodQuotationService,
         MiniMaxTtsSettings miniMaxTtsSettings)
-
     {
         _smartiesClient = smartiesClient;
         _attachmentService = attachmentService;
         _backgroundJobClient = backgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _realtimeAiService = realtimeAiService;
-        _sjFoodQuotationService = sjFoodQuotationService;
         _miniMaxTtsSettings = miniMaxTtsSettings;
     }
 
@@ -197,9 +192,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             .Cast<object>()
             .ToList();
 
-        if (assistant.ModelProvider == RealtimeAiProvider.OpenAi)
-            EnsureGetProductPriceSchema(tools);
-
         return new RealtimeAiModelConfig
         {
             Provider = assistant.ModelProvider,
@@ -214,45 +206,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         };
     }
 
-    private static void EnsureGetProductPriceSchema(List<object> tools)
-    {
-        foreach (var tool in tools.OfType<JObject>())
-        {
-            var name = tool.Value<string>("name");
-            if (!string.Equals(name, OpenAiToolConstants.GetProductPrice, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            tool["type"] ??= "function";
-
-            var parameters = tool["parameters"] as JObject ?? new JObject();
-            parameters["type"] ??= "object";
-
-            var properties = parameters["properties"] as JObject ?? new JObject();
-            properties["product_name"] ??= new JObject
-            {
-                ["type"] = "string",
-                ["description"] = "The product/dish name the user asked about."
-            };
-
-            properties["customer_hint"] ??= new JObject
-            {
-                ["type"] = "string",
-                ["description"] =
-                    "Any customer-identifying detail explicitly mentioned by the customer, such as restaurant/customer name, street address, warehouse number, header note/remark, contact name, contact role, or restaurant/store related clue. Do not guess; only include details the customer actually said."
-            };
-
-            var required = parameters["required"] as JArray ?? new JArray();
-            if (!required.Any(x => string.Equals(x?.ToString(), "product_name", StringComparison.Ordinal)))
-                required.Add("product_name");
-
-            parameters["properties"] = properties;
-            parameters["required"] = required;
-            parameters["additionalProperties"] ??= false;
-
-            tool["parameters"] = parameters;
-        }
-    }
-
     private async Task<RealtimeAiFunctionCallResult> OnFunctionCallAsync(
         RealtimeAiWssFunctionCallData functionCallData,
         RealtimeAiSessionActions actions,
@@ -262,71 +215,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         if (functionCallData == null || string.IsNullOrWhiteSpace(functionCallData.FunctionName))
             return null;
 
-        if (!string.Equals(functionCallData.FunctionName, OpenAiToolConstants.GetProductPrice, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        return await ProcessProductPriceAsync(functionCallData, assistant, cancellationToken).ConfigureAwait(false);
-    }
-
-    private sealed class ProductPriceArgs
-    {
-        public string ProductName { get; init; }
-    }
-
-    private static ProductPriceArgs ParseProductPriceArgs(string argumentsJson)
-    {
-        if (string.IsNullOrWhiteSpace(argumentsJson)) return new ProductPriceArgs();
-
-        try
-        {
-            var token = JToken.Parse(argumentsJson);
-            if (token.Type == JTokenType.String)
-                return new ProductPriceArgs { ProductName = token.Value<string>() };
-
-            var name = token.Value<string>("product_name")
-                       ?? token.Value<string>("productName")
-                       ?? token.Value<string>("name");
-
-            return new ProductPriceArgs { ProductName = name };
-        }
-        catch
-        {
-            return new ProductPriceArgs();
-        }
-    }
-
-    private async Task<RealtimeAiFunctionCallResult> ProcessProductPriceAsync(
-        RealtimeAiWssFunctionCallData functionCallData,
-        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-        CancellationToken cancellationToken)
-    {
-        var args = ParseProductPriceArgs(functionCallData?.ArgumentsJson);
-
-        if (string.IsNullOrWhiteSpace(args.ProductName))
-        {
-            return new RealtimeAiFunctionCallResult
-            {
-                Output = "Missing product_name. Ask the user which product they want the price for."
-            };
-        }
-
-        var phoneNumber = assistant?.AnsweringNumber;
-        var quotation = await _sjFoodQuotationService
-            .QueryPriceByPhoneAndProductAsync(phoneNumber, args.ProductName, null, cancellationToken)
-            .ConfigureAwait(false);
-        
-        if (!string.IsNullOrWhiteSpace(quotation?.SapId))
-        {
-            Log.Information("Get product price success. PhoneNumber: {PhoneNumber}, SapId: {SapId}, ProductName: {ProductName}, PriceLine: {PriceLine}",
-                phoneNumber, quotation.SapId, args.ProductName, quotation.Message);
-        }
-        else
-        {
-            Log.Information("Get product price finished. PhoneNumber: {PhoneNumber}, ProductName: {ProductName}, PriceLine: {PriceLine}",
-                phoneNumber, args.ProductName, quotation?.Message);
-        }
-        
-        return new RealtimeAiFunctionCallResult { Output = quotation?.Message };
+        return null;
     }
 
     private static RealtimeAiFunctionCallResult ProcessCollectComplaintInfo(

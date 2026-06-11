@@ -8,7 +8,6 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
-using SmartTalk.Core.Services.SjFood;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http.Clients;
@@ -42,7 +41,6 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
-    private readonly ISjFoodQuotationService _sjFoodQuotationService;
 
     #endregion
 
@@ -71,7 +69,6 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         ISalesDataProvider salesDataProvider,
         IAgentDataProvider agentDataProvider, 
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
-        ISjFoodQuotationService sjFoodQuotationService,
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
         IRealtimeAiService realtimeAiService,
@@ -87,7 +84,6 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _salesDataProvider = salesDataProvider;
         _agentDataProvider = agentDataProvider;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        _sjFoodQuotationService = sjFoodQuotationService;
         _ffmpegService = ffmpegService;
         _posUtilService = posUtilService;
         _realtimeAiService = realtimeAiService;

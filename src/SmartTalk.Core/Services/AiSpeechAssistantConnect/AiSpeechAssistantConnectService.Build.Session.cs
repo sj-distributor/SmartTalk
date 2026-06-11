@@ -63,56 +63,12 @@ public partial class AiSpeechAssistantConnectService
 
     private List<object> BuildTools()
     {
-        var tools = _ctx.FunctionCalls
+        return _ctx.FunctionCalls
             .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
             .Select(x => JsonConvert.DeserializeObject<JObject>(x.Content))
             .Where(x => x != null)
             .Cast<object>()
             .ToList();
-
-        if (_ctx.Assistant.ModelProvider == RealtimeAiProvider.OpenAi)
-            EnsureGetProductPriceSchema(tools);
-
-        return tools;
-    }
-
-    private static void EnsureGetProductPriceSchema(List<object> tools)
-    {
-        foreach (var tool in tools.OfType<JObject>())
-        {
-            var name = tool.Value<string>("name");
-            if (!string.Equals(name, OpenAiToolConstants.GetProductPrice, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            tool["type"] ??= "function";
-
-            var parameters = tool["parameters"] as JObject ?? new JObject();
-            parameters["type"] ??= "object";
-
-            var properties = parameters["properties"] as JObject ?? new JObject();
-            properties["product_name"] ??= new JObject
-            {
-                ["type"] = "string",
-                ["description"] = "The product name the customer asked about."
-            };
-
-            properties["customer_hint"] ??= new JObject
-            {
-                ["type"] = "string",
-                ["description"] =
-                    "Any customer-identifying detail explicitly mentioned by the customer, such as restaurant/customer name, street address, warehouse number, header note/remark, contact name, contact role, or restaurant/store related clue. Do not guess; only include details the customer actually said."
-            };
-
-            var required = parameters["required"] as JArray ?? new JArray();
-            if (!required.Any(x => string.Equals(x?.ToString(), "product_name", StringComparison.Ordinal)))
-                required.Add("product_name");
-
-            parameters["properties"] = properties;
-            parameters["required"] = required;
-            parameters["additionalProperties"] ??= false;
-
-            tool["parameters"] = parameters;
-        }
     }
     
     private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)
