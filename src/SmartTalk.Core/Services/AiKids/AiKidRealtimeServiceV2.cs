@@ -130,7 +130,8 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                             Transcription = t.Text
                         }).ToList()
                     }, CancellationToken.None));
-            }
+            },
+            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, assistant, CancellationToken.None)
         };
 
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
@@ -171,6 +172,17 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         };
     }
 
+    private async Task<RealtimeAiFunctionCallResult> OnFunctionCallAsync(
+        RealtimeAiWssFunctionCallData functionCallData,
+        RealtimeAiSessionActions actions,
+        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
+        CancellationToken cancellationToken)
+    {
+        if (functionCallData == null || string.IsNullOrWhiteSpace(functionCallData.FunctionName))
+            return null;
+
+        return null;
+    }
     private async Task<string> BuildResolvedPromptAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
