@@ -799,11 +799,18 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task ResolveItemDescriptionAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("#{HiFood_商品_术语库需求}", StringComparison.OrdinalIgnoreCase) ) return;
+        if (!_ctx.Prompt.Contains("{HiFood_商品_术语库需求}", StringComparison.OrdinalIgnoreCase)) return;
 
-        var cache = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionAsync(_ctx.From, cancellationToken).ConfigureAwait(false);
-        
-        _ctx.Prompt = _ctx.Prompt.Replace("#{HiFood_商品_术语库需求}", cache?.ModelDescription?.Trim() ?? string.Empty);
+        var descriptions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var descriptionList = string.Join(
+            "\n",
+            descriptions.Select(x =>
+                string.IsNullOrWhiteSpace(x.ModelDescription)
+                    ? x.ModelValue
+                    : $"{x.ModelValue}（{x.ModelDescription}）"));
+
+        _ctx.Prompt = _ctx.Prompt.Replace("#{HiFood_商品_术语库需求}", descriptionList);
     }
 
     private sealed record PosCompactProductEntry(
