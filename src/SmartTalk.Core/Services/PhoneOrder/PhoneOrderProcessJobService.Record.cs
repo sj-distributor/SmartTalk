@@ -107,7 +107,7 @@ public partial class PhoneOrderProcessJobService
             Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
         }
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         var callSubjectCn = "通话主题:";
         var callSubjectEn = "Conversation topic:";
@@ -131,6 +131,23 @@ public partial class PhoneOrderProcessJobService
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
       
+        if (completion.Content.Count>0)
+        {
+            var contentTexts = completion.Content
+                .Select(content => content.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+            
+            Log.Information(
+                "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
+                record.Id,
+                record.SessionId,
+                agent.Id,
+                aiSpeechAssistant?.Id,
+                aiSpeechAssistant?.Name,
+                contentTexts);
+        }
+        
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
@@ -263,7 +280,7 @@ public partial class PhoneOrderProcessJobService
     {
         var timezone = !string.IsNullOrWhiteSpace(agent.Timezone)
             ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone)
-            : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            : PstTimeZone.Get();
         var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
@@ -437,7 +454,7 @@ public partial class PhoneOrderProcessJobService
                 .ConfigureAwait(false);
         if (!extractedOrders.Any()) return;
 
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
 
         foreach (var storeOrder in extractedOrders)
@@ -710,8 +727,8 @@ public partial class PhoneOrderProcessJobService
                     Content = new CompletionsStringContent(
                         "你需要帮我从电话录音报告中判断两个维度：\n" +
                         "1. 是否真人接听（IsHumanAnswered）：\n" +
-                        "   - 默认返回 true，表示是真人接听。\n" +
-                        "   - 当报告中包含转接语音信箱、系统提示、无人接听，或是 是AI 回复时，返回 false。表示非真人接听\n" +
+                        "   - 默认返回 true，表示是真人接听。报告中明确显示是真人接听时候也需要返回true\n" +
+                        "   - 当报告中 1.无法判断是否是真人；2.转接语音信箱、系统提示、无人接听；3.对面为重复系统音提示；4.生硬的AI回复，5.分析报告不完整，6.报告中明确显示非真人接听 都需要返回 false。表示非真人接听\n" +
                         "例子：" +
                         "“转接语音信箱“，“非真人接听”，“无人应答”，“对面为重复系统音提示”\n" +
                         "2. 客人态度是否友好（IsCustomerFriendly）：\n" +

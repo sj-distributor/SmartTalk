@@ -31,8 +31,8 @@ using SmartTalk.Messages.Constants;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.Restaurants;
-using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
@@ -50,7 +50,6 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Smarties;
-using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -86,7 +85,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
-    private readonly ISpeechMaticsService _speechMaticsService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IFileTextExtractor _fileTextExtractor;
@@ -98,6 +96,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ITwilioService _twilioService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly IAiSpeechAssistantKnowledgePromptService _aiSpeechAssistantKnowledgePromptService;
+    private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
 
     private StringBuilder _openaiEvent;
     private bool _shouldSendBuffToOpenAi;
@@ -123,7 +123,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
-        ISpeechMaticsService speechMaticsService,
         ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
         IFileTextExtractor fileTextExtractor,
@@ -135,6 +134,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ITwilioService twilioService,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
+        IKnowledgeScenarioDataProvider knowledgeScenarioDataProvider,
         WebSocket openaiWebSocket = null)
     {
         _clock = clock;
@@ -158,7 +159,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _salesDataProvider = salesDataProvider;
         _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
-        _speechMaticsService = speechMaticsService;
         _workWeChatKeySetting = workWeChatKeySetting;
         _backgroundJobClient = backgroundJobClient;
         _restaurantDataProvider = restaurantDataProvider;
@@ -166,6 +166,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _twilioService = twilioService;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
+        _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
 
         _openaiEvent = new StringBuilder();
         _openaiWebSocket = openaiWebSocket ?? new ClientWebSocket();
@@ -262,10 +264,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-        var finalPrompt = knowledge.Prompt
+        var finalPrompt = _aiSpeechAssistantKnowledgePromptService.BuildFinalPrompt(knowledge)
             .Replace("#{user_profile}", string.IsNullOrEmpty(userProfile?.ProfileJson) ? " " : userProfile.ProfileJson)
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
@@ -1292,7 +1294,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var utcNow = DateTimeOffset.UtcNow;
 
-        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstZone = PstTimeZone.Get();
 
         var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
         
