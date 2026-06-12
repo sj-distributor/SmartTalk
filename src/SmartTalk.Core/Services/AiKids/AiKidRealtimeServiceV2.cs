@@ -18,7 +18,6 @@ using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
 using SmartTalk.Messages.Enums.RealtimeAi;
-using SmartTalk.Core.Constants;
 
 namespace SmartTalk.Core.Services.AiKids;
 

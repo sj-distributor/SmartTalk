@@ -43,6 +43,4 @@ public class AiSpeechAssistantConnectContext
     public AiSpeechAssistantOrderDto OrderItems { get; set; }
     public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
     public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
-
-    public Dictionary<string, string> PriceCache { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
