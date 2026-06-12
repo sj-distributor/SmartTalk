@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Domain.KnowledgeScenario;
 
@@ -17,8 +18,8 @@ public class KnowledgeSceneLanguageMapping : IEntity
     [Column("scene_id")]
     public int SceneId { get; set; }
 
-    [Column("language"), StringLength(64)]
-    public string Language { get; set; }
+    [Column("language")]
+    public AutoAddLanguage Language { get; set; }
 
     [Column("is_active", TypeName = "tinyint(1)")]
     public bool IsActive { get; set; } = true;

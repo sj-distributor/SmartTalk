@@ -937,8 +937,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<CrmAutoSyncAssistantLocationDto>> GetCrmAutoSyncAssistantsInCompanyAsync(
-        int companyId, CancellationToken cancellationToken = default)
+    public async Task<List<CrmAutoSyncAssistantLocationDto>> GetCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default)
     {
         var query =
             from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)

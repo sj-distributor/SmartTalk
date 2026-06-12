@@ -85,7 +85,7 @@ public class CrmSalesAutoSyncGroupingTests
     }
 
     [Fact]
-    public void BuildCustomerGroups_DoesNotMergeCustomersWithSamePhoneButDifferentIdentity()
+    public void BuildCustomerGroups_MergesCustomersWithSamePhoneEvenWhenIdentityDiffers()
     {
         var customers = new List<CrmSalesAutoSyncCustomerDto>
         {
@@ -95,8 +95,8 @@ public class CrmSalesAutoSyncGroupingTests
 
         var groups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
 
-        Assert.Equal(2, groups.Count);
-        Assert.All(groups, x => Assert.Single(x.CustomerIds));
+        Assert.Single(groups);
+        Assert.Equal(new[] { "100", "200" }, groups[0].CustomerIds);
     }
 
     private static CrmSalesAutoSyncCustomerDto CreateCustomer(string sapId, string salesName, string phone)

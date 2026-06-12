@@ -27,8 +27,6 @@ public interface ISalesDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeVariableCache> GetDeliveryInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
 
     Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default);
-
-    Task<CrmSalesAutoSyncRun> GetLatestSuccessfulCrmSalesAutoSyncRunByModeAsync(string mode, CancellationToken cancellationToken = default);
 }
 
 public class SalesDataProvider : ISalesDataProvider

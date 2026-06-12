@@ -113,14 +113,14 @@ public class AgentService : IAgentService
         var agent = new Agent
         {
             ServiceProviderId = command.ServiceProviderId,
-            Type = AgentType.Agent,
-            SourceSystem = AgentSourceSystem.Self,
-            IsDisplay = true,
+            Type = command.AgentType,
+            SourceSystem = command.SourceSystem,
+            IsDisplay = command.IsDisplay,
             Name = command.Name,
             Brief = command.Brief,
             Channel = command.Channel,
             IsReceiveCall = command.IsReceivingCall,
-            IsSurface = true,
+            IsSurface = command.IsSurface,
             Voice = command.Voice,
             WaitInterval = command.WaitInterval,
             IsTransferHuman = command.IsTransferHuman,

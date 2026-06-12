@@ -6,6 +6,7 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
+using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
 
@@ -65,7 +66,7 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
     
     Task UpdateKnowledgeSceneCompanyAsync(KnowledgeSceneCompany knowledgeSceneCompany, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, string language = null, bool? isActive = null, CancellationToken cancellationToken = default);
+    Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, AutoAddLanguage? language = null, bool? isActive = null, CancellationToken cancellationToken = default);
 
     Task AddKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -393,7 +394,7 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, string language = null, bool? isActive = null, CancellationToken cancellationToken = default)
+    public async Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, AutoAddLanguage? language = null, bool? isActive = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<KnowledgeSceneLanguageMapping>();
 
@@ -406,11 +407,8 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
             query = query.Where(x => distinctSceneIds.Contains(x.SceneId));
         }
 
-        if (!string.IsNullOrWhiteSpace(language))
-        {
-            var normalizedLanguage = language.Trim();
-            query = query.Where(x => x.Language == normalizedLanguage);
-        }
+        if (language.HasValue)
+            query = query.Where(x => x.Language == language.Value);
 
         if (isActive.HasValue)
             query = query.Where(x => x.IsActive == isActive.Value);

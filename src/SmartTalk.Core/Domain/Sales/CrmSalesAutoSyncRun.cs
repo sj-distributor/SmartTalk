@@ -23,6 +23,9 @@ public class CrmSalesAutoSyncRun : IEntity
     [Column("created_store_count")]
     public int CreatedStoreCount { get; set; }
 
+    [Column("created_agent_count")]
+    public int CreatedAgentCount { get; set; }
+
     [Column("created_assistant_count")]
     public int CreatedAssistantCount { get; set; }
 
@@ -32,8 +35,17 @@ public class CrmSalesAutoSyncRun : IEntity
     [Column("applied_scene_count")]
     public int AppliedSceneCount { get; set; }
 
+    [Column("transferred_assistant_count")]
+    public int TransferredAssistantCount { get; set; }
+
+    [Column("deactivated_assistant_count")]
+    public int DeactivatedAssistantCount { get; set; }
+
     [Column("warnings_json"), StringLength(4000)]
     public string WarningsJson { get; set; }
+
+    [Column("details_json", TypeName = "longtext")]
+    public string DetailsJson { get; set; }
 
     [Column("error_message"), StringLength(4000)]
     public string ErrorMessage { get; set; }

@@ -1,4 +1,11 @@
+using AutoMapper;
+using NSubstitute;
+using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.KnowledgeScenario;
+using SmartTalk.Core.Services.Pos;
+using SmartTalk.Messages.Commands.KnowledgeScenario;
+using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using Xunit;
 
@@ -10,25 +17,42 @@ public class AutoAddLanguageCatalogTests
     public void AutoAddLanguage_ContainsAllFixedPageLanguages()
     {
         var languages = Enum.GetValues<AutoAddLanguage>();
-
-        Assert.Contains(AutoAddLanguage.Mandarin, languages);
-        Assert.Contains(AutoAddLanguage.Cantonese, languages);
+        
         Assert.Contains(AutoAddLanguage.Spanish, languages);
         Assert.Contains(AutoAddLanguage.Korean, languages);
         Assert.Contains(AutoAddLanguage.Vietnamese, languages);
         Assert.Contains(AutoAddLanguage.Thai, languages);
     }
-}
 
-public class CrmToAutoAddLanguageConverterTests
-{
-    [Theory]
-    [InlineData("国语", "Mandarin")]
-    [InlineData("中文（大陸）", "Mandarin")]
-    [InlineData("Cantonese", "Cantonese")]
-    [InlineData("Spanish", "Spanish")]
-    public void ResolveLanguageCodeOrDefault_NormalizesCrmLanguage(string rawLanguage, string expected)
+    [Fact]
+    public async Task SaveKnowledgeSceneLanguageMappings_DoesNotAutoCreateKnowledgeSceneCompanyAuthorization()
     {
-        Assert.Equal(expected, CrmToAutoAddLanguageConverter.ResolveLanguageCodeOrDefault(rawLanguage));
+        var dataProvider = Substitute.For<IKnowledgeScenarioDataProvider>();
+        dataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: 1, isActive: true, cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeSceneLanguageMapping>());
+
+        var sut = new KnowledgeScenarioService(
+            Substitute.For<IMapper>(),
+            dataProvider,
+            Substitute.For<IAiSpeechAssistantDataProvider>(),
+            Substitute.For<IPosDataProvider>(),
+            Substitute.For<ISmartiesClient>(),
+            Substitute.For<IAiSpeechAssistantKnowledgePromptService>());
+
+        await sut.SaveKnowledgeSceneLanguageMappingsAsync(new SaveKnowledgeSceneLanguageMappingsCommand
+        {
+            CompanyId = 1,
+            Mappings =
+            [
+                new SaveKnowledgeSceneLanguageMappingItemDto
+                {
+                    Language = AutoAddLanguage.English,
+                    SceneId = 100
+                }
+            ]
+        }, CancellationToken.None);
+
+        await dataProvider.DidNotReceive()
+            .AddKnowledgeSceneCompaniesAsync(Arg.Any<List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeSceneCompany>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 }

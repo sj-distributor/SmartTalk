@@ -9,7 +9,7 @@ public static class CrmSalesAutoSyncGrouping
     private static readonly Regex AssistantNameRegex = new(@"^(.+?) \((.+)\)$", RegexOptions.Compiled);
 
     public static string BuildSalesKey(CrmSalesAutoSyncCustomerDto customer)
-        => $"{customer.SalesName} {customer.SalesGroup}".Trim();
+        => string.Join(" ", new[] { customer.SalesName, customer.SalesGroup }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
     public static List<CrmSalesAutoSyncCustomerGroup> BuildCustomerGroups(IEnumerable<CrmSalesAutoSyncCustomerDto> customers)
     {
@@ -19,40 +19,26 @@ public static class CrmSalesAutoSyncGrouping
             .ToList();
     }
 
-    public static Dictionary<string, CrmSalesAutoSyncCustomerGroup> BuildCustomerIdLookup(
-        IEnumerable<CrmSalesAutoSyncCustomerGroup> groups)
-    {
-        var lookup = new Dictionary<string, CrmSalesAutoSyncCustomerGroup>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var group in groups)
-        {
-            foreach (var customerId in group.CustomerIds)
-            {
-                if (!string.IsNullOrWhiteSpace(customerId))
-                    lookup[customerId.Trim()] = group;
-            }
-        }
-
-        return lookup;
-    }
+    public static Dictionary<string, CrmSalesAutoSyncCustomerGroup> BuildCustomerIdLookup(IEnumerable<CrmSalesAutoSyncCustomerGroup> groups)
+        => groups
+            .SelectMany(group => group.CustomerIds.Select(customerId => new { customerId, group }))
+            .Where(x => !string.IsNullOrWhiteSpace(x.customerId))
+            .ToDictionary(x => x.customerId, x => x.group, StringComparer.OrdinalIgnoreCase);
 
     public static HashSet<string> BuildActiveCustomerIds(IEnumerable<CrmSalesAutoSyncCustomerDto> customers)
         => customers
             .Select(x => x.CustomerId)
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
+            .Select(x => x)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     public static string BuildAssistantName(IReadOnlyList<string> customerIds, string language)
     {
         var ids = customerIds
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var lang = string.IsNullOrWhiteSpace(language) ? "English" : language.Trim();
+        var lang = string.IsNullOrWhiteSpace(language) ? "英文" : language;
         return ids.Count == 0 ? $"({lang})" : $"{string.Join("/", ids)} ({lang})";
     }
 
@@ -78,12 +64,13 @@ public static class CrmSalesAutoSyncGrouping
 
     private static List<CrmSalesAutoSyncCustomerGroup> BuildPhoneMergedGroups(string salesKey, List<CrmSalesAutoSyncCustomerDto> customers)
     {
-        var parent = Enumerable.Range(0, customers.Count).ToDictionary(i => i, i => i);
+        var customerContactKeys = customers.Select(GetNormalizedContactKeys).ToList();
+        var parent = Enumerable.Range(0, customers.Count).ToArray();
         var contactKeyToIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         for (var i = 0; i < customers.Count; i++)
         {
-            foreach (var contactKey in GetNormalizedContactKeys(customers[i]))
+            foreach (var contactKey in customerContactKeys[i])
             {
                 if (contactKeyToIndex.TryGetValue(contactKey, out var existingIndex))
                     Union(parent, i, existingIndex);
@@ -92,31 +79,31 @@ public static class CrmSalesAutoSyncGrouping
             }
         }
 
-        var components = new Dictionary<int, List<CrmSalesAutoSyncCustomerDto>>();
-        var noPhoneCustomers = new List<CrmSalesAutoSyncCustomerDto>();
+        var componentCustomers = new Dictionary<int, List<CrmSalesAutoSyncCustomerDto>>();
+        var customersWithoutPhones = new List<CrmSalesAutoSyncCustomerDto>();
 
         for (var i = 0; i < customers.Count; i++)
         {
-            if (GetNormalizedContactKeys(customers[i]).Count == 0)
+            if (customerContactKeys[i].Count == 0)
             {
-                noPhoneCustomers.Add(customers[i]);
+                customersWithoutPhones.Add(customers[i]);
                 continue;
             }
 
             var root = Find(parent, i);
-            if (!components.TryGetValue(root, out var list))
-            {
-                list = new List<CrmSalesAutoSyncCustomerDto>();
-                components[root] = list;
-            }
+            if (!componentCustomers.TryGetValue(root, out var groupedCustomers))
+                componentCustomers[root] = groupedCustomers = new List<CrmSalesAutoSyncCustomerDto>();
 
-            if (!list.Any(x => string.Equals(x.CustomerId, customers[i].CustomerId, StringComparison.OrdinalIgnoreCase)))
-                list.Add(customers[i]);
+            if (groupedCustomers.Any(x => string.Equals(x.CustomerId, customers[i].CustomerId, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            groupedCustomers.Add(customers[i]);
         }
 
-        var result = components.Values.Select(x => ToCustomerGroup(salesKey, x)).ToList();
-        result.AddRange(noPhoneCustomers.Select(x => ToCustomerGroup(salesKey, new List<CrmSalesAutoSyncCustomerDto> { x })));
-        return result;
+        return componentCustomers.Values
+            .Select(groupedCustomers => ToCustomerGroup(salesKey, groupedCustomers))
+            .Concat(customersWithoutPhones.Select(customer => ToCustomerGroup(salesKey, new List<CrmSalesAutoSyncCustomerDto> { customer })))
+            .ToList();
     }
 
     private static CrmSalesAutoSyncCustomerGroup ToCustomerGroup(string salesKey, List<CrmSalesAutoSyncCustomerDto> customers)
@@ -143,16 +130,10 @@ public static class CrmSalesAutoSyncGrouping
         foreach (var customer in customers)
         {
             if (!string.IsNullOrWhiteSpace(customer.Language))
-                return customer.Language.Trim();
+                return customer.Language;
         }
-
-        foreach (var contact in customers.SelectMany(x => x.Contacts ?? new List<ContactDto>()))
-        {
-            if (!string.IsNullOrWhiteSpace(contact.Language))
-                return contact.Language.Trim();
-        }
-
-        return "English";
+        
+        return "英文";
     }
 
     private static HashSet<string> GetNormalizedContactKeys(CrmSalesAutoSyncCustomerDto customer)
@@ -165,14 +146,7 @@ public static class CrmSalesAutoSyncGrouping
 
     private static string BuildNormalizedContactKey(ContactDto contact)
     {
-        var phoneKey = NormalizePhoneKey(contact?.Phone);
-        if (string.IsNullOrWhiteSpace(phoneKey))
-            return string.Empty;
-
-        var identityKey = NormalizeIdentityKey(contact?.Identity);
-        return string.IsNullOrWhiteSpace(identityKey)
-            ? phoneKey
-            : $"{phoneKey}|{identityKey}";
+        return NormalizePhoneKey(contact?.Phone);
     }
 
     private static string NormalizePhoneKey(string phoneNumber)
@@ -190,15 +164,7 @@ public static class CrmSalesAutoSyncGrouping
         return digits;
     }
 
-    private static string NormalizeIdentityKey(string identity)
-    {
-        if (string.IsNullOrWhiteSpace(identity))
-            return string.Empty;
-
-        return identity.Trim().ToLowerInvariant();
-    }
-
-    private static int Find(Dictionary<int, int> parent, int index)
+    private static int Find(int[] parent, int index)
     {
         while (parent[index] != index)
         {
@@ -209,7 +175,7 @@ public static class CrmSalesAutoSyncGrouping
         return index;
     }
 
-    private static void Union(Dictionary<int, int> parent, int left, int right)
+    private static void Union(int[] parent, int left, int right)
     {
         var leftRoot = Find(parent, left);
         var rightRoot = Find(parent, right);
