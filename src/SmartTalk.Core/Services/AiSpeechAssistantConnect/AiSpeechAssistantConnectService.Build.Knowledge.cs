@@ -810,7 +810,8 @@ public partial class AiSpeechAssistantConnectService
                     ? x.ModelValue
                     : $"{x.ModelValue}（{x.ModelDescription}）"));
 
-        _ctx.Prompt = _ctx.Prompt.Replace("#{HiFood_商品_术语库需求}", descriptionList).Replace("{HiFood_商品_术语库需求}", descriptionList);
+        _ctx.Prompt = _ctx.Prompt.Replace("#{HiFood_商品_术语库需求}", descriptionList)
+            .Replace("{HiFood_商品_术语库需求}", descriptionList).Replace("#{item_explain}", descriptionList);
     }
 
     private sealed record PosCompactProductEntry(
