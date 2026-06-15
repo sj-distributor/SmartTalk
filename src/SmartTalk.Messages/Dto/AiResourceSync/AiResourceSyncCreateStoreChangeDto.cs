@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.SalesAutoCreate;
 
-public class SyncCrmSalesAutoCreateStoreChangeDto
+public class AiResourceSyncCreateStoreChangeDto
 {
     public int StoreId { get; set; }
 

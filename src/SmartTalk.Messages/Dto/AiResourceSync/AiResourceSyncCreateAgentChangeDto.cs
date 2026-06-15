@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.SalesAutoCreate;
 
-public class SyncCrmSalesAutoCreateAgentChangeDto
+public class AiResourceSyncCreateAgentChangeDto
 {
     public int AgentId { get; set; }
 

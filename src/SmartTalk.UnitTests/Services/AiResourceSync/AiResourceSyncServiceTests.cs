@@ -2,11 +2,11 @@ using System.Linq.Expressions;
 using Mediator.Net;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
-using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
@@ -15,9 +15,9 @@ using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.Agent;
+using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Pos;
-using SmartTalk.Messages.Commands.Sales;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
@@ -27,9 +27,9 @@ using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using Xunit;
 
-namespace SmartTalk.UnitTests.Services.Sale;
+namespace SmartTalk.UnitTests.Services.AiResourceSync;
 
-public class SalesAutoCreateServiceTests
+public class AiResourceSyncServiceTests
 {
     [Fact]
     public async Task SyncCrmSalesAutoCreateAsync_ReturnsCustomerCount_AndEnqueuesBackgroundExecution()
@@ -43,13 +43,13 @@ public class SalesAutoCreateServiceTests
             });
 
         var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
-        Expression<Func<ISalesAutoCreateService, Task>>? queuedExpression = null;
+        Expression<Func<IAiResourceSyncProcessJobService, Task>>? queuedExpression = null;
         backgroundJobClient
-            .Enqueue<ISalesAutoCreateService>(Arg.Do<Expression<Func<ISalesAutoCreateService, Task>>>(x => queuedExpression = x), Arg.Any<string>())
+            .Enqueue<IAiResourceSyncProcessJobService>(Arg.Do<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(x => queuedExpression = x), Arg.Any<string>())
             .Returns("job-1");
 
         var sut = CreateSut(crmClient: crmClient, backgroundJobClient: backgroundJobClient);
-        var command = new SyncCrmSalesAutoCreateCommand
+        var command = new AiResourceSyncCommand
         {
             IsManual = true,
             ServiceProviderId = 123
@@ -60,11 +60,11 @@ public class SalesAutoCreateServiceTests
         Assert.NotNull(response);
         Assert.NotNull(response.Data);
         Assert.Equal(2, response.Data.TotalCount);
-        backgroundJobClient.Received(1).Enqueue(Arg.Any<Expression<Func<ISalesAutoCreateService, Task>>>(), Arg.Any<string>());
+        backgroundJobClient.Received(1).Enqueue(Arg.Any<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(), Arg.Any<string>());
         Assert.NotNull(queuedExpression);
 
         var methodCall = Assert.IsAssignableFrom<MethodCallExpression>(queuedExpression.Body);
-        Assert.Equal(nameof(ISalesAutoCreateService.ExecuteSyncCrmSalesAutoCreateAsync), methodCall.Method.Name);
+        Assert.Equal(nameof(IAiResourceSyncProcessJobService.ExecuteSyncCrmSalesAutoCreateAsync), methodCall.Method.Name);
     }
 
     [Fact]
@@ -196,8 +196,8 @@ public class SalesAutoCreateServiceTests
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
             knowledgeScenarioDataProvider: knowledgeScenarioDataProvider,
             salesDataProvider: salesDataProvider);
-
-        await sut.ExecuteSyncCrmSalesAutoCreateAsync(new SyncCrmSalesAutoCreateCommand
+        
+        await sut.SyncInternalAsync(new AiResourceSyncCommand
         {
             IsManual = true,
             ServiceProviderId = 123
@@ -216,7 +216,7 @@ public class SalesAutoCreateServiceTests
             Arg.Any<CancellationToken>());
     }
 
-    private static SalesAutoCreateService CreateSut(
+    private static AiResourceSyncService CreateSut(
         IMediator? mediator = null,
         ICrmClient? crmClient = null,
         IAgentDataProvider? agentDataProvider = null,
@@ -226,7 +226,7 @@ public class SalesAutoCreateServiceTests
         ISalesDataProvider? salesDataProvider = null,
         ISmartTalkBackgroundJobClient? backgroundJobClient = null)
     {
-        return new SalesAutoCreateService(
+        return new AiResourceSyncService(
             mediator ?? Substitute.For<IMediator>(),
             crmClient ?? Substitute.For<ICrmClient>(),
             agentDataProvider ?? Substitute.For<IAgentDataProvider>(),

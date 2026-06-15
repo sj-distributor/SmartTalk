@@ -1,71 +1,57 @@
 using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
-using Hangfire.Throttling;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
-using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.Sales;
-using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Agent;
+using SmartTalk.Messages.Commands.AiResourceSync;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Pos;
-using SmartTalk.Messages.Commands.Sales;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Dto.Sales;
-using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiResourceSync;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Dto.SalesAutoCreate;
+using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
-using SmartTalk.Messages.Dto.Pos;
-using SmartTalk.Messages.Dto.SalesAutoCreate;
 
-namespace SmartTalk.Core.Services.Sale;
+namespace SmartTalk.Core.Services.AiResourceSync;
 
-public interface ISalesAutoCreateService : IScopedDependency
+public record AiResourceSyncShardExecutionResult(string SalesKey, int CustomerGroupCount, AiResourceSyncExecutionStatsDto Stats);
+
+public record AiResourceSyncExecutionResult(int TotalCount, int ShardCount, IReadOnlyList<AiResourceSyncShardExecutionResult> Shards, AiResourceSyncExecutionStatsDto Stats, bool IsInitialRelease);
+
+public partial interface IAiResourceSyncService : IScopedDependency
 {
-    Task<SyncCrmSalesAutoCreateResponse> SyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken);
+    Task<AiResourceSyncResponse> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
+    
+    Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> customers, CancellationToken cancellationToken);
+    
+    Task RecordSyncRunAsync(AiResourceSyncCommand command, AiResourceSyncExecutionStatsDto stats, bool isInitialRelease, bool isSuccess, string errorMessage, CancellationToken cancellationToken);
 
-    [Semaphore(HangfireConstants.SemaphoreSyncCrmSalesAutoCreate)]
-    Task ExecuteSyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken);
+    Task SendNotifyAsync(bool isSuccess, CancellationToken cancellationToken);
 }
 
-public class SalesAutoCreateService : ISalesAutoCreateService
+public class AiResourceSyncService : IAiResourceSyncService
 {
-    private record SyncExecutionResult(SyncCrmSalesAutoCreateResponseData Data, SyncExecutionStats Stats, bool IsInitialRelease);
     private record SalesKnowledgeSyncTask(string StoreName, CrmSalesAutoSyncCustomerDto SeedCustomer, CrmSalesAutoSyncCustomerGroup MergedGroup);
+  
     private record SourceSceneLookup(Dictionary<AutoAddLanguage, KnowledgeScene> MappingScenes, Dictionary<int, List<KnowledgeSceneItem>> SceneItems);
-    private class SyncExecutionStats
-    {
-        public int TotalCount { get; set; }
-        public int CreatedStoreCount { get; set; }
-        public int CreatedAgentCount { get; set; }
-        public int CreatedAssistantCount { get; set; }
-        public int CreatedKnowledgeCount { get; set; }
-        public int AppliedSceneCount { get; set; }
-        public int TransferredAssistantCount { get; set; }
-        public int DeactivatedAssistantCount { get; set; }
-        public List<SyncCrmSalesAutoCreateStoreChangeDto> CreatedStores { get; } = new();
-        public List<SyncCrmSalesAutoCreateAgentChangeDto> CreatedAgents { get; } = new();
-        public List<SyncCrmSalesAutoCreateAssistantChangeDto> CreatedAssistants { get; } = new();
-        public List<SyncCrmSalesAutoCreateAssistantChangeDto> TransferredAssistants { get; } = new();
-        public List<SyncCrmSalesAutoCreateAssistantChangeDto> RenamedAssistants { get; } = new();
-        public List<SyncCrmSalesAutoCreateAssistantChangeDto> DeactivatedAssistants { get; } = new();
-        public List<string> Warnings { get; } = new();
-    }
-
-    private const int MaxSyncAttempts = 3;
-    private const int RetryDelaySeconds = 300;
-
+ 
     private readonly IMediator _mediator;
     private readonly ICrmClient _crmClient;
     private readonly IAgentDataProvider _agentDataProvider;
@@ -78,7 +64,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     private readonly SalesSetting _salesSetting;
     private readonly SalesAutoCreateSetting _salesAutoCreateSetting;
 
-    public SalesAutoCreateService(
+    public AiResourceSyncService(
         IMediator mediator,
         ICrmClient crmClient,
         IAgentDataProvider agentDataProvider,
@@ -104,63 +90,24 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         _salesAutoCreateSetting = salesAutoCreateSetting;
     }
 
-    public async Task<SyncCrmSalesAutoCreateResponse> SyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken)
+    public async Task<AiResourceSyncResponse> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
         var customers = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         
         Log.Information("CRM sync start. Customers={CustomerCount}", customers.Count);
 
-        _backgroundJobClient.Enqueue<ISalesAutoCreateService>(x => x.ExecuteSyncCrmSalesAutoCreateAsync(command, customers, CancellationToken.None));
+        _backgroundJobClient.Enqueue<IAiResourceSyncProcessJobService>(x => x.ExecuteSyncCrmSalesAutoCreateAsync(command, customers, CancellationToken.None));
 
-        return new SyncCrmSalesAutoCreateResponse
+        return new AiResourceSyncResponse
         {
-            Data = new SyncCrmSalesAutoCreateResponseData
+            Data = new AiResourceSyncResponseData
             {
                 TotalCount = customers.Count
             }
         };
     }
 
-    public async Task ExecuteSyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken)
-    {
-        Exception lastException = null;
-
-        for (var attempt = 1; attempt <= MaxSyncAttempts; attempt++)
-        {
-            try
-            {
-                var executionResult = await SyncInternalAsync(command, syncCustomers, cancellationToken).ConfigureAwait(false);
-
-                await RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, true, null, cancellationToken).ConfigureAwait(false);
-
-                if (!command.IsManual && attempt > 1)
-                    await SendNotifyAsync(true, cancellationToken).ConfigureAwait(false);
-
-                return;
-            }
-            catch (Exception ex)
-            {
-                lastException = ex;
-                Log.Warning(ex, "SyncCrmSalesAutoCreate attempt {Attempt}/{MaxAttempts} failed", attempt, MaxSyncAttempts);
-
-                if (attempt < MaxSyncAttempts)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(RetryDelaySeconds), cancellationToken).ConfigureAwait(false);
-                    continue;
-                }
-
-                Log.Error(ex, "SyncCrmSalesAutoCreate failed after {MaxAttempts} attempts", MaxSyncAttempts);
-                await RecordSyncRunAsync(command, null, false, false, ex.Message, cancellationToken).ConfigureAwait(false);
-
-                if (!command.IsManual)
-                    await SendNotifyAsync(false, cancellationToken).ConfigureAwait(false);
-            }
-        }
-
-        throw lastException!;
-    }
-
-    private async Task<SyncExecutionResult> SyncInternalAsync(SyncCrmSalesAutoCreateCommand command, List<CrmSalesAutoSyncCustomerDto> customers, CancellationToken cancellationToken)
+    public async Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> customers, CancellationToken cancellationToken)
     {
         if (!customers.Any())
         { 
@@ -174,7 +121,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
 
         var customerIdLookup = CrmSalesAutoSyncGrouping.BuildCustomerIdLookup(customerGroups);
         
-        var stats = new SyncExecutionStats { TotalCount = customers.Count };
+        var stats = new AiResourceSyncExecutionStatsDto { TotalCount = customers.Count };
 
         var company = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
         if (company == null)
@@ -214,34 +161,62 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                 return salesBucket.Select(mergedGroup => new SalesKnowledgeSyncTask(salesBucket.Key, seedCustomer, mergedGroup));
             }).ToList();
 
-        CompanyStore currentStore = null;
-        Agent currentSalesAgent = null;
-        string currentStoreName = null;
+        var shardResults = new List<AiResourceSyncShardExecutionResult>();
 
-        foreach (var syncTask in syncTasks.OrderBy(x => x.StoreName, StringComparer.OrdinalIgnoreCase))
+        foreach (var salesShard in syncTasks
+                     .OrderBy(x => x.StoreName, StringComparer.OrdinalIgnoreCase)
+                     .GroupBy(x => x.StoreName, StringComparer.OrdinalIgnoreCase))
         {
-            if (!string.Equals(currentStoreName, syncTask.StoreName, StringComparison.OrdinalIgnoreCase))
-            {
-                currentStore = await EnsureSalesStoreAsync(
-                    syncTask.SeedCustomer, company.Id, storeMap, stats, cancellationToken).ConfigureAwait(false);
- 
-                currentSalesAgent = await EnsureSalesAgentAsync(command.ServiceProviderId.Value, currentStore.Id, syncTask.StoreName, salesAgentCache, stats, cancellationToken).ConfigureAwait(false);
-                currentStoreName = syncTask.StoreName;
-            }
+            var shardResult = await ExecuteSalesShardAsync(
+                command, company.Id, salesShard.Key, salesShard.ToList(), customerIdLookup,
+                storeMap, salesAgentCache, customerKnowledgeAssistantCache,
+                sourceSceneLookup, existingCrmAssistants, claimedAssistantIds, cancellationToken).ConfigureAwait(false);
 
-            await EnsureMergedCustomerKnowledgeAsync(
-                command.ServiceProviderId.Value, company.Id, currentStore.Id, currentSalesAgent.Id, syncTask.MergedGroup, customerIdLookup, storeMap,
-                salesAgentCache, customerKnowledgeAssistantCache, sourceSceneLookup, existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
+            shardResults.Add(shardResult);
+            MergeStats(stats, shardResult.Stats);
         }
  
         await ReconcileInactiveCustomerAssistantsAsync(activeCustomerIds, existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
 
-        return new SyncExecutionResult(new SyncCrmSalesAutoCreateResponseData { TotalCount = customers.Count }, stats, isInitialRelease);
+        return new AiResourceSyncExecutionResult(customers.Count, shardResults.Count, shardResults, stats, isInitialRelease);
+    }
+
+    private async Task<AiResourceSyncShardExecutionResult> ExecuteSalesShardAsync(
+        AiResourceSyncCommand command,
+        int companyId,
+        string salesKey,
+        IReadOnlyList<SalesKnowledgeSyncTask> syncTasks,
+        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
+        Dictionary<string, CompanyStore> storeMap,
+        Dictionary<string, Agent> salesAgentCache,
+        Dictionary<string, Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache,
+        SourceSceneLookup sourceSceneLookup,
+        List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
+        HashSet<int> claimedAssistantIds,
+        CancellationToken cancellationToken)
+    {
+        var stats = new AiResourceSyncExecutionStatsDto();
+        var seedCustomer = syncTasks.First().SeedCustomer;
+
+        var store = await EnsureSalesStoreAsync(
+            seedCustomer, companyId, storeMap, stats, cancellationToken).ConfigureAwait(false);
+
+        var salesAgent = await EnsureSalesAgentAsync(
+            command.ServiceProviderId.Value, store.Id, salesKey, salesAgentCache, stats, cancellationToken).ConfigureAwait(false);
+
+        foreach (var syncTask in syncTasks)
+        {
+            await EnsureMergedCustomerKnowledgeAsync(
+                command.ServiceProviderId.Value, companyId, store.Id, salesAgent.Id, syncTask.MergedGroup, customerIdLookup, storeMap,
+                salesAgentCache, customerKnowledgeAssistantCache, sourceSceneLookup, existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new AiResourceSyncShardExecutionResult(salesKey, syncTasks.Count, stats);
     }
 
     private async Task<CompanyStore> EnsureSalesStoreAsync(
         CrmSalesAutoSyncCustomerDto customer, int companyId, Dictionary<string, CompanyStore> storeMap,
-        SyncExecutionStats stats, CancellationToken cancellationToken)
+        AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var storeName = CrmSalesAutoSyncGrouping.BuildSalesKey(customer);
         if (storeMap.TryGetValue(storeName, out var store))
@@ -277,7 +252,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
 
     private async Task<Agent> EnsureSalesAgentAsync(
         int serviceProviderId, int storeId, string salesAgentName, Dictionary<string, Agent> salesAgentCache, 
-        SyncExecutionStats stats, CancellationToken cancellationToken)
+        AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var salesAgentCacheKey = BuildStoreScopedCacheKey(storeId, salesAgentName);
         if (salesAgentCache.TryGetValue(salesAgentCacheKey, out var cachedSalesAgent))
@@ -352,7 +327,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         SourceSceneLookup sourceSceneLookup,
         List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
         HashSet<int> claimedAssistantIds,
-        SyncExecutionStats stats,
+        AiResourceSyncExecutionStatsDto stats,
         CancellationToken cancellationToken)
     {
         var customerAssistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(mergedGroup.CustomerIds, mergedGroup.Language);
@@ -377,7 +352,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         IReadOnlyList<string> customerIds,
         SourceSceneLookup sourceSceneLookup,
         Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache,
-        SyncExecutionStats stats,
+        AiResourceSyncExecutionStatsDto stats,
         CancellationToken cancellationToken)
     {
         var assistantCacheKey = BuildStoreScopedCacheKey(storeId, customerKnowledgeAssistantName);
@@ -404,10 +379,10 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> CreateCustomerKnowledgeAssistantAsync(
         int serviceProviderId, int salesAgentId, int storeId, string customerKnowledgeAssistantName, string language,
         IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup,
-        Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache, SyncExecutionStats stats, CancellationToken cancellationToken)
+        Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var assistantCacheKey = BuildStoreScopedCacheKey(storeId, customerKnowledgeAssistantName);
-        var details = await BuildSourceSceneKnowledgeDetailsAsync(language, customerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
+        var details = BuildSourceSceneKnowledgeDetails(language, customerIds, sourceSceneLookup, stats);
         Log.Information("Assistant add request. Name={AssistantName}, DetailCount={DetailCount}", customerKnowledgeAssistantName, details.Count);
 
         var created = await _mediator.SendAsync<AddAiSpeechAssistantCommand, AddAiSpeechAssistantResponse>(new AddAiSpeechAssistantCommand
@@ -430,9 +405,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         return assistant;
     }
     
-    private async Task<List<AiSpeechAssistantKnowledgeDetailDto>> BuildSourceSceneKnowledgeDetailsAsync(
+    private List<AiSpeechAssistantKnowledgeDetailDto> BuildSourceSceneKnowledgeDetails(
         string language, IReadOnlyList<string> customerIds,
-        SourceSceneLookup sourceSceneLookup, SyncExecutionStats stats, CancellationToken cancellationToken)
+        SourceSceneLookup sourceSceneLookup, AiResourceSyncExecutionStatsDto stats)
     {
         var scene = ResolveSourceScene(sourceSceneLookup, language);
         
@@ -484,7 +459,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         Dictionary<string, Agent> salesAgentCache,
         Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache, SourceSceneLookup sourceSceneLookup,
         List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
-        HashSet<int> claimedAssistantIds, SyncExecutionStats stats, CancellationToken cancellationToken)
+        HashSet<int> claimedAssistantIds, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         Log.Information(
             "Assistant resolve. Name={AssistantName}, StoreId={TargetStoreId}, Customers={CustomerIds}, Lang={Language}",
@@ -628,7 +603,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     }
 
     private async Task RenameCustomerAssistantAsync(
-        CrmAutoSyncAssistantLocationDto assistantLocation, string assistantName, SyncExecutionStats stats, CancellationToken cancellationToken)
+        CrmAutoSyncAssistantLocationDto assistantLocation, string assistantName, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(assistantLocation.AssistantId, cancellationToken).ConfigureAwait(false);
         if (assistant == null || string.Equals(assistant.Name, assistantName, StringComparison.OrdinalIgnoreCase))
@@ -652,7 +627,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         SourceSceneLookup sourceSceneLookup,
         List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
         HashSet<int> claimedAssistantIds,
-        SyncExecutionStats stats,
+        AiResourceSyncExecutionStatsDto stats,
         CancellationToken cancellationToken)
     {
         var processedTargetGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -723,7 +698,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
 
     private async Task ReconcileInactiveCustomerAssistantsAsync(
         HashSet<string> activeCustomerIds, List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants, HashSet<int> claimedAssistantIds,
-        SyncExecutionStats stats, CancellationToken cancellationToken)
+        AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         foreach (var assistant in existingCrmAssistants.Where(x => !claimedAssistantIds.Contains(x.AssistantId)))
         {
@@ -773,7 +748,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     }
 
     private async Task TransferCustomerAssistantToStoreAsync(
-        CrmAutoSyncAssistantLocationDto assistantLocation, int targetStoreId, SyncExecutionStats stats, CancellationToken cancellationToken)
+        CrmAutoSyncAssistantLocationDto assistantLocation, int targetStoreId, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var posAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(assistantLocation.AgentId, cancellationToken).ConfigureAwait(false);
 
@@ -834,18 +809,18 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             : null;
     }
 
-    private static void RecordCreatedStore(SyncExecutionStats stats, int storeId, string storeName)
+    private static void RecordCreatedStore(AiResourceSyncExecutionStatsDto stats, int storeId, string storeName)
     {
-        stats.CreatedStores.Add(new SyncCrmSalesAutoCreateStoreChangeDto
+        stats.CreatedStores.Add(new AiResourceSyncCreateStoreChangeDto
         {
             StoreId = storeId,
             StoreName = storeName
         });
     }
 
-    private static void RecordCreatedAgent(SyncExecutionStats stats, int agentId, int storeId, string agentName)
+    private static void RecordCreatedAgent(AiResourceSyncExecutionStatsDto stats, int agentId, int storeId, string agentName)
     {
-        stats.CreatedAgents.Add(new SyncCrmSalesAutoCreateAgentChangeDto
+        stats.CreatedAgents.Add(new AiResourceSyncCreateAgentChangeDto
         {
             AgentId = agentId,
             StoreId = storeId,
@@ -853,9 +828,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         });
     }
 
-    private static void RecordCreatedAssistant(SyncExecutionStats stats, int assistantId, int? storeId, int? agentId, string assistantName)
+    private static void RecordCreatedAssistant(AiResourceSyncExecutionStatsDto stats, int assistantId, int? storeId, int? agentId, string assistantName)
     {
-        stats.CreatedAssistants.Add(new SyncCrmSalesAutoCreateAssistantChangeDto
+        stats.CreatedAssistants.Add(new AiResourceSyncCreateAssistantChangeDto
         {
             AssistantId = assistantId,
             StoreId = storeId,
@@ -864,9 +839,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         });
     }
 
-    private static void RecordTransferredAssistant(SyncExecutionStats stats, int assistantId, int? storeId, int? agentId, string assistantName, int? previousStoreId)
+    private static void RecordTransferredAssistant(AiResourceSyncExecutionStatsDto stats, int assistantId, int? storeId, int? agentId, string assistantName, int? previousStoreId)
     {
-        stats.TransferredAssistants.Add(new SyncCrmSalesAutoCreateAssistantChangeDto
+        stats.TransferredAssistants.Add(new AiResourceSyncCreateAssistantChangeDto
         {
             AssistantId = assistantId,
             StoreId = storeId,
@@ -876,9 +851,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         });
     }
 
-    private static void RecordRenamedAssistant(SyncExecutionStats stats, int assistantId, int? storeId, int? agentId, string assistantName, string previousAssistantName)
+    private static void RecordRenamedAssistant(AiResourceSyncExecutionStatsDto stats, int assistantId, int? storeId, int? agentId, string assistantName, string previousAssistantName)
     {
-        stats.RenamedAssistants.Add(new SyncCrmSalesAutoCreateAssistantChangeDto
+        stats.RenamedAssistants.Add(new AiResourceSyncCreateAssistantChangeDto
         {
             AssistantId = assistantId,
             StoreId = storeId,
@@ -888,9 +863,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         });
     }
 
-    private static void RecordDeactivatedAssistant(SyncExecutionStats stats, int assistantId, int? storeId, int? agentId, string assistantName)
+    private static void RecordDeactivatedAssistant(AiResourceSyncExecutionStatsDto stats, int assistantId, int? storeId, int? agentId, string assistantName)
     {
-        stats.DeactivatedAssistants.Add(new SyncCrmSalesAutoCreateAssistantChangeDto
+        stats.DeactivatedAssistants.Add(new AiResourceSyncCreateAssistantChangeDto
         {
             AssistantId = assistantId,
             StoreId = storeId,
@@ -899,7 +874,26 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         });
     }
 
-    private async Task RecordSyncRunAsync(SyncCrmSalesAutoCreateCommand command, SyncExecutionStats stats, bool isInitialRelease, bool isSuccess, string errorMessage, CancellationToken cancellationToken)
+    private static void MergeStats(AiResourceSyncExecutionStatsDto target, AiResourceSyncExecutionStatsDto source)
+    {
+        target.CreatedStoreCount += source.CreatedStoreCount;
+        target.CreatedAgentCount += source.CreatedAgentCount;
+        target.CreatedAssistantCount += source.CreatedAssistantCount;
+        target.CreatedKnowledgeCount += source.CreatedKnowledgeCount;
+        target.AppliedSceneCount += source.AppliedSceneCount;
+        target.TransferredAssistantCount += source.TransferredAssistantCount;
+        target.DeactivatedAssistantCount += source.DeactivatedAssistantCount;
+
+        target.CreatedStores.AddRange(source.CreatedStores);
+        target.CreatedAgents.AddRange(source.CreatedAgents);
+        target.CreatedAssistants.AddRange(source.CreatedAssistants);
+        target.TransferredAssistants.AddRange(source.TransferredAssistants);
+        target.RenamedAssistants.AddRange(source.RenamedAssistants);
+        target.DeactivatedAssistants.AddRange(source.DeactivatedAssistants);
+        target.Warnings.AddRange(source.Warnings);
+    }
+
+    public async Task RecordSyncRunAsync(AiResourceSyncCommand command, AiResourceSyncExecutionStatsDto stats, bool isInitialRelease, bool isSuccess, string errorMessage, CancellationToken cancellationToken)
     {
         var details = stats == null
             ? null
@@ -933,7 +927,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         await _salesDataProvider.AddCrmSalesAutoSyncRunAsync(run, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task SendNotifyAsync(bool isSuccess, CancellationToken cancellationToken)
+    public async Task SendNotifyAsync(bool isSuccess, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_salesAutoCreateSetting.NotifyRobotUrl))
             return;

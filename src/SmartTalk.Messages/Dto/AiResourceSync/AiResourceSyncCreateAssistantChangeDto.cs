@@ -1,6 +1,6 @@
 namespace SmartTalk.Messages.Dto.SalesAutoCreate;
 
-public class SyncCrmSalesAutoCreateAssistantChangeDto
+public class AiResourceSyncCreateAssistantChangeDto
 {
     public int AssistantId { get; set; }
 
