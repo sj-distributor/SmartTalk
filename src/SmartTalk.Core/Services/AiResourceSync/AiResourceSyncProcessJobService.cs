@@ -12,7 +12,7 @@ public partial interface IAiResourceSyncProcessJobService: IScopedDependency
 {
     [Semaphore(HangfireConstants.SemaphoreSyncCrmSalesAutoCreate)]
     
-    Task AiResourceSyncAsync (SchedulingSyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken);
+    Task AiResourceSyncAsync (SchedulingAiResourceSyncCommand command, CancellationToken cancellationToken);
     
     Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken);
 }
@@ -29,7 +29,7 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
     private const int MaxSyncAttempts = 3;
     private const int RetryDelaySeconds = 300;
 
-    public async Task AiResourceSyncAsync(SchedulingSyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken)
+    public async Task AiResourceSyncAsync(SchedulingAiResourceSyncCommand command, CancellationToken cancellationToken)
     { 
        await ExecuteSyncCrmSalesAutoCreateAsync(new AiResourceSyncCommand(), new List<CrmSalesAutoSyncCustomerDto>(), cancellationToken).ConfigureAwait(false);
     }
