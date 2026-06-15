@@ -48,8 +48,6 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
     
-    Task UpdateKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default);
-
     Task DeleteKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -393,7 +391,25 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
+    
+    public async Task UpdateKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> items, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (items is { Count: > 0 })
+            await _repository.UpdateAllAsync(items, cancellationToken).ConfigureAwait(false);
 
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (knowledges.Count != 0)
+            await _repository.DeleteAllAsync(knowledges, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
     public async Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, AutoAddLanguage? language = null, bool? isActive = null, CancellationToken cancellationToken = default)
     {
         var query = _repository.Query<KnowledgeSceneLanguageMapping>();
@@ -429,32 +445,6 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
     {
         if (mappings.Count != 0)
             await _repository.UpdateAllAsync(mappings, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task UpdateKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.UpdateAsync(knowledge, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task UpdateKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> items, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        if (items is { Count: > 0 })
-            await _repository.UpdateAllAsync(items, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task DeleteKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        if (knowledges.Count != 0)
-            await _repository.DeleteAllAsync(knowledges, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

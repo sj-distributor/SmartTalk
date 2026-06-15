@@ -1247,5 +1247,4 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
                 .ToList()
         };
     }
-
 }
