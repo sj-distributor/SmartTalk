@@ -1,6 +1,5 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using SmartTalk.Core.Constants;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.AiSpeechAssistant;
