@@ -1,10 +1,12 @@
 using Mediator.Net;
 using Newtonsoft.Json;
 using Serilog;
+using Hangfire.Throttling;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Agents;
@@ -33,6 +35,7 @@ public interface ISalesAutoCreateService : IScopedDependency
 {
     Task<SyncCrmSalesAutoCreateResponse> SyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken);
 
+    [Semaphore(HangfireConstants.SemaphoreSyncCrmSalesAutoCreate)]
     Task ExecuteSyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken);
 }
 
@@ -40,7 +43,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
 {
     private record SyncExecutionResult(SyncCrmSalesAutoCreateResponseData Data, SyncExecutionStats Stats, bool IsInitialRelease);
     private record SalesKnowledgeSyncTask(string StoreName, CrmSalesAutoSyncCustomerDto SeedCustomer, CrmSalesAutoSyncCustomerGroup MergedGroup);
-    private record SourceSceneLookup(Dictionary<AutoAddLanguage, KnowledgeScene> MappingScenes);
+    private record SourceSceneLookup(Dictionary<AutoAddLanguage, KnowledgeScene> MappingScenes, Dictionary<int, List<KnowledgeSceneItem>> SceneItems);
     private class SyncExecutionStats
     {
         public int TotalCount { get; set; }
@@ -441,7 +444,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             return new List<AiSpeechAssistantKnowledgeDetailDto>();
         }
 
-        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken).ConfigureAwait(false);
+        if (!sourceSceneLookup.SceneItems.TryGetValue(scene.Id, out var sceneItems))
+            sceneItems = new List<KnowledgeSceneItem>();
+
         if (sceneItems.Count == 0)
         {
             Log.Warning("Scene empty. SceneId={SceneId}, Customers={CustomerIds}, Lang={Language}",
@@ -502,7 +507,6 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                 stats.TransferredAssistantCount++;
             }
             
-            await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(exactMatch.AssistantId, cancellationToken).ConfigureAwait(false);
             return;
         }
         
@@ -535,7 +539,6 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                 sameStoreMatch.Name = assistantName;
             }
 
-            await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(sameStoreMatch.AssistantId, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -552,7 +555,6 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                 crossStoreMatch.StoreId = targetStoreId;
                 stats.TransferredAssistantCount++;
                 
-                await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(crossStoreMatch.AssistantId, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -801,7 +803,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
                 x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
 
         if (mappingSceneIds.Count == 0)
-            return new SourceSceneLookup(new Dictionary<AutoAddLanguage, KnowledgeScene>());
+            return new SourceSceneLookup(new Dictionary<AutoAddLanguage, KnowledgeScene>(), new Dictionary<int, List<KnowledgeSceneItem>>());
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(
             mappingSceneIds.Values.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
@@ -809,8 +811,15 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         var mappingScenes = mappingSceneIds
             .Where(x => sceneMap.ContainsKey(x.Value))
             .ToDictionary(x => x.Key, x => sceneMap[x.Value]);
+        var sceneItemsLookup = new Dictionary<int, List<KnowledgeSceneItem>>();
 
-        return new SourceSceneLookup(mappingScenes);
+        foreach (var sceneId in mappingScenes.Values.Select(x => x.Id).Distinct())
+        {
+            var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(sceneId, cancellationToken).ConfigureAwait(false);
+            sceneItemsLookup[sceneId] = sceneItems;
+        }
+
+        return new SourceSceneLookup(mappingScenes, sceneItemsLookup);
     }
 
     private KnowledgeScene ResolveSourceScene(SourceSceneLookup sourceSceneLookup, string language)

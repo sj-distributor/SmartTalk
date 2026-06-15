@@ -23,4 +23,6 @@ public static class HangfireConstants
     public const string InternalHostingCaCheKnowledgeVariable = "cache-knowledge-variable";
     
     public const string SemaphoreHiFoodCacheCustomerItems = "semaphore-hi-food-cache-customer-items";
+
+    public const string SemaphoreSyncCrmSalesAutoCreate = "semaphore-sync-crm-sales-auto-create";
 }
