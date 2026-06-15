@@ -24,4 +24,14 @@ public static class CrmToAutoAddLanguageConverter
 
         return AliasLookup.TryGetValue(rawLanguage.Trim(), out language);
     }
+
+    public static string NormalizeToken(string rawLanguage)
+    {
+        if (TryResolve(rawLanguage, out var language))
+            return language.ToString();
+
+        return string.IsNullOrWhiteSpace(rawLanguage)
+            ? AutoAddLanguage.English.ToString()
+            : rawLanguage.Trim();
+    }
 }

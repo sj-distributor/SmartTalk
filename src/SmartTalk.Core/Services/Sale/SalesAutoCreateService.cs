@@ -33,7 +33,7 @@ public interface ISalesAutoCreateService : IScopedDependency
 {
     Task<SyncCrmSalesAutoCreateResponse> SyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken);
 
-    Task ExecuteSyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken);
+    Task ExecuteSyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken);
 }
 
 public class SalesAutoCreateService : ISalesAutoCreateService
@@ -105,7 +105,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
     {
         var customers = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        _backgroundJobClient.Enqueue<ISalesAutoCreateService>(x => x.ExecuteSyncCrmSalesAutoCreateAsync(command, CancellationToken.None));
+        Log.Information("CRM sync start. Customers={CustomerCount}", customers.Count);
+
+        _backgroundJobClient.Enqueue<ISalesAutoCreateService>(x => x.ExecuteSyncCrmSalesAutoCreateAsync(command, customers, CancellationToken.None));
 
         return new SyncCrmSalesAutoCreateResponse
         {
@@ -116,7 +118,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         };
     }
 
-    public async Task ExecuteSyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken)
+    public async Task ExecuteSyncCrmSalesAutoCreateAsync(SyncCrmSalesAutoCreateCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken)
     {
         Exception lastException = null;
 
@@ -124,7 +126,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         {
             try
             {
-                var executionResult = await SyncInternalAsync(command, cancellationToken).ConfigureAwait(false);
+                var executionResult = await SyncInternalAsync(command, syncCustomers, cancellationToken).ConfigureAwait(false);
 
                 await RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, true, null, cancellationToken).ConfigureAwait(false);
 
@@ -155,11 +157,13 @@ public class SalesAutoCreateService : ISalesAutoCreateService
         throw lastException!;
     }
 
-    private async Task<SyncExecutionResult> SyncInternalAsync(SyncCrmSalesAutoCreateCommand command, CancellationToken cancellationToken)
+    private async Task<SyncExecutionResult> SyncInternalAsync(SyncCrmSalesAutoCreateCommand command, List<CrmSalesAutoSyncCustomerDto> customers, CancellationToken cancellationToken)
     {
-        var customers = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("CRM sync start. Customers={CustomerCount}", customers.Count);
+        if (!customers.Any())
+        { 
+            customers = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            Log.Information("auto CRM sync start. Customers={CustomerCount}", customers.Count); 
+        }
         
         var activeCustomerIds = CrmSalesAutoSyncGrouping.BuildActiveCustomerIds(customers);
 
@@ -253,11 +257,14 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             Description = $"Auto created from CRM sync for {customer.SalesName}",
             PhoneNumbers = new List<string> { "0123456789" },
             Latitude = "37.4249177",
-            Longitude = "-121.8891812"
+            Longitude = "-121.8891812",
         }, cancellationToken).ConfigureAwait(false);
         
         stats.CreatedStoreCount++;
         store = await _posDataProvider.GetPosCompanyStoreAsync(id: createResponse.Data.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        store.IsTaskEnabled = true;
+        store.Timezone = "America/Los_Angeles";
+        await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
         storeMap[storeName] = store;
         RecordCreatedStore(stats, store.Id, storeName);
         
@@ -311,7 +318,7 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             StoreId = storeId,
             Name = salesAgentName,
             TransferCallNumber = "",
-            Voice = "ash",
+            Voice = "alloy",
             WaitInterval = 2500,
             Brief = $"Auto created from CRM sync for {salesAgentName}",
             AgentType = AgentType.Sales,
@@ -379,9 +386,10 @@ public class SalesAutoCreateService : ISalesAutoCreateService
 
         Log.Information("Assistant create. StoreId={StoreId}, AgentId={AgentId}, Name={AssistantName}, Customers={CustomerIds}, Lang={Language}",
             storeId, salesAgentId, customerKnowledgeAssistantName, string.Join("/", customerIds), language ?? "英文");
+      
         assistant = await CreateCustomerKnowledgeAssistantAsync(
             serviceProviderId, salesAgentId, storeId, customerKnowledgeAssistantName,
-            string.IsNullOrWhiteSpace(language) ? "英文" : language.Trim(), customerIds, sourceSceneLookup,
+            CrmToAutoAddLanguageConverter.NormalizeToken(language), customerIds, sourceSceneLookup,
             customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
 
         stats.CreatedAssistantCount++;
@@ -405,9 +413,9 @@ public class SalesAutoCreateService : ISalesAutoCreateService
             AgentId = salesAgentId,
             AssistantName = customerKnowledgeAssistantName,
             Greetings = _salesAutoCreateSetting.DefaultAssistantGreetings,
-            AgentType = AgentType.Agent,
+            AgentType = AgentType.Sales,
             SourceSystem = AgentSourceSystem.CrmAutoSync,
-            IsDisplay = false,
+            IsDisplay = true,
             ModelLanguage = language,
             Channels = new List<AiSpeechAssistantChannel> { AiSpeechAssistantChannel.PhoneChat },
             Details = details

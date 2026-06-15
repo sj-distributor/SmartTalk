@@ -832,6 +832,7 @@ public partial class AiSpeechAssistantService
             AgentType.Assistant => await InitialAssistantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.Restaurant => await InitialRestaurantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.PosCompanyStore => await InitialPosCompanyStoreInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            AgentType.Sales => await InitialAiAgentInternalAsync(command, cancellationToken).ConfigureAwait(false),
             _ => throw new NotSupportedException(nameof(command.AgentType))
         };
         

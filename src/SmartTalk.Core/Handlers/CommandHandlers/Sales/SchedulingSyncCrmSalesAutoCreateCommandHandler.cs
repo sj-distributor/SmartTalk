@@ -3,6 +3,7 @@ using Mediator.Net.Contracts;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.Sales;
+using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Handlers.CommandHandlers.Sales;
 
@@ -24,6 +25,6 @@ public class SchedulingSyncCrmSalesAutoCreateCommandHandler : ICommandHandler<Sc
         await _salesAutoCreateService.ExecuteSyncCrmSalesAutoCreateAsync(new SyncCrmSalesAutoCreateCommand
         {
             ServiceProviderId = _salesAutoCreateSetting.ServiceProviderId
-        }, cancellationToken).ConfigureAwait(false);
+        }, new List<CrmSalesAutoSyncCustomerDto>(), cancellationToken).ConfigureAwait(false);
     }
 }

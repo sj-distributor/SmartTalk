@@ -201,7 +201,7 @@ public class SalesAutoCreateServiceTests
         {
             IsManual = true,
             ServiceProviderId = 123
-        }, CancellationToken.None);
+        }, new List<CrmSalesAutoSyncCustomerDto>(), CancellationToken.None);
 
         await mediator.Received(1).SendAsync<AddAiSpeechAssistantCommand, AddAiSpeechAssistantResponse>(
             Arg.Is<AddAiSpeechAssistantCommand>(x =>

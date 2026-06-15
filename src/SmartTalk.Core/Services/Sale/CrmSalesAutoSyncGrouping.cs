@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
@@ -38,7 +39,7 @@ public static class CrmSalesAutoSyncGrouping
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToList();
 
-        var lang = string.IsNullOrWhiteSpace(language) ? "英文" : language;
+        var lang = CrmToAutoAddLanguageConverter.NormalizeToken(language);
         return ids.Count == 0 ? $"({lang})" : $"{string.Join("/", ids)} ({lang})";
     }
 
