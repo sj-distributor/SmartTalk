@@ -16,6 +16,7 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.AiKids;
@@ -27,6 +28,8 @@ public interface IAiKidRealtimeServiceV2 : IScopedDependency
 
 public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 {
+    private static readonly TimeSpan TestLinkMaxSessionDuration = TimeSpan.FromMinutes(30);
+
     private readonly ISmartiesClient _smartiesClient;
     private readonly IAttachmentService _attachmentService;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
@@ -76,6 +79,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             WebSocket = command.WebSocket,
             Region = command.Region,
             EnableRecording = true,
+            MaxSessionDuration = orderRecordType == PhoneOrderRecordType.TestLink ? TestLinkMaxSessionDuration : (TimeSpan?)null,
             IdleFollowUp = timer != null
                 ? new RealtimeSessionIdleFollowUp
                 {

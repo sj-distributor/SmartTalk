@@ -6,10 +6,6 @@ namespace SmartTalk.Core.Services.AiSpeechAssistant;
 public partial interface IAiSpeechAssistantDataProvider
 {
     Task<List<AiSpeechAssistantDescription>> GetAiSpeechAssistantDescriptionsAsync(List<string> modelIds = null, CancellationToken cancellationToken = default);
-    
-    Task<AiSpeechAssistantDescription> GetAiSpeechAssistantDescriptionAsync(string modelIds, CancellationToken cancellationToken = default);
-
-    Task<bool> IsAiSpeechAssistantDescriptionExistedAsync(string itemDescription, CancellationToken cancellationToken = default);
 
     Task AddAiSpeechAssistantDescriptionsAsync(List<AiSpeechAssistantDescription> modelDescriptions, bool forceSave = true, CancellationToken cancellationToken = default);
 
@@ -30,20 +26,6 @@ public partial class AiSpeechAssistantDataProvider
         }
 
         return await query.OrderBy(x => x.ModelId).ToListAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<AiSpeechAssistantDescription> GetAiSpeechAssistantDescriptionAsync(string modelValue, CancellationToken cancellationToken = default)
-    {
-        var query = await _repository.Query<AiSpeechAssistantDescription>().FirstOrDefaultAsync(x => x.ModelId == modelValue, cancellationToken).ConfigureAwait(false);
-
-        return query;
-    }
-
-    public async Task<bool> IsAiSpeechAssistantDescriptionExistedAsync(string itemDescription, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(itemDescription)) return false;
-
-        return await _repository.Query<AiSpeechAssistantDescription>().AnyAsync(x => x.ModelValue ==itemDescription.Trim(), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task AddAiSpeechAssistantDescriptionsAsync(List<AiSpeechAssistantDescription> modelDescriptions, bool forceSave = true, CancellationToken cancellationToken = default)

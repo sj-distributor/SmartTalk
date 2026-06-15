@@ -125,7 +125,13 @@ public partial class RealtimeAiService
             await SafeExecuteAsync(
                 () => _ctx.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close acknowledged", CancellationToken.None), "acknowledge client close");
         else
+        {
             Log.Warning("[RealtimeAi] Client disconnected abnormally, SessionId: {SessionId}, WebSocketState: {WebSocketState}", _ctx.SessionId, GetWebSocketStateSafe());
+
+            if (_ctx.Options.MaxSessionDuration.HasValue)
+                await SafeExecuteAsync(
+                    () => CloseClientWebSocketIfOpenAsync("Session ended"), "close client socket");
+        }
         
         await SafeExecuteAsync(
             () => DisconnectFromProviderAsync(clientIsClose ? "Client disconnected" : "Client disconnected abnormally"), "disconnect from provider");
@@ -138,6 +144,14 @@ public partial class RealtimeAiService
 
         await SafeExecuteAsync(HandleRecordingAsync, "handle recording");
         await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");
+    }
+
+    private async Task CloseClientWebSocketIfOpenAsync(string reason)
+    {
+        if (_ctx.WebSocket == null) return;
+
+        if (_ctx.WebSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            await _ctx.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, CancellationToken.None).ConfigureAwait(false);
     }
 
     private enum AudioSource { Client, Provider }
