@@ -491,7 +491,8 @@ public partial class AiSpeechAssistantConnectService
     
     private async Task ResolveItemDescriptionAsync(CancellationToken cancellationToken)
     {
-        if (!_ctx.Prompt.Contains("{HiFood_商品_术语库需求}", StringComparison.OrdinalIgnoreCase)) return;
+        if (!_ctx.Prompt.Contains("{HiFood_商品_术语库需求}", StringComparison.OrdinalIgnoreCase)
+            && !_ctx.Prompt.Contains("#{item_explain}", StringComparison.OrdinalIgnoreCase)) return;
 
         var descriptions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantDescriptionsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -502,8 +503,9 @@ public partial class AiSpeechAssistantConnectService
                     ? x.ModelValue
                     : $"{x.ModelValue}（{x.ModelDescription}）"));
 
-
-        _ctx.Prompt = _ctx.Prompt.Replace("#{HiFood_商品_术语库需求}", descriptionList)
-            .Replace("{HiFood_商品_术语库需求}", descriptionList).Replace("#{item_explain}", descriptionList);
+        _ctx.Prompt = _ctx.Prompt
+            .Replace("#{HiFood_商品_术语库需求}", descriptionList)
+            .Replace("{HiFood_商品_术语库需求}", descriptionList)
+            .Replace("#{item_explain}", descriptionList);
     }
 }
