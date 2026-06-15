@@ -169,6 +169,12 @@ public class RealtimeSessionOptions
     public bool EnableRecording { get; set; }
 
     /// <summary>
+    /// Optional hard cap for the entire realtime session. When reached, the service
+    /// closes the client WebSocket and runs the normal session cleanup flow.
+    /// </summary>
+    public TimeSpan? MaxSessionDuration { get; set; }
+
+    /// <summary>
     /// Optional idle follow-up configuration. When set, AI will proactively
     /// send a follow-up message if the user stays silent after an AI turn.
     /// Null to disable.
