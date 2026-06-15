@@ -1,12 +1,7 @@
-
-
-using Hangfire;
 using Hangfire.Throttling;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Commands.Sales;
 using SmartTalk.Messages.Dto.Sales;
