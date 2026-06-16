@@ -1,5 +1,6 @@
 using Mediator.Net.Context;
 using Mediator.Net.Contracts;
+using Serilog;
 using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
@@ -20,6 +21,8 @@ public class AiResourceSyncEventHandler : IEventHandler<AiResourceSyncEvent>
 
     public async Task Handle(IReceiveContext<AiResourceSyncEvent> context, CancellationToken cancellationToken)
     {
+        Log.Information("Start AiResourceSyncEventHandler");
+        
         var (customers, totalCount) = await _crmClient.GetSalesAutoSyncCustomersAsync(isGetTotalCount: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         _backgroundJobClient.Enqueue<IAiResourceSyncProcessJobService>(
