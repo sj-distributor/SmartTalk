@@ -152,7 +152,7 @@ public partial class PosService : IPosService
     {
         var store = _mapper.Map<CompanyStore>(command);
 
-        store.CreatedBy = command.CreatedBy ?? _currentUser.Id;
+        store.CreatedBy = command.CreatedBy ?? _currentUser.Id ?? CurrentUsers.InternalUser.Id;
 
         await _posDataProvider.AddPosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
         
