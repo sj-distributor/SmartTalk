@@ -815,7 +815,7 @@ public partial class AiSpeechAssistantService
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
-            CreatedBy = command.CreatedBy ?? _currentUser.Id,
+            CreatedBy = command.CreatedBy ?? _currentUser.Id ?? CurrentUsers.InternalUser.Id,
             ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
             ModelProvider = RealtimeAiProvider.OpenAi,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
@@ -955,7 +955,7 @@ public partial class AiSpeechAssistantService
             ModelLanguage = command.ModelLanguage,
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
-            CreatedBy = command.CreatedBy ?? _currentUser.Id,
+            CreatedBy = command.CreatedBy ?? _currentUser.Id ?? CurrentUsers.InternalUser.Id,
             Prompt = string.Empty
         };
 

@@ -317,6 +317,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     private async Task EnsureMergedCustomerKnowledgeAsync(
         int serviceProviderId,
+        int? initiatedByUserId,
         int companyId,
         int storeId,
         int salesAgentId,
@@ -338,7 +339,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             customerAssistantName, storeId, salesAgentId, mergedGroup.SalesKey, string.Join("/", mergedGroup.CustomerIds), mergedGroup.Language ?? "英文");
       
         await ResolveMergedCustomerAssistantAsync(
-            serviceProviderId, companyId, storeId, salesAgentId, customerAssistantName, mergedGroup, customerIdLookup,
+            serviceProviderId, initiatedByUserId, companyId, storeId, salesAgentId, customerAssistantName, mergedGroup, customerIdLookup,
             storeMap, salesAgentCache, customerKnowledgeAssistantCache, sourceSceneLookup,
             existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
 
@@ -346,6 +347,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     private async Task<Core.Domain.AISpeechAssistant.AiSpeechAssistant> EnsureCustomerKnowledgeAssistantAsync(
         int serviceProviderId,
+        int? initiatedByUserId,
         int salesAgentId,
         int storeId,
         string customerKnowledgeAssistantName,
@@ -367,7 +369,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             storeId, salesAgentId, customerKnowledgeAssistantName, string.Join("/", customerIds), language ?? "英文");
       
         assistant = await CreateCustomerKnowledgeAssistantAsync(
-            serviceProviderId, salesAgentId, storeId, customerKnowledgeAssistantName,
+            serviceProviderId, initiatedByUserId, salesAgentId, storeId, customerKnowledgeAssistantName,
             CrmToAutoAddLanguageConverter.NormalizeToken(language), customerIds, sourceSceneLookup,
             customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
 
@@ -378,7 +380,7 @@ public class AiResourceSyncService : IAiResourceSyncService
     }
 
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> CreateCustomerKnowledgeAssistantAsync(
-        int serviceProviderId, int salesAgentId, int storeId, string customerKnowledgeAssistantName, string language,
+        int serviceProviderId, int? initiatedByUserId, int salesAgentId, int storeId, string customerKnowledgeAssistantName, string language,
         IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup,
         Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
@@ -390,7 +392,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         {
             ServiceProviderId = serviceProviderId,
             AgentId = salesAgentId,
-            CreatedBy = command.InitiatedByUserId,
+            CreatedBy = initiatedByUserId,
             AssistantName = customerKnowledgeAssistantName,
             Greetings = _salesAutoCreateSetting.DefaultAssistantGreetings,
             AgentType = AgentType.Sales,
@@ -456,7 +458,7 @@ public class AiResourceSyncService : IAiResourceSyncService
     }
 
     private async Task ResolveMergedCustomerAssistantAsync(
-        int serviceProviderId, int companyId, int targetStoreId, int salesAgentId, string assistantName, CrmSalesAutoSyncCustomerGroup mergedGroup,
+        int serviceProviderId, int? initiatedByUserId, int companyId, int targetStoreId, int salesAgentId, string assistantName, CrmSalesAutoSyncCustomerGroup mergedGroup,
         IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup, Dictionary<string, CompanyStore> storeMap,
         Dictionary<string, Agent> salesAgentCache,
         Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache, SourceSceneLookup sourceSceneLookup,
@@ -503,7 +505,7 @@ public class AiResourceSyncService : IAiResourceSyncService
                     sameStoreMatch.AssistantId, string.Join("/", existingIds), string.Join("/", desiredIds), string.Join("/", removedCustomerIds));
                 
                 await CopySplitCustomersBeforeShrinkAsync(
-                    serviceProviderId, removedCustomerIds,
+                    serviceProviderId, initiatedByUserId, removedCustomerIds,
                     mergedGroup.SalesKey, customerIdLookup, storeMap, salesAgentCache, customerKnowledgeAssistantCache,
                     sourceSceneLookup,
                     existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
@@ -542,7 +544,7 @@ public class AiResourceSyncService : IAiResourceSyncService
                     crossStoreMatch.AssistantId, crossStoreMatch.Name, assistantName);
                
                 var copiedAssistant = await EnsureCustomerKnowledgeAssistantAsync(
-                    serviceProviderId, salesAgentId, targetStoreId, assistantName, mergedGroup.Language,
+                    serviceProviderId, initiatedByUserId, salesAgentId, targetStoreId, assistantName, mergedGroup.Language,
                     mergedGroup.CustomerIds, sourceSceneLookup,
                     customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
                
@@ -563,7 +565,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             "Assistant match: none. Name={AssistantName}, StoreId={TargetStoreId}",
             assistantName, targetStoreId);
         var createdAssistant = await EnsureCustomerKnowledgeAssistantAsync(
-            serviceProviderId, salesAgentId, targetStoreId, assistantName, mergedGroup.Language,
+            serviceProviderId, initiatedByUserId, salesAgentId, targetStoreId, assistantName, mergedGroup.Language,
             mergedGroup.CustomerIds, sourceSceneLookup,
             customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
         
@@ -621,6 +623,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     private async Task CopySplitCustomersBeforeShrinkAsync(
         int serviceProviderId,
+        int? initiatedByUserId,
         IEnumerable<string> removedCustomerIds,
         string currentSalesKey, IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
         Dictionary<string, CompanyStore> storeMap,
@@ -680,7 +683,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             
             var targetAssistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(targetGroup.CustomerIds, targetGroup.Language);
             var copiedAssistant = await EnsureCustomerKnowledgeAssistantAsync(
-                serviceProviderId, targetSalesAgent.Id, targetStore.Id, targetAssistantName, 
+                serviceProviderId, initiatedByUserId, targetSalesAgent.Id, targetStore.Id, targetAssistantName, 
                 targetGroup.Language, targetGroup.CustomerIds, sourceSceneLookup,
                 customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
 
