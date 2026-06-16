@@ -1,5 +1,6 @@
 using System.Text;
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
 using SmartTalk.Messages.Dto.AutoTest;
