@@ -9,9 +9,9 @@ public static class CrmToAutoAddLanguageConverter
         {
             ["中文"] = AutoAddLanguage.Chinese,
             ["英文"] = AutoAddLanguage.English,
-            ["西班牙语"] = AutoAddLanguage.Spanish,
-            ["韩语"] = AutoAddLanguage.Korean,
-            ["日语"] = AutoAddLanguage.Japanese,
+            ["西文"] = AutoAddLanguage.Spanish,
+            ["韓文"] = AutoAddLanguage.Korean,
+            ["日文"] = AutoAddLanguage.Japanese,
             ["越南语"] = AutoAddLanguage.Vietnamese,
             ["泰国语"] = AutoAddLanguage.Thai,
         };
