@@ -150,6 +150,8 @@ public class CrmClient : ICrmClient
 
     public async Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, bool isGetTotalCount = true, CancellationToken cancellationToken = default)
     {
+        Log.Information("GetSalesAutoSyncCustomersAsync isGetTotalCount {@isGetTotalCount}", isGetTotalCount);
+        
         var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info";
         var headers = new Dictionary<string, string>
         {
