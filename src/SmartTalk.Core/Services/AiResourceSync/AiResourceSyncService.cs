@@ -199,7 +199,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         var seedCustomer = syncTasks.First().SeedCustomer;
 
         var store = await EnsureSalesStoreAsync(
-            seedCustomer, companyId, storeMap, stats, cancellationToken).ConfigureAwait(false);
+            seedCustomer, companyId, storeMap, command.InitiatedByUserId, stats, cancellationToken).ConfigureAwait(false);
 
         var salesAgent = await EnsureSalesAgentAsync(
             command.ServiceProviderId.Value, store.Id, salesKey, salesAgentCache, stats, cancellationToken).ConfigureAwait(false);
@@ -207,7 +207,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         foreach (var syncTask in syncTasks)
         {
             await EnsureMergedCustomerKnowledgeAsync(
-                command.ServiceProviderId.Value, companyId, store.Id, salesAgent.Id, syncTask.MergedGroup, customerIdLookup, storeMap,
+                command.ServiceProviderId.Value, command.InitiatedByUserId, companyId, store.Id, salesAgent.Id, syncTask.MergedGroup, customerIdLookup, storeMap,
                 salesAgentCache, customerKnowledgeAssistantCache, sourceSceneLookup, existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
         }
 
@@ -216,7 +216,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     private async Task<CompanyStore> EnsureSalesStoreAsync(
         CrmSalesAutoSyncCustomerDto customer, int companyId, Dictionary<string, CompanyStore> storeMap,
-        AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
+        int? initiatedByUserId, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var storeName = CrmSalesAutoSyncGrouping.BuildSalesKey(customer);
         if (storeMap.TryGetValue(storeName, out var store))
@@ -230,6 +230,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         var createResponse = await _mediator.SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(new CreateCompanyStoreCommand
         {
             CompanyId = companyId,
+            CreatedBy = initiatedByUserId,
             Names = BuildStoreNamesJson(storeName),
             Address = "625 VISTA WAY, MILPITAS, CA 95035",
             Description = $"Auto created from CRM sync for {customer.SalesName}",
@@ -389,6 +390,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         {
             ServiceProviderId = serviceProviderId,
             AgentId = salesAgentId,
+            CreatedBy = command.InitiatedByUserId,
             AssistantName = customerKnowledgeAssistantName,
             Greetings = _salesAutoCreateSetting.DefaultAssistantGreetings,
             AgentType = AgentType.Sales,

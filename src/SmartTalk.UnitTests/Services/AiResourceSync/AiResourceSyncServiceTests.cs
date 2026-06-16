@@ -99,16 +99,7 @@ public class AiResourceSyncServiceTests
             .Returns(new SmartTalk.Core.Domain.Pos.Company { Id = 1, Name = "OME" });
         posDataProvider.GetPosCompanyStoresAsync(
                 Arg.Any<List<int>>(), Arg.Any<List<int>>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new List<SmartTalk.Core.Domain.Pos.CompanyStore>
-            {
-                new()
-                {
-                    Id = 10,
-                    CompanyId = 1,
-                    CreatedDate = DateTimeOffset.UtcNow,
-                    Names = "{\"en\":{\"name\":\"Alice GroupA\"},\"cn\":{\"name\":\"Alice GroupA\"}}"
-                }
-            });
+            .Returns(new List<SmartTalk.Core.Domain.Pos.CompanyStore>());
         posDataProvider.GetPosCompanyStoreAsync(null, 10, null, null, Arg.Any<CancellationToken>())
             .Returns(new SmartTalk.Core.Domain.Pos.CompanyStore
             {
@@ -200,12 +191,14 @@ public class AiResourceSyncServiceTests
         await sut.SyncInternalAsync(new AiResourceSyncCommand
         {
             IsManual = true,
-            ServiceProviderId = 123
+            ServiceProviderId = 123,
+            InitiatedByUserId = 888
         }, new List<CrmSalesAutoSyncCustomerDto>(), CancellationToken.None);
 
         await mediator.Received(1).SendAsync<AddAiSpeechAssistantCommand, AddAiSpeechAssistantResponse>(
             Arg.Is<AddAiSpeechAssistantCommand>(x =>
                 x.AssistantName == "100 (English)" &&
+                x.CreatedBy == 888 &&
                 x.Greetings == "Hello" &&
                 x.Json == "{}" &&
                 x.Details.Count == 1 &&
@@ -213,6 +206,12 @@ public class AiResourceSyncServiceTests
                 x.Details[0].FormatType == AiSpeechAssistantKonwledgeFormatType.FAQ &&
                 x.Details[0].Content == "scene item content" &&
                 x.Details[0].FileName == "scene-item.txt"),
+            Arg.Any<CancellationToken>());
+
+        await mediator.Received(1).SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(
+            Arg.Is<CreateCompanyStoreCommand>(x =>
+                x.CompanyId == 1 &&
+                x.CreatedBy == 888),
             Arg.Any<CancellationToken>());
     }
 

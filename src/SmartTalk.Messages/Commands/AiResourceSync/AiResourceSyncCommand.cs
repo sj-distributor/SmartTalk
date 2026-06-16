@@ -7,6 +7,8 @@ namespace SmartTalk.Messages.Commands.AiResourceSync;
 public class AiResourceSyncCommand : HasServiceProviderId, ICommand
 {
     public bool IsManual { get; set; }
+
+    public int? InitiatedByUserId { get; set; }
 }
 
 public class AiResourceSyncResponse : SmartTalkResponse<AiResourceSyncResponseData>
