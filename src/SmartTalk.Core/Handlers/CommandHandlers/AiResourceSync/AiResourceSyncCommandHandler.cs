@@ -25,7 +25,7 @@ public class AiResourceSyncCommandHandler : ICommandHandler<AiResourceSyncComman
         {
             Data = new AiResourceSyncResponseData
             {
-              TotalCount = @event.CrmSalesAuto.Count
+              TotalCount = @event.TotalCount
             }
         };
     }
