@@ -16,6 +16,8 @@ public interface IOpenaiClient : IScopedDependency
     Task<byte[]> GenerateAudioChatCompletionAsync(BinaryData audioData, string prompt, string voice, CancellationToken cancellationToken);
 
     Task<string> GenerateTextChatCompletionFromAudioAsync(BinaryData audioData, string prompt, CancellationToken cancellationToken);
+
+    Task<string> TranscribeDiarizedAudioAsync(byte[] audioData, string fileName, CancellationToken cancellationToken);
 }
 
 public class OpenaiClient : IOpenaiClient
@@ -112,5 +114,36 @@ public class OpenaiClient : IOpenaiClient
         Log.Information("Analyze record to repeat order text: {RepeatOrderText}", text);
 
         return text;
+    }
+
+    public async Task<string> TranscribeDiarizedAudioAsync(byte[] audioData, string fileName, CancellationToken cancellationToken)
+    {
+        var headers = new Dictionary<string, string>
+        {
+            { "Authorization", $"Bearer {_openAiSettings.ApiKey}" }
+        };
+
+        var requestUrl = $"{_openAiSettings.BaseUrl}/v1/audio/transcriptions";
+
+        var response = await _smartTalkHttpClientFactory.PostAsMultipartAsync<string>(
+            requestUrl,
+            new Dictionary<string, string>
+            {
+                ["model"] = "gpt-4o-transcribe-diarize",
+                ["response_format"] = "diarized_json",
+                ["chunking_strategy"] = "auto"
+            },
+            new Dictionary<string, (byte[], string)>
+            {
+                ["file"] = (audioData, string.IsNullOrWhiteSpace(fileName) ? "recording.wav" : fileName)
+            },
+            cancellationToken,
+            timeout: TimeSpan.FromMinutes(10),
+            headers: headers,
+            isNeedToReadErrorContent: true).ConfigureAwait(false);
+
+        Log.Information("Diarized transcription response: {Response}", response);
+
+        return response;
     }
 }

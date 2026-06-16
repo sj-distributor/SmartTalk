@@ -23,6 +23,15 @@ public partial class RealtimeAiService
         BuildConnectSwitcher();
         BuildRecordingIfRequired();
         BuildSessionActions();
+        ApplyMaxSessionDurationIfRequired();
+    }
+
+    private void ApplyMaxSessionDurationIfRequired()
+    {
+        if (_ctx.Options.MaxSessionDuration is not { } maxSessionDuration || maxSessionDuration <= TimeSpan.Zero)
+            return;
+
+        _ctx.SessionCts.CancelAfter(maxSessionDuration);
     }
 
     private void BuildRecordingIfRequired()
