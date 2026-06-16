@@ -29,6 +29,15 @@ public class KnowledgeScenarioController : ControllerBase
         return Ok(response);
     }
 
+    [Route("folder/tree"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneFolderTreeResponse))]
+    public async Task<IActionResult> GetKnowledgeSceneFolderTreeAsync([FromQuery] GetKnowledgeSceneFolderTreeRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetKnowledgeSceneFolderTreeRequest, GetKnowledgeSceneFolderTreeResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
     [Route("folder/add"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddKnowledgeSceneFolderResponse))]
     public async Task<IActionResult> AddKnowledgeSceneFolderAsync([FromBody] AddKnowledgeSceneFolderCommand command)
