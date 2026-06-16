@@ -22,7 +22,7 @@ public partial class PhoneOrderProcessJobService
         var complaint = await ExtractComplaintFeedbackAsync(reportText, cancellationToken).ConfigureAwait(false);
         var customerIds = ParseCustomerIds(aiSpeechAssistant?.Name);
         var orders = customerIds.Count > 0
-            ? await GetComplaintInvoiceOrdersAsync(customerIds, 7, cancellationToken).ConfigureAwait(false)
+            ? await GetComplaintInvoiceOrdersAsync(customerIds, cancellationToken).ConfigureAwait(false)
             : new List<ComplaintInvoiceOrder>();
         var matchResult = MatchComplaintInvoiceOrders(complaint, orders, customerIds.Count > 0);
 
@@ -77,35 +77,31 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task<List<ComplaintInvoiceOrder>> GetComplaintInvoiceOrdersAsync(List<string> customerIds, int daysWindow, CancellationToken cancellationToken)
+    private async Task<List<ComplaintInvoiceOrder>> GetComplaintInvoiceOrdersAsync(List<string> customerIds, CancellationToken cancellationToken)
     {
+        var normalizedCustomerIds = NormalizeCustomerIdsForOrderQuery(customerIds);
+
         try
         {
             var response = await _salesClient.GetOrderInformationByCustomerIdAsync(
-                new GetOrderInformationByCustomerIdRequestDto { CustomerIds = customerIds },
+                new GetOrderInformationByCustomerIdRequestDto { CustomerIds = normalizedCustomerIds },
                 cancellationToken).ConfigureAwait(false);
 
-            return BuildComplaintInvoiceOrders(response?.Data, daysWindow);
+            return BuildComplaintInvoiceOrders(response?.Data);
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Get complaint invoice orders failed. CustomerIds={CustomerIds}", string.Join(",", customerIds));
+            Log.Warning(ex, "Get complaint invoice orders failed. CustomerIds={CustomerIds}", string.Join(",", normalizedCustomerIds));
             return new List<ComplaintInvoiceOrder>();
         }
     }
 
-    private static List<ComplaintInvoiceOrder> BuildComplaintInvoiceOrders(List<GetOrderInformationByCustomerIdItemDto> items, int daysWindow)
+    private static List<ComplaintInvoiceOrder> BuildComplaintInvoiceOrders(List<GetOrderInformationByCustomerIdItemDto> items)
     {
         if (items == null || items.Count == 0) return new List<ComplaintInvoiceOrder>();
 
-        var pacificToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, PstTimeZone.Get()).Date;
-        var startDate = pacificToday.AddDays(-daysWindow + 1);
-
         return items
-            .Where(x => !string.IsNullOrWhiteSpace(x.InvNumber) &&
-                        x.InvDate.HasValue &&
-                        x.InvDate.Value.Date >= startDate &&
-                        x.InvDate.Value.Date <= pacificToday)
+            .Where(x => !string.IsNullOrWhiteSpace(x.InvNumber))
             .GroupBy(x => x.InvNumber.Trim())
             .Select(g =>
             {
@@ -222,6 +218,16 @@ public partial class PhoneOrderProcessJobService
         return string.IsNullOrWhiteSpace(assistantName)
             ? new List<string>()
             : assistantName.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().ToList();
+    }
+
+    private static List<string> NormalizeCustomerIdsForOrderQuery(IEnumerable<string> customerIds)
+    {
+        return (customerIds ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Select(x => char.IsDigit(x[0]) && x.Length < 10 ? x.PadLeft(10, '0') : x)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static string NormalizeInvoiceNumber(string value)
