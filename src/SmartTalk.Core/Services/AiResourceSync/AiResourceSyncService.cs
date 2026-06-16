@@ -28,6 +28,7 @@ using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
+using SmartTalk.Messages.Events.AiResourceSync;
 
 namespace SmartTalk.Core.Services.AiResourceSync;
 
@@ -37,7 +38,7 @@ public record AiResourceSyncExecutionResult(int TotalCount, int ShardCount, IRea
 
 public partial interface IAiResourceSyncService : IScopedDependency
 {
-    Task<AiResourceSyncResponse> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
+    Task<AiResourceSyncEvent> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
     
     Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> customers, CancellationToken cancellationToken);
     
@@ -60,7 +61,6 @@ public class AiResourceSyncService : IAiResourceSyncService
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IWeChatClient _weChatClient;
-    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly SalesSetting _salesSetting;
     private readonly SalesAutoCreateSetting _salesAutoCreateSetting;
 
@@ -85,25 +85,20 @@ public class AiResourceSyncService : IAiResourceSyncService
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
         _salesDataProvider = salesDataProvider;
         _weChatClient = weChatClient;
-        _backgroundJobClient = backgroundJobClient;
         _salesSetting = salesSetting;
         _salesAutoCreateSetting = salesAutoCreateSetting;
     }
 
-    public async Task<AiResourceSyncResponse> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
+    public async Task<AiResourceSyncEvent> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
         var customers = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("CRM sync start. Customers={CustomerCount}", customers.Count);
 
-        _backgroundJobClient.Enqueue<IAiResourceSyncProcessJobService>(x => x.ExecuteSyncCrmSalesAutoCreateAsync(command, customers, CancellationToken.None));
+        Log.Information("CRM sync accepted. Customers={CustomerCount}", customers.Count);
 
-        return new AiResourceSyncResponse
+        return new AiResourceSyncEvent
         {
-            Data = new AiResourceSyncResponseData
-            {
-                TotalCount = customers.Count
-            }
+            Command = command,
+            CrmSalesAuto = customers
         };
     }
 
