@@ -34,6 +34,8 @@ public interface IKnowledgeScenarioService : IScopedDependency
     
     Task<GetKnowledgeSceneFoldersResponse> GetKnowledgeSceneFoldersAsync(GetKnowledgeSceneFoldersRequest request, CancellationToken cancellationToken);
 
+    Task<GetKnowledgeSceneFolderTreeResponse> GetKnowledgeSceneFolderTreeAsync(GetKnowledgeSceneFolderTreeRequest request, CancellationToken cancellationToken);
+
     Task<GetKnowledgeScenesResponse> GetKnowledgeScenesAsync(GetKnowledgeScenesRequest request, CancellationToken cancellationToken);
 
     Task<GetKnowledgeSceneResponse> GetKnowledgeSceneAsync(GetKnowledgeSceneRequest request, CancellationToken cancellationToken);
@@ -413,6 +415,38 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         return new GetKnowledgeSceneFoldersResponse
         {
             Data = _mapper.Map<List<KnowledgeSceneFolderDto>>(folders)
+        };
+    }
+
+    public async Task<GetKnowledgeSceneFolderTreeResponse> GetKnowledgeSceneFolderTreeAsync(GetKnowledgeSceneFolderTreeRequest request, CancellationToken cancellationToken)
+    {
+        var folders = await _knowledgeScenarioDataProvider.GetKnowledgeSceneFoldersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var folderIds = folders.Select(x => x.Id).ToList();
+        var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        scenes = folderIds.Count == 0 ? scenes : scenes.Where(x => folderIds.Contains(x.FolderId)).ToList();
+        var data = folders.Select(folder =>
+        {
+            var folderScenes = scenes.Where(x => x.FolderId == folder.Id).Select(scene =>
+            {
+                var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
+                return sceneDto;
+            }).ToList();
+
+            return new KnowledgeSceneFolderTreeDto
+            {
+                Id = folder.Id,
+                Name = folder.Name,
+                CreatedAt = folder.CreatedAt,
+                UpdatedAt = folder.UpdatedAt,
+                Scenes = folderScenes
+            };
+        }).ToList();
+
+        Log.Information("GetKnowledgeSceneFolderTreeAsync completed. FolderCount={FolderCount}, SceneCount={SceneCount}", folders.Count, scenes.Count);
+
+        return new GetKnowledgeSceneFolderTreeResponse
+        {
+            Data = data
         };
     }
 
