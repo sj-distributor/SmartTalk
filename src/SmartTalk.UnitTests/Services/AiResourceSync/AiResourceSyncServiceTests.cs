@@ -1,12 +1,10 @@
 using System.Linq.Expressions;
 using Mediator.Net;
-using Mediator.Net.Context;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
-using SmartTalk.Core.Handlers.EventHandlers.AiResourceSync;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.AiSpeechAssistant;
@@ -27,7 +25,6 @@ using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
-using SmartTalk.Messages.Events.AiResourceSync;
 using Xunit;
 
 namespace SmartTalk.UnitTests.Services.AiResourceSync;
@@ -35,49 +32,39 @@ namespace SmartTalk.UnitTests.Services.AiResourceSync;
 public class AiResourceSyncServiceTests
 {
     [Fact]
-    public async Task SyncCrmSalesAutoCreateAsync_ReturnsEventWithoutLoadingCustomers()
+    public async Task SyncCrmSalesAutoCreateAsync_ReturnsCustomerCount_AndEnqueuesBackgroundExecution()
     {
         var crmClient = Substitute.For<ICrmClient>();
-        var sut = CreateSut(crmClient: crmClient);
-        var command = new AiResourceSyncCommand
-        {
-            IsManual = true,
-            ServiceProviderId = 123
-        };
+        crmClient.GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<CrmSalesAutoSyncCustomerDto>
+            {
+                new() { CustomerId = "100" },
+                new() { CustomerId = "200" }
+            });
 
-        var @event = await sut.SyncCrmSalesAutoCreateAsync(command, CancellationToken.None);
-
-        Assert.NotNull(@event);
-        Assert.Same(command, @event.Command);
-        Assert.Empty(@event.CrmSalesAuto);
-        await crmClient.DidNotReceive().GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task AiResourceSyncEventHandler_EnqueuesBackgroundExecution()
-    {
         var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
         Expression<Func<IAiResourceSyncProcessJobService, Task>>? queuedExpression = null;
         backgroundJobClient
             .Enqueue<IAiResourceSyncProcessJobService>(Arg.Do<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(x => queuedExpression = x), Arg.Any<string>())
             .Returns("job-1");
 
-        var handler = new AiResourceSyncEventHandler(backgroundJobClient);
-        var context = Substitute.For<IReceiveContext<AiResourceSyncEvent>>();
-        context.Message.Returns(new AiResourceSyncEvent
+        var sut = CreateSut(crmClient: crmClient, backgroundJobClient: backgroundJobClient);
+        var command = new AiResourceSyncCommand
         {
-            Command = new AiResourceSyncCommand
-            {
-                IsManual = true,
-                ServiceProviderId = 123,
-                InitiatedByUserId = 888
-            }
-        });
+            IsManual = true,
+            ServiceProviderId = 123
+        };
 
-        await handler.Handle(context, CancellationToken.None);
+        var response = await sut.SyncCrmSalesAutoCreateAsync(command, CancellationToken.None);
 
+        Assert.NotNull(response);
+        Assert.NotNull(response.Data);
+        Assert.Equal(2, response.Data.TotalCount);
         backgroundJobClient.Received(1).Enqueue(Arg.Any<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(), Arg.Any<string>());
         Assert.NotNull(queuedExpression);
+
+        var methodCall = Assert.IsAssignableFrom<MethodCallExpression>(queuedExpression.Body);
+        Assert.Equal(nameof(IAiResourceSyncProcessJobService.ExecuteSyncCrmSalesAutoCreateAsync), methodCall.Method.Name);
     }
 
     [Fact]

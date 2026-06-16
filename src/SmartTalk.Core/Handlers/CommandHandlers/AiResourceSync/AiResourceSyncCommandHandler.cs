@@ -17,16 +17,6 @@ public class AiResourceSyncCommandHandler : ICommandHandler<AiResourceSyncComman
 
     public async Task<AiResourceSyncResponse> Handle(IReceiveContext<AiResourceSyncCommand> context, CancellationToken cancellationToken)
     {
-        var @event = await _aiResourceSyncService.SyncCrmSalesAutoCreateAsync(context.Message, cancellationToken).ConfigureAwait(false);
-        
-        await context.PublishAsync(@event, cancellationToken).ConfigureAwait(false);
-
-        return new AiResourceSyncResponse
-        {
-            Data = new AiResourceSyncResponseData
-            {
-              TotalCount = @event.CrmSalesAuto.Count
-            }
-        };
+        return await _aiResourceSyncService.SyncCrmSalesAutoCreateAsync(context.Message, cancellationToken).ConfigureAwait(false);
     }
 }
