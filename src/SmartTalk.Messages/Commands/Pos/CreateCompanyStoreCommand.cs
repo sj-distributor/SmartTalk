@@ -7,6 +7,8 @@ namespace SmartTalk.Messages.Commands.Pos;
 public class CreateCompanyStoreCommand : ICommand
 {
     public int CompanyId { get; set; }
+
+    public int? CreatedBy { get; set; }
     
     public string Names { get; set; }
     
