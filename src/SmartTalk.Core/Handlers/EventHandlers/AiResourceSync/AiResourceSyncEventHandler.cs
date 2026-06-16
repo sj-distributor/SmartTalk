@@ -4,6 +4,7 @@ using Serilog;
 using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Events.AiResourceSync;
 
 namespace SmartTalk.Core.Handlers.EventHandlers.AiResourceSync;
@@ -22,11 +23,8 @@ public class AiResourceSyncEventHandler : IEventHandler<AiResourceSyncEvent>
     public async Task Handle(IReceiveContext<AiResourceSyncEvent> context, CancellationToken cancellationToken)
     {
         Log.Information("Start AiResourceSyncEventHandler");
-        
-        var (customers, totalCount) = await _crmClient.GetSalesAutoSyncCustomersAsync(isGetTotalCount: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         _backgroundJobClient.Enqueue<IAiResourceSyncProcessJobService>(
-            x => x.ExecuteSyncCrmSalesAutoCreateAsync(context.Message.Command, customers, CancellationToken.None));
-
+            x => x.ExecuteSyncCrmSalesAutoCreateAsync(context.Message.Command, new List<CrmSalesAutoSyncCustomerDto>(), CancellationToken.None));
     }
 }
