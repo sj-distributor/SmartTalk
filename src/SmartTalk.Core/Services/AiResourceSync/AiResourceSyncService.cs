@@ -91,7 +91,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     public async Task<AiResourceSyncEvent> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
-        var (customers, totalCount) =await _crmClient.GetSalesAutoSyncCustomersAsync(isGetTotalCount: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var (customers, totalCount) =await _crmClient.GetSalesAutoSyncCustomersAsync(isGetTotalCount: false, cancellationToken: cancellationToken).ConfigureAwait(false);
        
         Log.Information("CRM sync accepted. Total={TotalCount}, FirstPageCount={FirstPageCount}", totalCount, customers.Count);
 
