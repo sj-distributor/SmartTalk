@@ -187,5 +187,27 @@ public class KnowledgeScenarioController : ControllerBase
 
         return Ok(response);
     }
+    
+    #endregion
+    
+    #region scene_language
+
+    [Route("scene/language/mappings"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetKnowledgeSceneLanguageMappingsResponse))]
+    public async Task<IActionResult> GetKnowledgeSceneAutoAddLanguageMappingsAsync([FromQuery] GetKnowledgeSceneLanguageMappingsRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.RequestAsync<GetKnowledgeSceneLanguageMappingsRequest, GetKnowledgeSceneLanguageMappingsResponse>(request, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("scene/language/mappings/save"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SaveKnowledgeSceneLanguageMappingsResponse))]
+    public async Task<IActionResult> SaveKnowledgeSceneAutoAddLanguageMappingsAsync([FromBody] SaveKnowledgeSceneLanguageMappingsCommand command, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.SendAsync<SaveKnowledgeSceneLanguageMappingsCommand, SaveKnowledgeSceneLanguageMappingsResponse>(command, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
+    }
     #endregion
 }

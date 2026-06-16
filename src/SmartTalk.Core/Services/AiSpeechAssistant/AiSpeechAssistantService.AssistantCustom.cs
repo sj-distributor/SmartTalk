@@ -532,7 +532,7 @@ public partial class AiSpeechAssistantService
             throw new Exception("Do not have the store permission to operate");
         
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-        
+
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
@@ -565,7 +565,7 @@ public partial class AiSpeechAssistantService
 
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
-        
+
         var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantByIdsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
@@ -582,7 +582,7 @@ public partial class AiSpeechAssistantService
             Data = _mapper.Map<List<AiSpeechAssistantDto>>(assistants)
         };
     }
-
+    
     public async Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
@@ -804,6 +804,7 @@ public partial class AiSpeechAssistantService
             AgentType.Assistant => await InitialAssistantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.Restaurant => await InitialRestaurantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.PosCompanyStore => await InitialPosCompanyStoreInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            AgentType.Sales => await InitialAiAgentInternalAsync(command, cancellationToken).ConfigureAwait(false),
             _ => throw new NotSupportedException(nameof(command.AgentType))
         };
         
