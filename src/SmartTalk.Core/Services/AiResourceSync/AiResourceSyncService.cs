@@ -207,7 +207,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         foreach (var syncTask in syncTasks)
         {
             await EnsureMergedCustomerKnowledgeAsync(
-                command.ServiceProviderId.Value, companyId, store.Id, salesAgent.Id, syncTask.MergedGroup, customerIdLookup, storeMap,
+                command.ServiceProviderId.Value, command.InitiatedByUserId, companyId, store.Id, salesAgent.Id, syncTask.MergedGroup, customerIdLookup, storeMap,
                 salesAgentCache, customerKnowledgeAssistantCache, sourceSceneLookup, existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
         }
 
