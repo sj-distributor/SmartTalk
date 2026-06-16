@@ -35,34 +35,27 @@ namespace SmartTalk.UnitTests.Services.AiResourceSync;
 public class AiResourceSyncServiceTests
 {
     [Fact]
-    public async Task SyncCrmSalesAutoCreateAsync_ReturnsEventWithoutLoadingCustomers()
-    {
-        var crmClient = Substitute.For<ICrmClient>();
-        var sut = CreateSut(crmClient: crmClient);
-        var command = new AiResourceSyncCommand
-        {
-            IsManual = true,
-            ServiceProviderId = 123
-        };
-
-        var @event = await sut.SyncCrmSalesAutoCreateAsync(command, CancellationToken.None);
-
-        Assert.NotNull(@event);
-        Assert.Same(command, @event.Command);
-        Assert.Empty(@event.CrmSalesAuto);
-        await crmClient.DidNotReceive().GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task AiResourceSyncEventHandler_EnqueuesBackgroundExecution()
     {
+        var crmClient = Substitute.For<ICrmClient>();
+        crmClient.GetSalesAutoSyncCustomersAsync(
+                Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns((
+                new List<CrmSalesAutoSyncCustomerDto>
+                {
+                    new() { CustomerId = "100" },
+                    new() { CustomerId = "200" }
+                },
+                2
+            ));
+        
         var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
         Expression<Func<IAiResourceSyncProcessJobService, Task>>? queuedExpression = null;
         backgroundJobClient
             .Enqueue<IAiResourceSyncProcessJobService>(Arg.Do<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(x => queuedExpression = x), Arg.Any<string>())
             .Returns("job-1");
 
-        var handler = new AiResourceSyncEventHandler(backgroundJobClient);
+        var handler = new AiResourceSyncEventHandler(backgroundJobClient, crmClient);
         var context = Substitute.For<IReceiveContext<AiResourceSyncEvent>>();
         context.Message.Returns(new AiResourceSyncEvent
         {
@@ -76,25 +69,34 @@ public class AiResourceSyncServiceTests
 
         await handler.Handle(context, CancellationToken.None);
 
+        await crmClient.Received(1).GetSalesAutoSyncCustomersAsync(1, true, Arg.Any<CancellationToken>());
         backgroundJobClient.Received(1).Enqueue(Arg.Any<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(), Arg.Any<string>());
         Assert.NotNull(queuedExpression);
+        var methodCall = Assert.IsAssignableFrom<MethodCallExpression>(queuedExpression.Body);
+        Assert.Equal(nameof(IAiResourceSyncProcessJobService.ExecuteSyncCrmSalesAutoCreateAsync), methodCall.Method.Name);
     }
 
     [Fact]
     public async Task ExecuteSyncCrmSalesAutoCreateAsync_CreatesAssistantWithKnowledgeDetailsFromSceneItems()
     {
         var crmClient = Substitute.For<ICrmClient>();
-        crmClient.GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new List<CrmSalesAutoSyncCustomerDto>
-            {
-                new()
+        crmClient.GetSalesAutoSyncCustomersAsync(
+                Arg.Any<int>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>())
+            .Returns((
+                new List<CrmSalesAutoSyncCustomerDto>
                 {
-                    CustomerId = "100",
-                    SalesName = "Alice",
-                    SalesGroup = "GroupA",
-                    Language = "English"
-                }
-            });
+                    new()
+                    {
+                        CustomerId = "100",
+                        SalesName = "Alice",
+                        SalesGroup = "GroupA",
+                        Language = "English"
+                    }
+                },
+                1
+            ));
 
         var mediator = Substitute.For<IMediator>();
         mediator.SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(
