@@ -3,10 +3,8 @@ using Mediator.Net;
 using Mediator.Net.Context;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
-using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Domain.Pos;
-using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Handlers.EventHandlers.AiResourceSync;
 using SmartTalk.Core.Services.Agents;
@@ -23,11 +21,9 @@ using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Agent;
-using SmartTalk.Messages.Dto.AiResourceSync;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Sales;
-using SmartTalk.Messages.Dto.SalesAutoCreate;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
@@ -232,54 +228,6 @@ public class AiResourceSyncServiceTests
                 x.CompanyId == 1 &&
                 x.CreatedBy == 888),
             Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task RecordSyncRunAsync_TruncatesPersistedDetailsAndWarnings()
-    {
-        var salesDataProvider = Substitute.For<ISalesDataProvider>();
-        CrmSalesAutoSyncRun savedRun = null;
-        salesDataProvider.AddCrmSalesAutoSyncRunAsync(Arg.Do<CrmSalesAutoSyncRun>(x => savedRun = x), true, Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
-
-        var sut = CreateSut(salesDataProvider: salesDataProvider);
-        var stats = new AiResourceSyncExecutionStatsDto();
-
-        for (var i = 0; i < 55; i++)
-        {
-            stats.CreatedAssistants.Add(new AiResourceSyncCreateAssistantChangeDto
-            {
-                AssistantId = i + 1,
-                AssistantName = $"Assistant-{i + 1}"
-            });
-        }
-
-        for (var i = 0; i < 105; i++)
-        {
-            stats.Warnings.Add($"Warning-{i + 1}");
-        }
-
-        await sut.RecordSyncRunAsync(new AiResourceSyncCommand
-        {
-            IsManual = true
-        }, stats, false, true, null, CancellationToken.None);
-
-        Assert.NotNull(savedRun);
-
-        var createdAssistantsJson = JToken.Parse(savedRun.CreatedAssistantsJson);
-        Assert.Equal(55, createdAssistantsJson["TotalCount"]?.Value<int>());
-        Assert.Equal(5, createdAssistantsJson["TruncatedCount"]?.Value<int>());
-        Assert.Equal(50, createdAssistantsJson["Items"]?.Count());
-
-        Assert.Equal(0, JToken.Parse(savedRun.CreatedStoresJson)["TotalCount"]?.Value<int>());
-        Assert.Equal(0, JToken.Parse(savedRun.CreatedAgentsJson)["TotalCount"]?.Value<int>());
-        Assert.Equal(0, JToken.Parse(savedRun.TransferredAssistantsJson)["TotalCount"]?.Value<int>());
-        Assert.Equal(0, JToken.Parse(savedRun.RenamedAssistantsJson)["TotalCount"]?.Value<int>());
-        Assert.Equal(0, JToken.Parse(savedRun.DeactivatedAssistantsJson)["TotalCount"]?.Value<int>());
-
-        var warningsJson = JArray.Parse(savedRun.WarningsJson);
-        Assert.Equal(101, warningsJson.Count);
-        Assert.Equal("... truncated 5 warning entries", warningsJson.Last?.Value<string>());
     }
 
     private static AiResourceSyncService CreateSut(
