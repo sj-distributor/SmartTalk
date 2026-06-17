@@ -193,8 +193,6 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     public RealtimeAiInferenceCapabilities Capabilities { get; } = new()
     {
         TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = false, CanEmitTextAlongsideAudio = false },
-        SupportsAudioOutput = true,
-        InputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 },
-        OutputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 }
+        SupportsAudioOutput = true
     };
 }

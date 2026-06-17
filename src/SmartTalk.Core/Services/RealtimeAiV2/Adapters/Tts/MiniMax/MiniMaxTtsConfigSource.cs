@@ -1,7 +1,6 @@
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 
@@ -19,8 +18,6 @@ public sealed class MiniMaxTtsConfigSource : IRealtimeAiTtsConfigSource
     {
         _settings = settings;
     }
-
-    public RealtimeAiTtsProviderType ProviderType => RealtimeAiTtsProviderType.MiniMax;
 
     public RealtimeAiTtsConfig Build(RealtimeAiTtsRequest request) =>
         _settings.BuildRealtimeAiTtsConfig(

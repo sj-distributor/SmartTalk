@@ -16,9 +16,7 @@ public class OutputModeNegotiatorTests
     private static RealtimeAiInferenceCapabilities Caps(bool textOnly, bool textAlongside, bool audio) => new()
     {
         TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = textOnly, CanEmitTextAlongsideAudio = textAlongside },
-        SupportsAudioOutput = audio,
-        InputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 },
-        OutputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 }
+        SupportsAudioOutput = audio
     };
 
     [Theory]

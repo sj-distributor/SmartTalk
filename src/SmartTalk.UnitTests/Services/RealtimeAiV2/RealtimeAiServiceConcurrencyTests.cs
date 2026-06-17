@@ -16,10 +16,8 @@ public class RealtimeAiServiceConcurrencyTests
 {
     private static RealtimeAiInferenceCapabilities AudioCapableInference() => new()
     {
-        TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false, TextModalityToken = "text" },
-        SupportsAudioOutput = true,
-        InputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 },
-        OutputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 }
+        TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false },
+        SupportsAudioOutput = true
     };
 
     [Fact]

@@ -57,8 +57,6 @@ public class RealtimeAiTtsConfigResolverTests
     {
         var source = new MiniMaxTtsConfigSource(EnabledMiniMaxSettings());
 
-        source.ProviderType.ShouldBe(RealtimeAiTtsProviderType.MiniMax);
-
         var config = source.Build(new RealtimeAiTtsRequest { AssistantId = 42, ModelVoice = "v" });
 
         config.ShouldNotBeNull();

@@ -1,6 +1,5 @@
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 
@@ -12,7 +11,5 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 /// </summary>
 public interface IRealtimeAiTtsConfigSource : IScopedDependency
 {
-    RealtimeAiTtsProviderType ProviderType { get; }
-
     RealtimeAiTtsConfig Build(RealtimeAiTtsRequest request);
 }

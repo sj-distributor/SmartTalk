@@ -49,10 +49,8 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
             .Returns(new Dictionary<string, string> { { "Authorization", "Bearer test" } });
         ProviderAdapter.Capabilities.Returns(new RealtimeAiInferenceCapabilities
         {
-            TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false, TextModalityToken = "text" },
-            SupportsAudioOutput = true,
-            InputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.ALAW },
-            OutputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.ALAW }
+            TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false },
+            SupportsAudioOutput = true
         });
         ProviderAdapter.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiOutputMode>(), Arg.Any<RealtimeAiAudioCodec>())
             .Returns(new { type = "session.update" });
