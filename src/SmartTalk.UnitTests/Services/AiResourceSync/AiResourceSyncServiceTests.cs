@@ -157,12 +157,21 @@ public class AiResourceSyncServiceTests
         aiSpeechAssistantDataProvider.HasCrmAutoSyncAssistantsInCompanyAsync(1, Arg.Any<CancellationToken>()).Returns(true);
         aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantsInCompanyAsync(1, Arg.Any<CancellationToken>())
             .Returns(new List<CrmAutoSyncAssistantLocationDto>());
+        aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(10, "100", Arg.Any<CancellationToken>())
+            .Returns(
+                Task.FromResult<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>(null),
+                Task.FromResult(new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
+                {
+                    Id = 101,
+                    AgentId = 201,
+                    Name = "100"
+                }));
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(101, Arg.Any<CancellationToken>())
             .Returns(new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
             {
                 Id = 101,
                 AgentId = 201,
-                Name = "100 (English)"
+                Name = "100"
             });
         aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(
                 Arg.Any<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(), true, Arg.Any<CancellationToken>())
@@ -194,6 +203,15 @@ public class AiResourceSyncServiceTests
         var salesDataProvider = Substitute.For<ISalesDataProvider>();
         salesDataProvider.AddCrmSalesAutoSyncRunAsync(Arg.Any<SmartTalk.Core.Domain.Sales.CrmSalesAutoSyncRun>(), true, Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
+        var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
+        redisSafeRunner.ExecuteWithLockAsync(
+                Arg.Any<string>(),
+                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<TimeSpan?>(),
+                Arg.Any<TimeSpan?>(),
+                Arg.Any<TimeSpan?>(),
+                Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
+            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
 
         var sut = CreateSut(
             mediator: mediator,
@@ -202,7 +220,8 @@ public class AiResourceSyncServiceTests
             posDataProvider: posDataProvider,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
             knowledgeScenarioDataProvider: knowledgeScenarioDataProvider,
-            salesDataProvider: salesDataProvider);
+            salesDataProvider: salesDataProvider,
+            redisSafeRunner: redisSafeRunner);
         
         await sut.SyncInternalAsync(new AiResourceSyncCommand
         {
@@ -213,7 +232,7 @@ public class AiResourceSyncServiceTests
 
         await mediator.Received(1).SendAsync<AddAiSpeechAssistantCommand, AddAiSpeechAssistantResponse>(
             Arg.Is<AddAiSpeechAssistantCommand>(x =>
-                x.AssistantName == "100 (English)" &&
+                x.AssistantName == "100" &&
                 x.CreatedBy == 888 &&
                 x.Greetings == "Hello" &&
                 x.Json == "{}" &&
@@ -293,7 +312,7 @@ public class AiResourceSyncServiceTests
         {
             Id = 1141,
             AgentId = 10347,
-            Name = "116399 (English)",
+            Name = "116399",
             CreatedDate = DateTimeOffset.UtcNow
         };
 
@@ -307,7 +326,7 @@ public class AiResourceSyncServiceTests
                     AssistantId = 1141,
                     StoreId = 10,
                     AgentId = 10347,
-                    Name = "116399 (English)"
+                    Name = "116399"
                 }
             });
         aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(

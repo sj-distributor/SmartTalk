@@ -44,17 +44,27 @@ public class CrmSalesAutoSyncGroupingTests
     {
         var name = CrmSalesAutoSyncGrouping.BuildAssistantName(["200", "100"], "English");
 
-        Assert.Equal("100/200 (English)", name);
+        Assert.Equal("100/200", name);
     }
 
     [Fact]
-    public void TryParseAssistantName_ParsesMergedIds()
+    public void TryParseAssistantName_ParsesLegacyMergedIds()
     {
         var parsed = CrmSalesAutoSyncGrouping.TryParseAssistantName("100/200 (English)", out var ids, out var language);
 
         Assert.True(parsed);
         Assert.Equal(["100", "200"], ids);
         Assert.Equal("English", language);
+    }
+
+    [Fact]
+    public void TryParseAssistantName_ParsesMergedIdsWithoutLanguageSuffix()
+    {
+        var parsed = CrmSalesAutoSyncGrouping.TryParseAssistantName("100/200", out var ids, out var language);
+
+        Assert.True(parsed);
+        Assert.Equal(["100", "200"], ids);
+        Assert.Null(language);
     }
 
     [Fact]

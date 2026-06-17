@@ -37,10 +37,12 @@ public static class CrmSalesAutoSyncGrouping
     {
         var ids = customerIds
             .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var lang = CrmToAutoAddLanguageConverter.NormalizeToken(language);
-        return ids.Count == 0 ? $"({lang})" : $"{string.Join("/", ids)} ({lang})";
+        return string.Join("/", ids);
     }
 
     public static bool TryParseAssistantName(string assistantName, out List<string> customerIds, out string language)
@@ -51,16 +53,18 @@ public static class CrmSalesAutoSyncGrouping
         if (string.IsNullOrWhiteSpace(assistantName))
             return false;
 
-        var match = AssistantNameRegex.Match(assistantName.Trim());
-        if (!match.Success)
-            return false;
+        var normalizedName = assistantName.Trim();
+        var match = AssistantNameRegex.Match(normalizedName);
+        var rawIds = match.Success ? match.Groups[1].Value : normalizedName;
+        if (match.Success)
+            language = match.Groups[2].Value.Trim();
 
-        customerIds = match.Groups[1].Value
+        customerIds = rawIds
             .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        language = match.Groups[2].Value.Trim();
-        return true;
+
+        return customerIds.Count > 0;
     }
 
     private static List<CrmSalesAutoSyncCustomerGroup> BuildPhoneMergedGroups(string salesKey, List<CrmSalesAutoSyncCustomerDto> customers)
