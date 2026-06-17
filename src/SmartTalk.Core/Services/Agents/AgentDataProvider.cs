@@ -40,6 +40,8 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default);
 
+    Task<Agent> GetCrmAutoSyncAgentByStoreAndNameAsync(int storeId, string agentName, CancellationToken cancellationToken = default);
+
     Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default);
 }
 
@@ -203,6 +205,24 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default)
     {
         return await _repository.Query<Agent>().Where(x => ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Agent> GetCrmAutoSyncAgentByStoreAndNameAsync(int storeId, string agentName, CancellationToken cancellationToken = default)
+    {
+        if (storeId <= 0 || string.IsNullOrWhiteSpace(agentName))
+            return null;
+
+        var query =
+            from posAgent in _repository.Query<PosAgent>()
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            where posAgent.StoreId == storeId
+                  && agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+                  && agent.Type == AgentType.Sales
+                  && agent.Name == agentName
+            orderby agent.CreatedDate descending
+            select agent;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
     public async Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default)

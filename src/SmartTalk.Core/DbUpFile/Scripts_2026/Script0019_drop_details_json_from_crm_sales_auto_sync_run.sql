@@ -1,0 +1,2 @@
+ALTER TABLE `crm_sales_auto_sync_run`
+    DROP COLUMN IF EXISTS `details_json`;
