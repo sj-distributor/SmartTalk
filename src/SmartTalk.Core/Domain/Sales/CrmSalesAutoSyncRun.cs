@@ -44,8 +44,23 @@ public class CrmSalesAutoSyncRun : IEntity
     [Column("warnings_json"), StringLength(4000)]
     public string WarningsJson { get; set; }
 
-    [Column("details_json", TypeName = "longtext")]
-    public string DetailsJson { get; set; }
+    [Column("created_stores_json", TypeName = "longtext")]
+    public string CreatedStoresJson { get; set; }
+
+    [Column("created_agents_json", TypeName = "longtext")]
+    public string CreatedAgentsJson { get; set; }
+
+    [Column("created_assistants_json", TypeName = "longtext")]
+    public string CreatedAssistantsJson { get; set; }
+
+    [Column("transferred_assistants_json", TypeName = "longtext")]
+    public string TransferredAssistantsJson { get; set; }
+
+    [Column("renamed_assistants_json", TypeName = "longtext")]
+    public string RenamedAssistantsJson { get; set; }
+
+    [Column("deactivated_assistants_json", TypeName = "longtext")]
+    public string DeactivatedAssistantsJson { get; set; }
 
     [Column("error_message"), StringLength(4000)]
     public string ErrorMessage { get; set; }
