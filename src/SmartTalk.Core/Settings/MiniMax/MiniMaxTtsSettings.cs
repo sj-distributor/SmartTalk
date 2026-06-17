@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
-using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Settings.MiniMax;

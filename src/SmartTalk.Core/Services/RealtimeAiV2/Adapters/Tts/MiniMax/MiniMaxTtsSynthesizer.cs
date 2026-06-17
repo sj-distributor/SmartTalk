@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Serilog;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Dto.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 
