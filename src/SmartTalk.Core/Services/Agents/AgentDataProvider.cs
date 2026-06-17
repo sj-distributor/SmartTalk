@@ -10,6 +10,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Agent;
 
 namespace SmartTalk.Core.Services.Agents;
