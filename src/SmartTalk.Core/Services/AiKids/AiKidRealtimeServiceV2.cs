@@ -7,6 +7,7 @@ using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Settings.MiniMax;
@@ -188,7 +189,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 .Select(x => x.Config)
                 .ToList(),
             TurnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).Config,
-            InputAudioNoiseReduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction).Config
+            VendorOptions = new OpenAiRealtimeModelOptions
+            {
+                InputAudioNoiseReduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction).Config
+            }
         };
     }
 

@@ -81,12 +81,15 @@ public class OpenAiSessionPayloadGoldenTests
                 Voice = "shimmer",
                 Tools = new List<object> { new { type = "function", name = "lookup_order" } },
                 TurnDetection = new { type = "semantic_vad" },
-                InputAudioNoiseReduction = new { type = "near_field" },
-                TranscriptionModel = "whisper-1",
-                TranscriptionLanguage = "yue",
-                MaxResponseOutputTokens = 4096,
-                OutputAudioSpeed = 1.2m,
-                EnableRealtimeTracing = true
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    InputAudioNoiseReduction = new { type = "near_field" },
+                    TranscriptionModel = "whisper-1",
+                    TranscriptionLanguage = "yue",
+                    MaxResponseOutputTokens = 4096,
+                    OutputAudioSpeed = 1.2m,
+                    EnableRealtimeTracing = true
+                }
             }
         };
 

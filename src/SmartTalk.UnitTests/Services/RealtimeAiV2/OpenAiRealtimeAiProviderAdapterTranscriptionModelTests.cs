@@ -51,7 +51,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionModel = model
+                VendorOptions = new OpenAiRealtimeModelOptions { TranscriptionModel = model }
             }
         };
 
@@ -141,8 +141,11 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                TranscriptionLanguage = "yue"
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    TranscriptionLanguage = "yue"
+                }
             }
         };
 

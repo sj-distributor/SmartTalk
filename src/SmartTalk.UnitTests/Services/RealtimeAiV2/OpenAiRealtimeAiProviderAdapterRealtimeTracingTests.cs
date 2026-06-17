@@ -41,7 +41,7 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                EnableRealtimeTracing = enableTracing
+                VendorOptions = new OpenAiRealtimeModelOptions { EnableRealtimeTracing = enableTracing }
             }
         };
 
@@ -137,10 +137,13 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionLanguage = "yue",
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                MaxResponseOutputTokens = 1200,
-                EnableRealtimeTracing = true
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionLanguage = "yue",
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    MaxResponseOutputTokens = 1200,
+                    EnableRealtimeTracing = true
+                }
             }
         };
 

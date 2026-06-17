@@ -96,6 +96,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     {
         var modelConfig = options.ModelConfig;
         var useExternalTts = outputMode == RealtimeAiOutputMode.Text;
+        var openAi = modelConfig.VendorOptions as OpenAiRealtimeModelOptions ?? new OpenAiRealtimeModelOptions();
 
         // GA session.update payload (post 2026-05-07):
         // - new required `session.type` field ("realtime" | "transcription")
@@ -116,13 +117,13 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                 // caller's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23)
                 // strips the key entirely, so OpenAI uses its server-side default
                 // (effectively unlimited within the session budget).
-                max_response_output_tokens = modelConfig.MaxResponseOutputTokens,
+                max_response_output_tokens = openAi.MaxResponseOutputTokens,
                 // null for every assistant without an opt-in RealtimeTracing row; the
                 // serializer strips the key, so OpenAI does not retain a trace
                 // (current behaviour). Setting EnableRealtimeTracing = true emits
                 // `tracing = "auto"` and the session shows up in the OpenAI
                 // traces dashboard for 30 days — escalation-debug tool.
-                tracing = modelConfig.EnableRealtimeTracing == true ? EnabledTracingMode : null,
+                tracing = openAi.EnableRealtimeTracing == true ? EnabledTracingMode : null,
                 audio = new
                 {
                     input = new
@@ -141,11 +142,11 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                             // IsNullOrWhiteSpace (not IsNullOrEmpty) so an accidental " " or "\t"
                             // in the config row also falls back to the adapter default rather than
                             // being forwarded as an invalid model literal and rejected by OpenAI.
-                            model = string.IsNullOrWhiteSpace(modelConfig.TranscriptionModel) ? DefaultTranscriptionModel : modelConfig.TranscriptionModel,
-                            language = modelConfig.TranscriptionLanguage
+                            model = string.IsNullOrWhiteSpace(openAi.TranscriptionModel) ? DefaultTranscriptionModel : openAi.TranscriptionModel,
+                            language = openAi.TranscriptionLanguage
                         },
                         turn_detection = modelConfig.TurnDetection ?? new { type = "server_vad" },
-                        noise_reduction = modelConfig.InputAudioNoiseReduction
+                        noise_reduction = openAi.InputAudioNoiseReduction
                     },
                     output = useExternalTts ? null : new
                     {
@@ -158,7 +159,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                         // null for every assistant without an OutputAudioSpeed row; the
                         // caller's NullValueHandling.Ignore (RealtimeAiService.Connect.cs:23)
                         // strips the key entirely, so OpenAI uses its default 1.0.
-                        speed = modelConfig.OutputAudioSpeed
+                        speed = openAi.OutputAudioSpeed
                     }
                 },
                 tools = modelConfig.Tools.Any() ? modelConfig.Tools : null

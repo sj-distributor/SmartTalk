@@ -40,7 +40,7 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                OutputAudioSpeed = speed
+                VendorOptions = new OpenAiRealtimeModelOptions { OutputAudioSpeed = speed }
             }
         };
 
@@ -120,10 +120,13 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionLanguage = "yue",
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                MaxResponseOutputTokens = 1200,
-                OutputAudioSpeed = 0.9m
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionLanguage = "yue",
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    MaxResponseOutputTokens = 1200,
+                    OutputAudioSpeed = 0.9m
+                }
             }
         };
 

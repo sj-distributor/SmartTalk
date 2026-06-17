@@ -49,7 +49,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionLanguage = language
+                VendorOptions = new OpenAiRealtimeModelOptions { TranscriptionLanguage = language }
             }
         };
 

@@ -42,7 +42,7 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                MaxResponseOutputTokens = cap
+                VendorOptions = new OpenAiRealtimeModelOptions { MaxResponseOutputTokens = cap }
             }
         };
 
@@ -129,9 +129,12 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionLanguage = "yue",
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                MaxResponseOutputTokens = 1200
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionLanguage = "yue",
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    MaxResponseOutputTokens = 1200
+                }
             }
         };
 
