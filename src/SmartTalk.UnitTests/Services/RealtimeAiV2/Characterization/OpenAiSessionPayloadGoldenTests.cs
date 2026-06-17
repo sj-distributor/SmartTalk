@@ -49,6 +49,42 @@ public class OpenAiSessionPayloadGoldenTests
     private const string AudioModeAllPopulatedGolden =
         """{"type":"session.update","session":{"type":"realtime","instructions":"you are helpful","output_modalities":["audio"],"max_response_output_tokens":4096,"tracing":"auto","audio":{"input":{"format":{"type":"audio/pcmu"},"transcription":{"model":"whisper-1","language":"yue"},"turn_detection":{"type":"semantic_vad"},"noise_reduction":{"type":"near_field"}},"output":{"format":{"type":"audio/pcmu"},"voice":"shimmer","speed":1.2}},"tools":[{"type":"function","name":"lookup_order"}]}}""";
 
+    // P-Text golden — text (external-TTS) mode, MULAW, every optional OpenAI field populated. This is the
+    // single most behavior-changing branch of the S4 explicit-output-mode work: output_modalities becomes
+    // ["text"] and the entire audio.output block (voice/speed/format) is DROPPED, not nulled — while
+    // audio.input (format/transcription/turn_detection/noise_reduction) and key order stay pinned.
+    private const string TextModeAllPopulatedGolden =
+        """{"type":"session.update","session":{"type":"realtime","instructions":"you are helpful","output_modalities":["text"],"max_response_output_tokens":4096,"tracing":"auto","audio":{"input":{"format":{"type":"audio/pcmu"},"transcription":{"model":"whisper-1","language":"yue"},"turn_detection":{"type":"semantic_vad"},"noise_reduction":{"type":"near_field"}}},"tools":[{"type":"function","name":"lookup_order"}]}}""";
+
+    [Fact]
+    public void BuildSessionConfig_TextMode_AllOptionalPopulated_IsByteIdentical()
+    {
+        var adapter = NewAdapter();
+        var options = new RealtimeSessionOptions
+        {
+            ModelConfig = new RealtimeAiModelConfig
+            {
+                Prompt = "you are helpful",
+                Voice = "shimmer",
+                Tools = new List<object> { new { type = "function", name = "lookup_order" } },
+                TurnDetection = new { type = "semantic_vad" },
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    InputAudioNoiseReduction = new { type = "near_field" },
+                    TranscriptionModel = "whisper-1",
+                    TranscriptionLanguage = "yue",
+                    MaxResponseOutputTokens = 4096,
+                    OutputAudioSpeed = 1.2m,
+                    EnableRealtimeTracing = true
+                }
+            }
+        };
+
+        var json = ProductionSerialize(adapter.BuildSessionConfig(options, RealtimeAiOutputMode.Text, RealtimeAiAudioCodec.MULAW));
+
+        json.ShouldBe(TextModeAllPopulatedGolden);
+    }
+
     [Fact]
     public void BuildSessionConfig_AudioMode_AllOptionalNull_IsByteIdentical()
     {
@@ -96,5 +132,29 @@ public class OpenAiSessionPayloadGoldenTests
         var json = ProductionSerialize(adapter.BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json.ShouldBe(AudioModeAllPopulatedGolden);
+    }
+
+    [Fact]
+    public void BuildSessionConfig_VendorOptionsWrongType_DegradesToAllDefaults()
+    {
+        // The adapter reads VendorOptions with an `as` cast, so a bag of an unexpected type yields all
+        // defaults — the same payload as no vendor options at all, never a throw. Pin this so the graceful
+        // fallback (both prod consumers always pass OpenAiRealtimeModelOptions, but the contract is `object`)
+        // cannot silently change.
+        var adapter = NewAdapter();
+        var options = new RealtimeSessionOptions
+        {
+            ModelConfig = new RealtimeAiModelConfig
+            {
+                Prompt = "you are helpful",
+                Voice = "alloy",
+                Tools = new List<object>(),
+                VendorOptions = new { unrelated = "bag" }
+            }
+        };
+
+        var json = ProductionSerialize(adapter.BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
+
+        json.ShouldBe(AudioModeAllNullGolden);
     }
 }

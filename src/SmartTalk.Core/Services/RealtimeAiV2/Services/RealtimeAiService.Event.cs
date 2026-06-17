@@ -296,7 +296,9 @@ public partial class RealtimeAiService
         // First text of this external turn → it will wait for the TTS gate; arm the absolute hard
         // ceiling so the turn can never hang past it (covers a provider that streams text then stalls
         // without ever sending response.done). Exactly-once is guaranteed by the same handled latch.
-        if (!_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
+        // Gated on external-TTS mode: in audio mode the turn completes on provider-done without waiting,
+        // so a hard-ceiling watchdog must never arm there (defensive — audio mode emits no text today).
+        if (UsesExternalTts && !_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
 
         _ctx.CurrentResponseHasTextOutput = true;
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
