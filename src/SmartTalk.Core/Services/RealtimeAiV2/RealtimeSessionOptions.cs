@@ -120,23 +120,6 @@ public class RealtimeSessionOptions
     public RealtimeAiServerRegion Region { get; set; }
 
     /// <summary>
-    /// Backstop: the maximum time to wait for the external TTS provider to signal synthesis completion
-    /// for a turn after the inference provider's turn is already done. On timeout the engine force-completes
-    /// the turn so a stalled or misbehaving TTS vendor cannot wedge the session. <c>null</c> uses
-    /// <c>RealtimeAiTurnWatchdogDefaults.TtsSynthesisTimeout</c> (env-overridable). Ignored in built-in
-    /// audio mode, where there is no external synthesis to wait for.
-    /// </summary>
-    public TimeSpan? TtsSynthesisTimeout { get; set; }
-
-    /// <summary>
-    /// Absolute backstop: the maximum lifetime of a single external-TTS (text-output) turn from its first
-    /// text. On timeout the engine force-completes the turn, so a provider that streams text then stalls
-    /// without ever sending response.done cannot hang the session. <c>null</c> uses
-    /// <c>RealtimeAiTurnWatchdogDefaults.TurnHardCeiling</c> (env-overridable). Ignored in built-in audio mode.
-    /// </summary>
-    public TimeSpan? TurnHardCeiling { get; set; }
-
-    /// <summary>
     /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
     /// </summary>
     public bool EnableRecording { get; set; }

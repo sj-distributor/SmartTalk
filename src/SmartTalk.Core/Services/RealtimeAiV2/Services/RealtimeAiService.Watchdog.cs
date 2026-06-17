@@ -5,13 +5,19 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    // Test-only seam (internal, not part of any public/operator config surface): overrides the fixed
+    // RealtimeAiTurnWatchdogDefaults durations so tests need not wait the real 8s/45s ceiling. Null in
+    // production → the constants apply. Per-instance, so concurrent test classes never collide.
+    internal TimeSpan? TtsSynthesisWatchdogTimeoutOverride { get; set; }
+    internal TimeSpan? TurnHardCeilingWatchdogOverride { get; set; }
+
     // Backstop for the external-TTS wedge: the inference provider's turn is done but the TTS provider
     // never raises SynthesisCompleted/Failed, so the dual gate would wait forever. Armed only on the
     // external-TTS waiting path; built-in audio mode completes on provider-done and never arms.
     private void ArmTtsSynthesisWatchdog()
     {
         var generation = Interlocked.Read(ref _ctx.CurrentTurnGeneration);
-        var timeout = _ctx.Options.TtsSynthesisTimeout ?? RealtimeAiTurnWatchdogDefaults.TtsSynthesisTimeout;
+        var timeout = TtsSynthesisWatchdogTimeoutOverride ?? RealtimeAiTurnWatchdogDefaults.TtsSynthesisTimeout;
 
         _ = RunTtsSynthesisWatchdogAsync(generation, timeout);
     }
@@ -66,7 +72,7 @@ public partial class RealtimeAiService
     private void ArmTurnHardCeilingWatchdog()
     {
         var generation = Interlocked.Read(ref _ctx.CurrentTurnGeneration);
-        var ceiling = _ctx.Options.TurnHardCeiling ?? RealtimeAiTurnWatchdogDefaults.TurnHardCeiling;
+        var ceiling = TurnHardCeilingWatchdogOverride ?? RealtimeAiTurnWatchdogDefaults.TurnHardCeiling;
 
         _ = RunTurnHardCeilingWatchdogAsync(generation, ceiling);
     }
