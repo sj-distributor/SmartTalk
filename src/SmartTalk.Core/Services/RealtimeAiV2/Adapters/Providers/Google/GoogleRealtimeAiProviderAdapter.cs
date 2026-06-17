@@ -184,4 +184,15 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     public RealtimeAiAudioCodec GetPreferredCodec(RealtimeAiAudioCodec clientCodec) => RealtimeAiAudioCodec.PCM16;
 
     public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
+
+    // The current Google adapter emits audio only (the modelTurn-text arm is an unfinished //todo),
+    // so it declares no text-output support and is fixed at PCM16. A capability gate must therefore
+    // never pair it with an external text-driven TTS provider.
+    public RealtimeAiInferenceCapabilities Capabilities { get; } = new()
+    {
+        TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = false, CanEmitTextAlongsideAudio = false },
+        SupportsAudioOutput = true,
+        InputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 },
+        OutputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16 }
+    };
 }

@@ -7,7 +7,14 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 public interface IRealtimeAiProviderAdapter : IScopedDependency
 {
     RealtimeAiProvider Provider { get; }
-    
+
+    /// <summary>
+    /// What this provider can do (text-output support, audio output, codecs), declared as data the
+    /// engine reads to negotiate the output mode and validate codecs — instead of branching on
+    /// <see cref="Provider"/>.
+    /// </summary>
+    RealtimeAiInferenceCapabilities Capabilities { get; }
+
     Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region);
 
     object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec);

@@ -619,4 +619,14 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     public RealtimeAiAudioCodec GetPreferredCodec(RealtimeAiAudioCodec clientCodec) => clientCodec;
     
     public RealtimeAiProvider Provider => RealtimeAiProvider.OpenAi;
+
+    // OpenAI realtime can run text-only output (used to drive external TTS) and emits native audio;
+    // it accepts/produces G.711 (µ-law/A-law) and PCM16. "text" is the output_modalities token.
+    public RealtimeAiInferenceCapabilities Capabilities { get; } = new()
+    {
+        TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false, TextModalityToken = "text" },
+        SupportsAudioOutput = true,
+        InputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.ALAW, RealtimeAiAudioCodec.PCM16 },
+        OutputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.ALAW, RealtimeAiAudioCodec.PCM16 }
+    };
 }
