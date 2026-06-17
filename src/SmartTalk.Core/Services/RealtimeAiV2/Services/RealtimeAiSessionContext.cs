@@ -42,6 +42,10 @@ public class RealtimeAiSessionContext
     public bool CurrentResponseTtsSynthesisCompleted;
     public bool CurrentResponseTurnCompletedHandled;
 
+    // Monotonic per-turn id (bumped when a new provider response starts). A TTS-synthesis watchdog
+    // captures it when armed and compares on fire, so a watchdog from a superseded turn no-ops.
+    public long CurrentTurnGeneration;
+
     // Accumulates the assistant's text output for the current turn so external-TTS mode can
     // surface the AI side of the transcript (no output_audio_transcript events arrive there).
     public StringBuilder CurrentResponseTextBuilder { get; } = new();

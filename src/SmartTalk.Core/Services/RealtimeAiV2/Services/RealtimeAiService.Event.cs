@@ -341,6 +341,10 @@ public partial class RealtimeAiService
 
     private void ResetCurrentResponseState()
     {
+        // Bump the turn generation first so any TTS-synthesis watchdog still pending from the previous
+        // turn no-ops when it fires (it captured the old generation).
+        Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
+
         _ctx.CurrentResponseHasTextOutput = false;
         _ctx.CurrentResponseTextDoneHandled = false;
         _ctx.CurrentResponseProviderTurnCompleted = false;
@@ -353,6 +357,8 @@ public partial class RealtimeAiService
     {
         if (await MarkProviderTurnCompletedAndShouldCompleteAsync().ConfigureAwait(false))
             await OnAiTurnCompletedAsync().ConfigureAwait(false);
+        else
+            ArmTtsSynthesisWatchdog();   // provider turn done but external TTS hasn't signalled yet
     }
 
     private async Task MarkTtsSynthesisCompletedAndCompleteWhenReadyAsync()
