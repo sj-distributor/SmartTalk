@@ -6,6 +6,7 @@ using SmartTalk.Core.DbUpFile;
 using SmartTalk.Core.Settings;
 using SmartTalk.Core.Settings.Logging;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using Autofac.Extensions.DependencyInjection;
 
 namespace SmartTalk.Api;
