@@ -11,6 +11,8 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ICrmClient : IScopedDependency
 {
+    Task<CrmSalesAutoSyncPagedResponseDto> GetSalesAutoSyncCustomersPageAsync(int page, CancellationToken cancellationToken = default);
+
     Task<string> GetCrmTokenAsync(CancellationToken cancellationToken);
     
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, CancellationToken cancellationToken);
@@ -30,6 +32,8 @@ public interface ICrmClient : IScopedDependency
 
 public class CrmClient : ICrmClient
 {
+    private const int MaxConcurrentSalesAutoSyncPageRequests = 4;
+
     private readonly CrmSetting _crmSetting;
     private readonly Dictionary<string, string> _headers;
     private readonly ISmartTalkHttpClientFactory _httpClient;
@@ -141,42 +145,63 @@ public class CrmClient : ICrmClient
         return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
     }
 
-    public async Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, bool isGetTotalCount = true, CancellationToken cancellationToken = default)
+    public async Task<CrmSalesAutoSyncPagedResponseDto> GetSalesAutoSyncCustomersPageAsync(int page, CancellationToken cancellationToken = default)
     {
-        Log.Information("GetSalesAutoSyncCustomersAsync isGetTotalCount {@isGetTotalCount}", isGetTotalCount);
-        
-        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info";
+        var normalizedPage = page > 0 ? page : 1;
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info?page={normalizedPage}";
         var headers = new Dictionary<string, string>
         {
             { "X-API-KEY", _crmSetting.ApiKey },
             { "Accept", "application/json" }
         };
 
+        return await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+    }
+
+    public async Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, bool isGetTotalCount = true, CancellationToken cancellationToken = default)
+    {
+        Log.Information("GetSalesAutoSyncCustomersAsync isGetTotalCount {@isGetTotalCount}", isGetTotalCount);
+
         var page = startPage > 0 ? startPage : 1;
-        var result = new List<CrmSalesAutoSyncCustomerDto>();
+        var firstPage = await GetSalesAutoSyncCustomersPageAsync(page, cancellationToken).ConfigureAwait(false);
+        if (firstPage?.Data == null || firstPage.Data.Count == 0)
+            return (new List<CrmSalesAutoSyncCustomerDto>(), firstPage?.Total ?? 0);
 
-        while (true)
-        {
-            var pagedUrl = $"{url}?page={page}";
-            var response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+        if (!isGetTotalCount || firstPage.CurrentPage >= firstPage.LastPage)
+            return (firstPage.Data, firstPage.Total);
 
-            if (response?.Data == null || response.Data.Count == 0)
-                break;
+        var pageResults = new List<CrmSalesAutoSyncCustomerDto>[firstPage.LastPage - page + 1];
+        pageResults[0] = firstPage.Data;
 
-            result.AddRange(response.Data);
-            
-            if (!isGetTotalCount)
+        using var throttler = new SemaphoreSlim(MaxConcurrentSalesAutoSyncPageRequests);
+        var tasks = Enumerable.Range(page + 1, firstPage.LastPage - page)
+            .Select(async targetPage =>
             {
-                return (result, response.Total);
-            }
+                await throttler.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    var response = await GetSalesAutoSyncCustomersPageAsync(targetPage, cancellationToken).ConfigureAwait(false);
+                    pageResults[targetPage - page] = response?.Data ?? new List<CrmSalesAutoSyncCustomerDto>();
+                }
+                finally
+                {
+                    throttler.Release();
+                }
+            })
+            .ToList();
 
-            if (response.CurrentPage >= response.LastPage)
-                break;
+        await Task.WhenAll(tasks).ConfigureAwait(false);
 
-            page++;
-        }
+        var result = pageResults
+            .Where(x => x != null && x.Count > 0)
+            .SelectMany(x => x)
+            .ToList();
 
-        return (result, result.Count > 0 ? null : 0);
+        Log.Information(
+            "GetSalesAutoSyncCustomersAsync completed. StartPage={StartPage}, LastPage={LastPage}, PageCount={PageCount}, CustomerCount={CustomerCount}",
+            page, firstPage.LastPage, pageResults.Length, result.Count);
+
+        return (result, firstPage.Total);
     }
 
     public async Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default)
