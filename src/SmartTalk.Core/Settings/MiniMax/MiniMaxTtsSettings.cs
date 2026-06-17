@@ -54,15 +54,17 @@ public class MiniMaxTtsSettings : IConfigurationSetting
                string.Equals(AssistantId.Trim(), assistantId.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    // Inference-agnostic: building a MiniMax config does NOT depend on which inference provider runs.
+    // Whether external TTS is actually usable for a given inference provider is decided generically by
+    // the engine's OutputModeNegotiator from the provider's declared text-output capability — not by a
+    // hardcoded provider check here.
     public RealtimeAiTtsConfig BuildRealtimeAiTtsConfig(
         int assistantId,
-        RealtimeAiProvider modelProvider,
         string modelVoice,
         int sampleRate,
         int? sourceSampleRate = null)
     {
         if (!IsEnabledForAssistant(assistantId)) return null;
-        if (modelProvider != RealtimeAiProvider.OpenAi) return null;
         if (string.IsNullOrWhiteSpace(ApiKey)) return null;
 
         return new RealtimeAiTtsConfig

@@ -150,7 +150,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
     {
         return _miniMaxTtsSettings.BuildRealtimeAiTtsConfig(
             assistant.Id,
-            assistant.ModelProvider,
             assistant.ModelVoice,
             sampleRate,
             sourceSampleRate: sampleRate);

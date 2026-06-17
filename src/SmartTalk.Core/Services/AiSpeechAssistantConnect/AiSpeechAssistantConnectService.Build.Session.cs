@@ -67,7 +67,6 @@ public partial class AiSpeechAssistantConnectService
     {
         return _miniMaxTtsSettings.BuildRealtimeAiTtsConfig(
             assistant.Id,
-            assistant.ModelProvider,
             assistant.ModelVoice,
             _miniMaxTtsSettings.SampleRate);
     }

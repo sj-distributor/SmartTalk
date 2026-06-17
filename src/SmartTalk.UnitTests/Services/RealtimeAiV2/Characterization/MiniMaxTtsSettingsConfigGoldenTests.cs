@@ -8,12 +8,11 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2.Characterization;
 
 /// <summary>
 /// CHARACTERIZATION test — pins MiniMaxTtsSettings.BuildRealtimeAiTtsConfig: the exact produced
-/// RealtimeAiTtsConfig shape (including the 6-key ProviderSpecificConfig), the three null-return guards
-/// in precedence order, the ResolveMiniMaxVoiceId table, and the source_sample_rate fallback. No test
-/// asserts the produced config shape today. Migration step S7 mutates this object (config-source
-/// resolver) and DELETES the modelProvider!=OpenAi guard; pinning the pre-state makes that deletion a
-/// deliberate RED-then-GREEN rather than a silent shift. Also guards S1 (TtsConfig moves to Messages)
-/// and S8 (consumer seam).
+/// RealtimeAiTtsConfig shape (including the 6-key ProviderSpecificConfig), the two null-return guards
+/// (disabled / blank api key), the ResolveMiniMaxVoiceId table, and the source_sample_rate fallback.
+/// Config-building is inference-agnostic (S7 removed the modelProvider!=OpenAi gate and its parameter);
+/// whether a given inference provider can actually drive external TTS is decided by the engine's
+/// OutputModeNegotiator from the provider's declared text-output capability.
 /// </summary>
 public class MiniMaxTtsSettingsConfigGoldenTests
 {
@@ -41,7 +40,7 @@ public class MiniMaxTtsSettingsConfigGoldenTests
     [Fact]
     public void BuildRealtimeAiTtsConfig_HappyPath_ProducesExactShape()
     {
-        var config = Settings().BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, "custom-voice", sampleRate: 24000);
+        var config = Settings().BuildRealtimeAiTtsConfig(42, "custom-voice", sampleRate: 24000);
 
         config.ShouldNotBeNull();
         config!.ProviderType.ShouldBe(RealtimeAiTtsProviderType.MiniMax);
@@ -63,7 +62,7 @@ public class MiniMaxTtsSettingsConfigGoldenTests
     [Fact]
     public void BuildRealtimeAiTtsConfig_ExplicitSourceSampleRate_OverridesSettings()
     {
-        var config = Settings().BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, "v", sampleRate: 24000, sourceSampleRate: 16000);
+        var config = Settings().BuildRealtimeAiTtsConfig(42, "v", sampleRate: 24000, sourceSampleRate: 16000);
 
         config!.ProviderSpecificConfig["source_sample_rate"].ShouldBe(16000);
     }
@@ -72,7 +71,7 @@ public class MiniMaxTtsSettingsConfigGoldenTests
     public void BuildRealtimeAiTtsConfig_SourceSampleRateConfigKey_UsedWhenNoArg()
     {
         var config = Settings(d => d["MiniMaxTts:SourceSampleRate"] = "11025")
-            .BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, "v", sampleRate: 24000);
+            .BuildRealtimeAiTtsConfig(42, "v", sampleRate: 24000);
 
         config!.ProviderSpecificConfig["source_sample_rate"].ShouldBe(11025);
     }
@@ -83,26 +82,24 @@ public class MiniMaxTtsSettingsConfigGoldenTests
     public void Guard_DisabledForAssistant_ReturnsNull()
     {
         Settings(d => d["MiniMaxTts:Enabled"] = "false")
-            .BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, "v", 24000).ShouldBeNull();
+            .BuildRealtimeAiTtsConfig(42, "v", 24000).ShouldBeNull();
     }
 
     [Fact]
     public void Guard_AssistantIdMismatch_ReturnsNull()
     {
-        Settings().BuildRealtimeAiTtsConfig(99, RealtimeAiProvider.OpenAi, "v", 24000).ShouldBeNull();
+        Settings().BuildRealtimeAiTtsConfig(99, "v", 24000).ShouldBeNull();
     }
 
-    [Fact]
-    public void Guard_NonOpenAiProvider_ReturnsNull_TheLineS7Deletes()
-    {
-        Settings().BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.Google, "v", 24000).ShouldBeNull();
-    }
+    // (Removed Guard_NonOpenAiProvider_ReturnsNull: MiniMax config-building is now inference-agnostic.
+    //  Whether a given inference provider can drive external TTS is decided by OutputModeNegotiator from
+    //  the provider's declared text-output capability — see OutputModeNegotiatorTests.)
 
     [Fact]
     public void Guard_BlankApiKey_ReturnsNull()
     {
         Settings(d => d["MiniMaxTts:ApiKey"] = "   ")
-            .BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, "v", 24000).ShouldBeNull();
+            .BuildRealtimeAiTtsConfig(42, "v", 24000).ShouldBeNull();
     }
 
     // ── ResolveMiniMaxVoiceId table ────────────────────────────────
@@ -113,7 +110,7 @@ public class MiniMaxTtsSettingsConfigGoldenTests
     [InlineData("   ")]
     public void ResolveVoice_BlankModelVoice_FallsBackToDefaultVoiceId(string? modelVoice)
     {
-        Settings().BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, modelVoice!, 24000)!.Voice.ShouldBe("dv");
+        Settings().BuildRealtimeAiTtsConfig(42, modelVoice!, 24000)!.Voice.ShouldBe("dv");
     }
 
     [Fact]
@@ -121,13 +118,13 @@ public class MiniMaxTtsSettingsConfigGoldenTests
     {
         // An OpenAI voice (in OpenAiRealtimeAiProviderAdapter.SupportedVoices) is not a MiniMax voice,
         // so it falls back to the MiniMax default rather than being forwarded verbatim.
-        Settings().BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, "alloy", 24000)!.Voice.ShouldBe("dv");
+        Settings().BuildRealtimeAiTtsConfig(42, "alloy", 24000)!.Voice.ShouldBe("dv");
     }
 
     [Fact]
     public void ResolveVoice_NonOpenAiVoiceName_PassedVerbatim()
     {
-        Settings().BuildRealtimeAiTtsConfig(42, RealtimeAiProvider.OpenAi, "Chinese (Mandarin)_News_Anchor", 24000)!
+        Settings().BuildRealtimeAiTtsConfig(42, "Chinese (Mandarin)_News_Anchor", 24000)!
             .Voice.ShouldBe("Chinese (Mandarin)_News_Anchor");
     }
 }
