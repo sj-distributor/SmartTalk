@@ -10,7 +10,11 @@ public partial class RealtimeAiService
 {
     private bool IsProviderSessionActive => _ctx.SessionCts is { IsCancellationRequested: false };
 
-    private bool UsesExternalTts => _ctx.TtsProvider?.TtsProviderType != RealtimeAiTtsProviderType.BuiltIn;
+    // The engine routes text-mode behaviour off the negotiated OutputMode (decided once at connect),
+    // not by re-inspecting the TTS provider's vendor type. Equivalent for any live session — the
+    // negotiator returns Text iff the TTS needs text input (i.e. a non-BuiltIn provider) — but it keeps
+    // OutputMode the single source of truth so a provider's type can't drift from the negotiated mode.
+    private bool UsesExternalTts => _ctx.OutputMode == RealtimeAiOutputMode.Text;
 
     private async Task OnWssMessageReceivedAsync(string rawMessage)
     {
@@ -64,10 +68,17 @@ public partial class RealtimeAiService
                 // FunctionCallSuggested when the response contains function calls, ResponseTurnCompleted otherwise.
                 case RealtimeAiWssEventType.FunctionCallSuggested:
                 case RealtimeAiWssEventType.ResponseTurnCompleted:
-                    if (parsedEvent.Data is RealtimeAiWssTextData completedTextData)
-                        await FlushProviderTextToTtsAsync(completedTextData.Text).ConfigureAwait(false);
-                    else if (_ctx.CurrentResponseHasTextOutput && !_ctx.CurrentResponseTextDoneHandled)
-                        await FlushProviderTextToTtsAsync().ConfigureAwait(false);
+                    // Only the external-TTS (text) path consumes the provider's response text. In audio
+                    // mode the BuiltIn provider's text handlers are no-ops and the transcript arrives via
+                    // output_audio_transcript events, so gating here keeps the audio path from running the
+                    // text-synthesis routing — production behaviour with BuiltIn is unchanged.
+                    if (UsesExternalTts)
+                    {
+                        if (parsedEvent.Data is RealtimeAiWssTextData completedTextData)
+                            await FlushProviderTextToTtsAsync(completedTextData.Text).ConfigureAwait(false);
+                        else if (_ctx.CurrentResponseHasTextOutput && !_ctx.CurrentResponseTextDoneHandled)
+                            await FlushProviderTextToTtsAsync().ConfigureAwait(false);
+                    }
 
                     if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
                         await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
