@@ -153,6 +153,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<KnowledgeCopyRelatedInfoDto>> GetKnowledgeCopyRelatedEnrichInfoAsync(List<int> assistantIds, CancellationToken cancellationToken);
 
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
+
+    Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetCrmAutoSyncAssistantByStoreAndNameAsync(int storeId, string assistantName, CancellationToken cancellationToken = default);
     
     Task<bool> HasCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default);
     
@@ -877,6 +879,25 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetCrmAutoSyncAssistantByStoreAndNameAsync(int storeId, string assistantName, CancellationToken cancellationToken = default)
+    {
+        if (storeId <= 0 || string.IsNullOrWhiteSpace(assistantName))
+            return null;
+
+        var query =
+            from posAgent in _repository.Query<PosAgent>()
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            where posAgent.StoreId == storeId
+                  && agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+                  && assistant.Name == assistantName
+            orderby assistant.CreatedDate descending
+            select assistant;
+
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
     public async Task<bool> HasCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default)
     {
         var query =
