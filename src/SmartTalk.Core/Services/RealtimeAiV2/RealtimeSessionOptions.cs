@@ -175,6 +175,14 @@ public class RealtimeSessionOptions
     public TimeSpan? TtsSynthesisTimeout { get; set; }
 
     /// <summary>
+    /// Absolute backstop: the maximum lifetime of a single external-TTS (text-output) turn from its first
+    /// text. On timeout the engine force-completes the turn, so a provider that streams text then stalls
+    /// without ever sending response.done cannot hang the session. <c>null</c> uses
+    /// <c>RealtimeAiTurnWatchdogDefaults.TurnHardCeiling</c> (env-overridable). Ignored in built-in audio mode.
+    /// </summary>
+    public TimeSpan? TurnHardCeiling { get; set; }
+
+    /// <summary>
     /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
     /// </summary>
     public bool EnableRecording { get; set; }

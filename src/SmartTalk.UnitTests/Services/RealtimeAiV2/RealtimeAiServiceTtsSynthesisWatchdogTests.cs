@@ -57,11 +57,47 @@ public class RealtimeAiServiceTtsSynthesisWatchdogTests : RealtimeAiServiceTestB
     }
 
     [Fact]
-    public void TtsSynthesisTimeoutEnvVar_NamePinned()
+    public async Task ExternalTts_ProviderStreamsTextThenStalls_HardCeilingForceCompletesTheTurn()
     {
-        // Renaming this breaks any air-gapped operator who pinned the timeout via env — hard-pin it.
+        var tts = new NeverCompletingTextTtsProvider();
+        Switcher.TtsProvider(RealtimeAiTtsProviderType.MiniMax).Returns(tts);
+
+        ProviderAdapter.ParseMessage("delta").Returns(new ParsedRealtimeAiProviderEvent
+        {
+            Type = RealtimeAiWssEventType.ResponseTextDelta,
+            Data = new RealtimeAiWssTextData { Text = "hi" }
+        });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.TtsConfig = new RealtimeAiTtsConfig { ProviderType = RealtimeAiTtsProviderType.MiniMax, SampleRate = 24000 };
+            o.TurnHardCeiling = TimeSpan.FromMilliseconds(150);
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        // First text arms the hard ceiling; the provider then STALLS — no response.done ever arrives, so the
+        // TTS-synthesis watchdog is never armed and only the hard ceiling can rescue the turn.
+        await FakeWssClient.SimulateMessageReceivedAsync("delta");
+
+        TurnCompletedCount().ShouldBe(0);
+
+        await Task.Delay(400);
+
+        TurnCompletedCount().ShouldBe(1);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+    }
+
+    [Fact]
+    public void WatchdogEnvVars_NamesAndDefaultsPinned()
+    {
+        // Renaming these breaks any air-gapped operator who pinned the timeouts via env — hard-pin them.
         RealtimeAiTurnWatchdogDefaults.TtsSynthesisTimeoutEnvVar.ShouldBe("SMARTTALK_REALTIME_TTS_SYNTHESIS_TIMEOUT_MS");
         RealtimeAiTurnWatchdogDefaults.DefaultTtsSynthesisTimeoutMs.ShouldBe(8000);
+        RealtimeAiTurnWatchdogDefaults.TurnHardCeilingEnvVar.ShouldBe("SMARTTALK_REALTIME_TURN_HARD_CEILING_MS");
+        RealtimeAiTurnWatchdogDefaults.DefaultTurnHardCeilingMs.ShouldBe(45000);
     }
 
     private int TurnCompletedCount() => FakeWs.GetSentTextMessages().Count(m => m.Contains("AiTurnCompleted"));

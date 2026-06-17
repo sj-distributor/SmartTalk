@@ -59,4 +59,60 @@ public partial class RealtimeAiService
 
         await OnAiTurnCompletedAsync().ConfigureAwait(false);
     }
+
+    // Absolute backstop for an external (text) turn: armed at its first text. Covers the provider that
+    // streams text then stalls without ever sending response.done — the TTS-synthesis watchdog never arms
+    // there (it arms on provider-done), so without this the turn would hang forever.
+    private void ArmTurnHardCeilingWatchdog()
+    {
+        var generation = Interlocked.Read(ref _ctx.CurrentTurnGeneration);
+        var ceiling = _ctx.Options.TurnHardCeiling ?? RealtimeAiTurnWatchdogDefaults.TurnHardCeiling;
+
+        _ = RunTurnHardCeilingWatchdogAsync(generation, ceiling);
+    }
+
+    private async Task RunTurnHardCeilingWatchdogAsync(long generation, TimeSpan ceiling)
+    {
+        try
+        {
+            await Task.Delay(ceiling, _ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        await ForceTurnCompletionAtHardCeilingAsync(generation).ConfigureAwait(false);
+    }
+
+    private async Task ForceTurnCompletionAtHardCeilingAsync(long generation)
+    {
+        if (!IsProviderSessionActive) return;
+
+        var token = _ctx.SessionCts?.Token ?? CancellationToken.None;
+        var shouldComplete = false;
+
+        await _ctx.TurnCompletionStateLock.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            if (Interlocked.Read(ref _ctx.CurrentTurnGeneration) != generation) return;
+            if (_ctx.CurrentResponseTurnCompletedHandled) return;   // already completed via the gate
+
+            // Force BOTH gate legs: the provider may have stalled before response.done, and the TTS may
+            // still be mid-synthesis. The handled latch (waitsForExternalTts is true here) keeps it exactly-once.
+            _ctx.CurrentResponseProviderTurnCompleted = true;
+            _ctx.CurrentResponseTtsSynthesisCompleted = true;
+            shouldComplete = TryMarkCurrentResponseTurnCompletedLocked();
+        }
+        finally
+        {
+            _ctx.TurnCompletionStateLock.Release();
+        }
+
+        if (!shouldComplete) return;
+
+        Log.Warning("[RealtimeAi] Turn hard ceiling reached — forced turn completion, SessionId: {SessionId}", _ctx.SessionId);
+
+        await OnAiTurnCompletedAsync().ConfigureAwait(false);
+    }
 }

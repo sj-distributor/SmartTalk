@@ -293,6 +293,11 @@ public partial class RealtimeAiService
     {
         if (string.IsNullOrWhiteSpace(text)) return;
 
+        // First text of this external turn → it will wait for the TTS gate; arm the absolute hard
+        // ceiling so the turn can never hang past it (covers a provider that streams text then stalls
+        // without ever sending response.done). Exactly-once is guaranteed by the same handled latch.
+        if (!_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
+
         _ctx.CurrentResponseHasTextOutput = true;
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
         _ctx.CurrentResponseTextBuilder.Append(text);

@@ -12,9 +12,15 @@ public static class RealtimeAiTurnWatchdogDefaults
 
     public const int DefaultTtsSynthesisTimeoutMs = 8000;
 
-    public static TimeSpan TtsSynthesisTimeout =>
+    public const string TurnHardCeilingEnvVar = "SMARTTALK_REALTIME_TURN_HARD_CEILING_MS";
+
+    public const int DefaultTurnHardCeilingMs = 45000;
+
+    public static TimeSpan TtsSynthesisTimeout => Resolve(TtsSynthesisTimeoutEnvVar, DefaultTtsSynthesisTimeoutMs);
+
+    public static TimeSpan TurnHardCeiling => Resolve(TurnHardCeilingEnvVar, DefaultTurnHardCeilingMs);
+
+    private static TimeSpan Resolve(string envVar, int defaultMs) =>
         TimeSpan.FromMilliseconds(
-            int.TryParse(Environment.GetEnvironmentVariable(TtsSynthesisTimeoutEnvVar), out var ms) && ms > 0
-                ? ms
-                : DefaultTtsSynthesisTimeoutMs);
+            int.TryParse(Environment.GetEnvironmentVariable(envVar), out var ms) && ms > 0 ? ms : defaultMs);
 }
