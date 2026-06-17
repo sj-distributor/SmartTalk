@@ -23,7 +23,9 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return new Dictionary<string, string>();
     }
 
-    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec)
+    // The current Google adapter only emits audio (it declares no text output), so the negotiator
+    // never hands it RealtimeAiOutputMode.Text; the parameter is accepted to satisfy the contract.
+    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiOutputMode outputMode, RealtimeAiAudioCodec clientCodec)
     {
         var modelConfig = options.ModelConfig;
 

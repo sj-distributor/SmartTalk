@@ -92,10 +92,10 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         };
     }
 
-    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec)
+    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiOutputMode outputMode, RealtimeAiAudioCodec clientCodec)
     {
         var modelConfig = options.ModelConfig;
-        var useExternalTts = options.TtsConfig is { ProviderType: not RealtimeAiTtsProviderType.BuiltIn };
+        var useExternalTts = outputMode == RealtimeAiOutputMode.Text;
 
         // GA session.update payload (post 2026-05-07):
         // - new required `session.type` field ("realtime" | "transcription")

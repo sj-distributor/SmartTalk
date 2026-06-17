@@ -110,7 +110,7 @@ public class OpenAiRealtimeAiProviderAdapterVoiceListTests
     [InlineData("")]
     public void BuildSessionConfig_VoiceNullOrEmpty_UsesDefault(string voice)
     {
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithVoice(voice), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithVoice(voice), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["output"]!["voice"]!.Value<string>()
             .ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultVoice);
@@ -135,7 +135,7 @@ public class OpenAiRealtimeAiProviderAdapterVoiceListTests
         // Each documented voice must pass through the adapter unchanged. Failure here
         // would mean the adapter silently coerced an operator-selected voice into a
         // different one — a UX regression hard to debug from logs alone.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithVoice(voice), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithVoice(voice), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["output"]!["voice"]!.Value<string>().ShouldBe(voice);
     }
@@ -148,7 +148,7 @@ public class OpenAiRealtimeAiProviderAdapterVoiceListTests
         // string — OpenAI rejects unknown values server-side with a clear error,
         // which is strictly better than the adapter silently swapping in DefaultVoice
         // and leaving the operator wondering why their selection had no effect.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithVoice("midnight"), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithVoice("midnight"), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["output"]!["voice"]!.Value<string>().ShouldBe("midnight");
     }

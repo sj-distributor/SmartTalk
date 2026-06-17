@@ -6,6 +6,7 @@ using SmartTalk.Core.Services.RealtimeAiV2.Recording;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
 using SmartTalk.Core.Services.RealtimeAiV2.Wss;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -25,6 +26,9 @@ public class RealtimeAiSessionContext
     public IRealtimeAiProviderAdapter ProviderAdapter { get; set; }
     public IRealtimeAiTtsProvider TtsProvider { get; set; }
     public CancellationTokenSource SessionCts { get; set; }
+
+    // Negotiated once at connect (OutputModeNegotiator) and reused for the session — never re-sniffed.
+    public RealtimeAiOutputMode OutputMode { get; set; }
 
     // Runtime state
     public int Round { get; set; }

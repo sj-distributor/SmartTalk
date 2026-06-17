@@ -64,7 +64,7 @@ public class OpenAiSessionPayloadGoldenTests
             // TtsConfig null → useExternalTts == false → audio mode.
         };
 
-        var json = ProductionSerialize(adapter.BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
+        var json = ProductionSerialize(adapter.BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json.ShouldBe(AudioModeAllNullGolden);
     }
@@ -90,7 +90,7 @@ public class OpenAiSessionPayloadGoldenTests
             }
         };
 
-        var json = ProductionSerialize(adapter.BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
+        var json = ProductionSerialize(adapter.BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json.ShouldBe(AudioModeAllPopulatedGolden);
     }

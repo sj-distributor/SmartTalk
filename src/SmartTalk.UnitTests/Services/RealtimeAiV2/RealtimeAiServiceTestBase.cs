@@ -47,7 +47,14 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
         // Default stubs for ProviderAdapter
         ProviderAdapter.GetHeaders(Arg.Any<RealtimeAiServerRegion>())
             .Returns(new Dictionary<string, string> { { "Authorization", "Bearer test" } });
-        ProviderAdapter.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>())
+        ProviderAdapter.Capabilities.Returns(new RealtimeAiInferenceCapabilities
+        {
+            TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false, TextModalityToken = "text" },
+            SupportsAudioOutput = true,
+            InputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.ALAW },
+            OutputCodecs = new HashSet<RealtimeAiAudioCodec> { RealtimeAiAudioCodec.PCM16, RealtimeAiAudioCodec.MULAW, RealtimeAiAudioCodec.ALAW }
+        });
+        ProviderAdapter.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiOutputMode>(), Arg.Any<RealtimeAiAudioCodec>())
             .Returns(new { type = "session.update" });
         ProviderAdapter.BuildAudioAppendMessage(Arg.Any<RealtimeAiWssAudioData>())
             .Returns("audio_append_msg");

@@ -66,7 +66,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
         // The serialised transcription object MUST contain only `model` — no `language`.
         // `model` resolves to OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel
         // (whatever OpenAI's strongest model is at the time of the build).
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var transcription = json["session"]!["audio"]!["input"]!["transcription"]!;
         transcription["model"]!.Value<string>().ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
@@ -87,7 +87,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
         //
         // If this ever starts failing with `"language": ""` in the payload, the
         // parser's IsNullOrWhiteSpace guard has regressed.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(language), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(language), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var transcription = json["session"]!["audio"]!["input"]!["transcription"]!;
 
@@ -112,7 +112,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
         // Sanity check: setting TranscriptionLanguage=null must not perturb any
         // adjacent field. Regression here would mean Phase 5.1 silently shifted
         // turn_detection / noise_reduction / voice / instructions semantics.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["type"]!.Value<string>().ShouldBe("realtime");
@@ -136,7 +136,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
         // Setting a language hint must not perturb the model field — it stays on the
         // adapter's compile-time default unless the assistant also opted into a
         // TranscriptionModel override (covered separately).
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(language), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage(language), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var transcription = json["session"]!["audio"]!["input"]!["transcription"]!;
         transcription["model"]!.Value<string>().ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
@@ -148,7 +148,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionLanguageTests
     {
         // Activating the language hint must not silently affect turn_detection,
         // noise_reduction, voice, or output format.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage("yue"), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithLanguage("yue"), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["audio"]!["input"]!["turn_detection"]!["type"]!.Value<string>().ShouldBe("server_vad");

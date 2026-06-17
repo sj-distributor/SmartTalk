@@ -17,7 +17,9 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
 
     Dictionary<string, string> GetHeaders(RealtimeAiServerRegion region);
 
-    object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec);
+    // outputMode is decided by the engine (OutputModeNegotiator). A text-capable adapter MUST honor it
+    // and emit the matching modality; it MUST NOT infer the mode from options.TtsConfig.
+    object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiOutputMode outputMode, RealtimeAiAudioCodec clientCodec);
     
     string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
     
