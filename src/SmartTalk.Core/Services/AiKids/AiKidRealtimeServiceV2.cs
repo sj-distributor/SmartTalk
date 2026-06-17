@@ -7,6 +7,7 @@ using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.Core.Utils;
@@ -37,6 +38,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IRealtimeAiService _realtimeAiService;
     private readonly MiniMaxTtsSettings _miniMaxTtsSettings;
+    private readonly RealtimeAiTtsConfigResolver _ttsConfigResolver;
 
     public AiKidRealtimeServiceV2(
         ISmartiesClient smartiesClient,
@@ -44,7 +46,8 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         IRealtimeAiService realtimeAiService,
-        MiniMaxTtsSettings miniMaxTtsSettings)
+        MiniMaxTtsSettings miniMaxTtsSettings,
+        RealtimeAiTtsConfigResolver ttsConfigResolver)
     {
         _smartiesClient = smartiesClient;
         _attachmentService = attachmentService;
@@ -52,6 +55,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _realtimeAiService = realtimeAiService;
         _miniMaxTtsSettings = miniMaxTtsSettings;
+        _ttsConfigResolver = ttsConfigResolver;
     }
 
     public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
@@ -148,11 +152,13 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
     private RealtimeAiTtsConfig BuildTtsConfig(Domain.AISpeechAssistant.AiSpeechAssistant assistant, int sampleRate)
     {
-        return _miniMaxTtsSettings.BuildRealtimeAiTtsConfig(
-            assistant.Id,
-            assistant.ModelVoice,
-            sampleRate,
-            sourceSampleRate: sampleRate);
+        return _ttsConfigResolver.Resolve(new RealtimeAiTtsRequest
+        {
+            AssistantId = assistant.Id,
+            ModelVoice = assistant.ModelVoice,
+            SampleRate = sampleRate,
+            SourceSampleRate = sampleRate
+        });
     }
 
     private async Task<RealtimeAiModelConfig> BuildModelConfigAsync(

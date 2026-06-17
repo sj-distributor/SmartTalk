@@ -65,10 +65,11 @@ public partial class AiSpeechAssistantConnectService
 
     private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)
     {
-        return _miniMaxTtsSettings.BuildRealtimeAiTtsConfig(
-            assistant.Id,
-            assistant.ModelVoice,
-            _miniMaxTtsSettings.SampleRate);
+        return _ttsConfigResolver.Resolve(new RealtimeAiTtsRequest
+        {
+            AssistantId = assistant.Id,
+            ModelVoice = assistant.ModelVoice
+        });
     }
 
     /// <summary>
