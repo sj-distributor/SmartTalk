@@ -61,7 +61,7 @@ public class RealtimeAiServiceExternalTtsTurnGateGoldenTests : RealtimeAiService
     /// <summary>External TTS fake whose synthesis-completed signal the test raises explicitly, so the
     /// gate order (synthesis-done before provider-done) can be controlled. HandleProviderTextDoneAsync
     /// does NOT auto-complete, to avoid a second terminal signal.</summary>
-    private sealed class ManualExternalTtsProvider : IRealtimeAiTtsProvider
+    private sealed class ManualExternalTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiTextSynthesizer
     {
         public RealtimeAiTtsProviderType TtsProviderType => RealtimeAiTtsProviderType.MiniMax;
         public RealtimeAiAudioCodec OutputCodec => RealtimeAiAudioCodec.PCM16;
@@ -79,7 +79,6 @@ public class RealtimeAiServiceExternalTtsTurnGateGoldenTests : RealtimeAiService
             return Task.CompletedTask;
         }
 
-        public Task HandleProviderAudioAsync(string base64Audio, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task HandleProviderTextDeltaAsync(string textDelta, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task HandleProviderTextDoneAsync(CancellationToken cancellationToken) => Task.CompletedTask;
         public Task HandleInterruptAsync(CancellationToken cancellationToken) => Task.CompletedTask;

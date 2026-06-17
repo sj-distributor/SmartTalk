@@ -78,7 +78,7 @@ public class RealtimeAiServiceBargeInSendOrderGoldenTests : RealtimeAiServiceTes
     /// Mirrors <c>BuiltInRealtimeAiTtsProvider</c> (audio passthrough, BuiltIn type so the engine takes
     /// the truncate path) and records when the engine calls HandleInterruptAsync.
     /// </summary>
-    private sealed class OrderRecordingTtsProvider : IRealtimeAiTtsProvider
+    private sealed class OrderRecordingTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiAudioPassthrough
     {
         private readonly Action _onInterrupt;
 
@@ -102,9 +102,7 @@ public class RealtimeAiServiceBargeInSendOrderGoldenTests : RealtimeAiServiceTes
         public Task HandleProviderAudioAsync(string base64Audio, CancellationToken cancellationToken) =>
             AudioChunkReadyAsync?.Invoke(base64Audio) ?? Task.CompletedTask;
 
-        public Task HandleProviderTextDeltaAsync(string textDelta, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task HandleProviderTextDoneAsync(CancellationToken cancellationToken) =>
+        public Task HandleProviderAudioDoneAsync(CancellationToken cancellationToken) =>
             SynthesisCompletedAsync?.Invoke() ?? Task.CompletedTask;
 
         public Task HandleInterruptAsync(CancellationToken cancellationToken)

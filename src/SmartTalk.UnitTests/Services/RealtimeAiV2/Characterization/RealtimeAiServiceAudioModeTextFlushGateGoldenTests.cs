@@ -42,9 +42,10 @@ public class RealtimeAiServiceAudioModeTextFlushGateGoldenTests : RealtimeAiServ
         FakeWs.GetSentTextMessages().Count(m => m.Contains("AiTurnCompleted")).ShouldBe(1);
     }
 
-    /// <summary>BuiltIn-type provider (audio passthrough) that records whether the engine drives its
-    /// text handlers, so the audio-mode gate can be observed.</summary>
-    private sealed class RecordingBuiltInTtsProvider : IRealtimeAiTtsProvider
+    /// <summary>BuiltIn-type provider that ALSO implements the text-synthesizer sibling, so text routing
+    /// is structurally possible and the S5 gate (not S6's interface split) is what we observe: in audio
+    /// mode the engine must still not drive the text handlers.</summary>
+    private sealed class RecordingBuiltInTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiAudioPassthrough, IRealtimeAiTextSynthesizer
     {
         public int TextDeltaCalls;
         public int TextDoneCalls;
@@ -66,6 +67,9 @@ public class RealtimeAiServiceAudioModeTextFlushGateGoldenTests : RealtimeAiServ
 
         public Task HandleProviderAudioAsync(string base64Audio, CancellationToken cancellationToken) =>
             AudioChunkReadyAsync?.Invoke(base64Audio) ?? Task.CompletedTask;
+
+        public Task HandleProviderAudioDoneAsync(CancellationToken cancellationToken) =>
+            SynthesisCompletedAsync?.Invoke() ?? Task.CompletedTask;
 
         public Task HandleProviderTextDeltaAsync(string textDelta, CancellationToken cancellationToken)
         {

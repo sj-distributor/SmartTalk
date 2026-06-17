@@ -238,7 +238,7 @@ public class RealtimeAiServiceExternalTtsTests : RealtimeAiServiceTestBase
         });
     }
 
-    private sealed class FakeExternalTtsProvider : IRealtimeAiTtsProvider
+    private sealed class FakeExternalTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiTextSynthesizer
     {
         private readonly bool _autoComplete;
 
@@ -272,11 +272,6 @@ public class RealtimeAiServiceExternalTtsTests : RealtimeAiServiceTestBase
         public Task InitializeAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
         {
             OutputSampleRate = config.SampleRate ?? 24000;
-            return Task.CompletedTask;
-        }
-
-        public Task HandleProviderAudioAsync(string base64Audio, CancellationToken cancellationToken)
-        {
             return Task.CompletedTask;
         }
 

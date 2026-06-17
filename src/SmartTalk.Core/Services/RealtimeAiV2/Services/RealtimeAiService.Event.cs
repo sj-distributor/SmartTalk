@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -15,6 +16,12 @@ public partial class RealtimeAiService
     // negotiator returns Text iff the TTS needs text input (i.e. a non-BuiltIn provider) — but it keeps
     // OutputMode the single source of truth so a provider's type can't drift from the negotiated mode.
     private bool UsesExternalTts => _ctx.OutputMode == RealtimeAiOutputMode.Text;
+
+    // The TTS provider implements exactly one direction sibling (audio passthrough vs text synthesizer);
+    // routing through these casts means a provider structurally cannot receive the half it doesn't own.
+    private IRealtimeAiAudioPassthrough AudioPassthrough => _ctx.TtsProvider as IRealtimeAiAudioPassthrough;
+
+    private IRealtimeAiTextSynthesizer TextSynthesizer => _ctx.TtsProvider as IRealtimeAiTextSynthesizer;
 
     private async Task OnWssMessageReceivedAsync(string rawMessage)
     {
@@ -38,7 +45,7 @@ public partial class RealtimeAiService
                         if (!string.IsNullOrEmpty(audioData.ItemId))
                             _ctx.LastAssistantItemId = audioData.ItemId;
 
-                        await _ctx.TtsProvider.HandleProviderAudioAsync(audioData.Base64Payload, _ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                        await (AudioPassthrough?.HandleProviderAudioAsync(audioData.Base64Payload, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
                     }
                     break;
 
@@ -92,7 +99,7 @@ public partial class RealtimeAiService
                     break;
 
                 case RealtimeAiWssEventType.ResponseAudioDone:
-                    await _ctx.TtsProvider.HandleProviderTextDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                    await (AudioPassthrough?.HandleProviderAudioDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
                     break;
                 
                 case RealtimeAiWssEventType.ResponseStarted:
@@ -290,7 +297,7 @@ public partial class RealtimeAiService
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
         _ctx.CurrentResponseTextBuilder.Append(text);
 
-        await _ctx.TtsProvider.HandleProviderTextDeltaAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        await (TextSynthesizer?.HandleProviderTextDeltaAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
     }
 
     private async Task FlushProviderTextToTtsAsync(string completedText = null)
@@ -304,7 +311,7 @@ public partial class RealtimeAiService
 
         await EmitAssistantTextTranscriptIfApplicableAsync(completedText).ConfigureAwait(false);
 
-        await _ctx.TtsProvider.HandleProviderTextDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        await (TextSynthesizer?.HandleProviderTextDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
     }
 
     /// <summary>
