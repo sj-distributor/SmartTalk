@@ -906,7 +906,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
-
+    
     public async Task<bool> HasCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default)
     {
         var query =

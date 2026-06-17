@@ -8,10 +8,10 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.KnowledgeScenario;
-using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.Sales;
@@ -290,9 +290,8 @@ public class AiResourceSyncService : IAiResourceSyncService
             }
         }
 
-        var lockKey = $"crm-auto-sync:agent:{storeId}:{salesAgentName}";
         var salesAgent = await _redisSafeRunner.ExecuteWithLockAsync(
-            lockKey,
+            $"crm-auto-sync:agent:{storeId}:{salesAgentName}",
             async () =>
             {
                 var existing = await _agentDataProvider.GetCrmAutoSyncAgentByStoreAndNameAsync(storeId, salesAgentName, cancellationToken).ConfigureAwait(false);
@@ -317,16 +316,13 @@ public class AiResourceSyncService : IAiResourceSyncService
                     IsSurface = true
                 }, cancellationToken).ConfigureAwait(false);
 
-                var created = await _agentDataProvider.GetAgentByIdAsync(createdSalesAgent.Data.Id, cancellationToken).ConfigureAwait(false);
-                return created;
+                return await _agentDataProvider.GetAgentByIdAsync(createdSalesAgent.Data.Id, cancellationToken).ConfigureAwait(false);
             },
             expiry: TimeSpan.FromMinutes(2),
             wait: TimeSpan.FromSeconds(5),
             retry: TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
-        if (salesAgent == null)
-            salesAgent = await _agentDataProvider.GetCrmAutoSyncAgentByStoreAndNameAsync(storeId, salesAgentName, cancellationToken).ConfigureAwait(false);
-
+        salesAgent ??= await _agentDataProvider.GetCrmAutoSyncAgentByStoreAndNameAsync(storeId, salesAgentName, cancellationToken).ConfigureAwait(false);
         if (salesAgent == null)
             throw new Exception($"Sales agent create failed. StoreId={storeId}, AgentName={salesAgentName}");
 
@@ -388,9 +384,8 @@ public class AiResourceSyncService : IAiResourceSyncService
             return assistant;
         }
 
-        var lockKey = $"crm-auto-sync:assistant:{storeId}:{customerKnowledgeAssistantName}";
         assistant = await _redisSafeRunner.ExecuteWithLockAsync(
-            lockKey,
+            $"crm-auto-sync:assistant:{storeId}:{customerKnowledgeAssistantName}",
             async () =>
             {
                 var existing = await _aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(storeId, customerKnowledgeAssistantName, cancellationToken).ConfigureAwait(false);
@@ -409,9 +404,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             wait: TimeSpan.FromSeconds(5),
             retry: TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
-        if (assistant == null)
-            assistant = await _aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(storeId, customerKnowledgeAssistantName, cancellationToken).ConfigureAwait(false);
-
+        assistant ??= await _aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(storeId, customerKnowledgeAssistantName, cancellationToken).ConfigureAwait(false);
         if (assistant == null)
             throw new Exception($"Assistant create failed. StoreId={storeId}, Name={customerKnowledgeAssistantName}");
 
