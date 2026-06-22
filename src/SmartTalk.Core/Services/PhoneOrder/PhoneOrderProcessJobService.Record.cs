@@ -411,14 +411,14 @@ public partial class PhoneOrderProcessJobService
             "1. 直接輸出最終分析報告正文，不要輸出任何確認、等待或寒暄語。\n" +
             "2. 禁止輸出「好的」、「請稍等」、「我會」、「我將」、「以下是」、「正在生成」等過渡語。\n" +
             "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
-            "4. 即使錄音模糊、靜音或無法識別，也必須按分析報告格式輸出，並在內容摘要中說明無法識別的原因。\n" +
-            "5. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。";
+            "4. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。\n" +
+            "5. 「客人下單內容」不是必填項。只有在錄音中明確聽到客戶下單且包含可識別的物料，才可以輸出具體下單內容。\n";
 
         List<ChatMessage> messages =
         [
             new SystemChatMessage(recordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。")
+            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。沒有明確下單時，請寫「客人下單內容：無明確下單」")
         ];
 
         return messages;
