@@ -21,12 +21,17 @@ public partial class PhoneOrderProcessJobService
 
         var complaint = await ExtractComplaintFeedbackAsync(reportText, cancellationToken).ConfigureAwait(false);
         var customerIds = ParseCustomerIds(aiSpeechAssistant?.Name);
-        var orders = customerIds.Count > 0
-            ? await GetComplaintInvoiceOrdersAsync(customerIds, cancellationToken).ConfigureAwait(false)
-            : new List<ComplaintInvoiceOrder>();
-        var matchResult = MatchComplaintInvoiceOrders(complaint, orders, customerIds.Count > 0);
+        var matchResults = customerIds.Count > 0
+            ? await BuildCustomerComplaintInvoiceMatchResultsAsync(complaint, customerIds, cancellationToken).ConfigureAwait(false)
+            : new List<ComplaintCustomerInvoiceMatchResult>
+            {
+                new()
+                {
+                    MatchResult = MatchComplaintInvoiceOrders(complaint, new List<ComplaintInvoiceOrder>(), false)
+                }
+            };
 
-        return FormatComplaintFeedbackSection(complaint, matchResult);
+        return FormatComplaintFeedbackSection(complaint, matchResults);
     }
 
     private async Task<ComplaintFeedbackExtraction> ExtractComplaintFeedbackAsync(string reportText, CancellationToken cancellationToken)
@@ -77,21 +82,47 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task<List<ComplaintInvoiceOrder>> GetComplaintInvoiceOrdersAsync(List<string> customerIds, CancellationToken cancellationToken)
+    private async Task<List<ComplaintCustomerInvoiceMatchResult>> BuildCustomerComplaintInvoiceMatchResultsAsync(
+        ComplaintFeedbackExtraction complaint,
+        List<string> customerIds,
+        CancellationToken cancellationToken)
     {
-        var normalizedCustomerIds = NormalizeCustomerIdsForOrderQuery(customerIds);
+        var results = new List<ComplaintCustomerInvoiceMatchResult>();
+
+        foreach (var customerId in customerIds)
+        {
+            var queryCustomerId = NormalizeCustomerIdForOrderQuery(customerId);
+            var orders = await GetComplaintInvoiceOrdersAsync(customerId, queryCustomerId, cancellationToken).ConfigureAwait(false);
+
+            results.Add(new ComplaintCustomerInvoiceMatchResult
+            {
+                CustomerId = customerId,
+                QueryCustomerId = queryCustomerId,
+                MatchResult = MatchComplaintInvoiceOrders(complaint, orders, true)
+            });
+        }
+
+        return results;
+    }
+
+    private async Task<List<ComplaintInvoiceOrder>> GetComplaintInvoiceOrdersAsync(
+        string customerId,
+        string queryCustomerId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(queryCustomerId)) return new List<ComplaintInvoiceOrder>();
 
         try
         {
             var response = await _salesClient.GetOrderInformationByCustomerIdAsync(
-                new GetOrderInformationByCustomerIdRequestDto { CustomerIds = normalizedCustomerIds },
+                new GetOrderInformationByCustomerIdRequestDto { CustomerIds = new List<string> { queryCustomerId } },
                 cancellationToken).ConfigureAwait(false);
 
             return BuildComplaintInvoiceOrders(response?.Data);
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Get complaint invoice orders failed. CustomerIds={CustomerIds}", string.Join(",", normalizedCustomerIds));
+            Log.Warning(ex, "Get complaint invoice orders failed. CustomerId={CustomerId}, QueryCustomerId={QueryCustomerId}", customerId, queryCustomerId);
             return new List<ComplaintInvoiceOrder>();
         }
     }
@@ -181,7 +212,9 @@ public partial class PhoneOrderProcessJobService
         return ComplaintInvoiceMatchResult.Fail("无法匹配订单");
     }
 
-    private static string FormatComplaintFeedbackSection(ComplaintFeedbackExtraction complaint, ComplaintInvoiceMatchResult matchResult)
+    private static string FormatComplaintFeedbackSection(
+        ComplaintFeedbackExtraction complaint,
+        List<ComplaintCustomerInvoiceMatchResult> customerMatchResults)
     {
         static string JoinOrEmpty(IEnumerable<string> values)
         {
@@ -200,14 +233,23 @@ public partial class PhoneOrderProcessJobService
         builder.AppendLine();
         builder.AppendLine("订单匹配结果：");
 
-        if (matchResult.IsMatched)
+        foreach (var customerMatchResult in customerMatchResults ?? new List<ComplaintCustomerInvoiceMatchResult>())
         {
-            builder.AppendLine($"匹配成功：已锁定 Invoice {string.Join("、", matchResult.MatchedOrders.Select(x => x.InvNumber).Distinct())}");
-            builder.AppendLine($"命中规则：{matchResult.MatchReason}");
-        }
-        else
-        {
-            builder.AppendLine($"匹配失败：{matchResult.MatchReason}");
+            var matchResult = customerMatchResult.MatchResult ?? ComplaintInvoiceMatchResult.Fail("无法匹配订单");
+            var customerLabel = BuildCustomerIdLabel(customerMatchResult.CustomerId, customerMatchResult.QueryCustomerId);
+
+            if (!string.IsNullOrWhiteSpace(customerLabel))
+                builder.AppendLine($"客户ID：{customerLabel}");
+
+            if (matchResult.IsMatched)
+            {
+                builder.AppendLine($"匹配成功：已锁定 Invoice {string.Join("、", matchResult.MatchedOrders.Select(x => x.InvNumber).Distinct())}");
+                builder.AppendLine($"命中规则：{matchResult.MatchReason}");
+            }
+            else
+            {
+                builder.AppendLine($"匹配失败：{matchResult.MatchReason}");
+            }
         }
 
         return builder.ToString().TrimEnd();
@@ -220,14 +262,24 @@ public partial class PhoneOrderProcessJobService
             : assistantName.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().ToList();
     }
 
-    private static List<string> NormalizeCustomerIdsForOrderQuery(IEnumerable<string> customerIds)
+    private static string NormalizeCustomerIdForOrderQuery(string customerId)
     {
-        return (customerIds ?? [])
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .Select(x => char.IsDigit(x[0]) && x.Length < 10 ? x.PadLeft(10, '0') : x)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        if (string.IsNullOrWhiteSpace(customerId)) return string.Empty;
+
+        var trimmed = customerId.Trim();
+        return char.IsDigit(trimmed[0]) && trimmed.Length < 10 ? trimmed.PadLeft(10, '0') : trimmed;
+    }
+
+    private static string BuildCustomerIdLabel(string customerId, string queryCustomerId)
+    {
+        if (string.IsNullOrWhiteSpace(customerId) && string.IsNullOrWhiteSpace(queryCustomerId))
+            return string.Empty;
+
+        if (string.IsNullOrWhiteSpace(customerId) ||
+            string.Equals(customerId, queryCustomerId, StringComparison.OrdinalIgnoreCase))
+            return queryCustomerId;
+
+        return $"{customerId}（查询ID：{queryCustomerId}）";
     }
 
     private static string NormalizeInvoiceNumber(string value)
@@ -287,6 +339,15 @@ public partial class PhoneOrderProcessJobService
         public DateTime? InvDate { get; set; }
 
         public List<string> MaterialNames { get; set; } = new();
+    }
+
+    private sealed class ComplaintCustomerInvoiceMatchResult
+    {
+        public string CustomerId { get; set; }
+
+        public string QueryCustomerId { get; set; }
+
+        public ComplaintInvoiceMatchResult MatchResult { get; set; }
     }
 
     private sealed class ComplaintInvoiceMatchResult
