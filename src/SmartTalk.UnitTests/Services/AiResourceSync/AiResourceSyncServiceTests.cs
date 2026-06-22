@@ -56,7 +56,7 @@ public class AiResourceSyncServiceTests
             .Enqueue<IAiResourceSyncProcessJobService>(Arg.Do<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(x => queuedExpression = x), Arg.Any<string>())
             .Returns("job-1");
 
-        var handler = new AiResourceSyncEventHandler(backgroundJobClient, crmClient);
+        var handler = new AiResourceSyncEventHandler(backgroundJobClient);
         var context = Substitute.For<IReceiveContext<AiResourceSyncEvent>>();
         context.Message.Returns(new AiResourceSyncEvent
         {
