@@ -67,6 +67,7 @@ public class SalesService : ISalesService
 
             var orderItems = orderResponse?.Data ?? new List<SalesOrderHistoryDto>();
             var goodsStatusLookup = await BuildGoodsStatusLookupAsync(askItems, orderItems, soldToId, cancellationToken).ConfigureAwait(false);
+            var quotationLookup = await BuildQuotationLookupAsync(soldToId, askItems, orderItems, cancellationToken).ConfigureAwait(false);
 
             var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
                 .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct()
@@ -101,6 +102,7 @@ public class SalesService : ISalesService
                 var brand = parts.Length > 1 ? parts[1] : "";
                 var size = parts.Length > 3 ? parts[3] : "";
                 var status = string.IsNullOrWhiteSpace(materialNumber) || string.IsNullOrWhiteSpace(plant) ? string.Empty : goodsStatusLookup.GetValueOrDefault(BuildGoodsStatusKey(materialNumber, plant, rtype), string.Empty);
+                var price = FormatQuotationPrice(FindQuotation(quotationLookup, materialNumber));
 
                 string aliasText = "";
                 MaterialPartInfoDto partInfo = null;
@@ -118,7 +120,7 @@ public class SalesService : ISalesService
                 return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, status: {status}, " +
                        $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
                        $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
-                       $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr}";
+                       $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr}, price: {price}";
             }
 
             allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material, x.Plant, x.MaterialType)));
@@ -426,6 +428,71 @@ public class SalesService : ISalesService
     private static string BuildGoodsStatusKey(string material, string plant, string rtype)
     {
         return $"{material?.Trim().ToUpperInvariant()}|{plant?.Trim().ToUpperInvariant()}|{(rtype ?? string.Empty).Trim().ToUpperInvariant()}";
+    }
+
+    private static string BuildMaterialKey(string material)
+    {
+        if (string.IsNullOrWhiteSpace(material)) return string.Empty;
+
+        var trimmed = material.Trim();
+
+        return long.TryParse(trimmed, out _) ? trimmed.PadLeft(18, '0') : trimmed.ToUpperInvariant();
+    }
+
+    private async Task<Dictionary<string, AiQuotationDto>> BuildQuotationLookupAsync(string soldToId, List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems, CancellationToken cancellationToken)
+    {
+        var materialIds = askItems
+            .Select(x => x.Material)
+            .Concat(orderItems.Select(x => x.MaterialNumber))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(soldToId) || materialIds.Count == 0)
+            return new Dictionary<string, AiQuotationDto>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var response = await _salesClient.GetCustomerAiQuotationAsync(new GetCustomerAiQuotationRequestDto
+            {
+                CustomerId = soldToId,
+                MaterialIdList = materialIds
+            }, cancellationToken).ConfigureAwait(false);
+
+            return response?.AiQuotationList?
+                .Where(x => !string.IsNullOrWhiteSpace(x.MaterialId))
+                .GroupBy(x => BuildMaterialKey(x.MaterialId), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+                ?? new Dictionary<string, AiQuotationDto>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "GetCustomerAiQuotationAsync failed for soldToId {SoldToId}", soldToId);
+            return new Dictionary<string, AiQuotationDto>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static AiQuotationDto FindQuotation(Dictionary<string, AiQuotationDto> quotationLookup, string materialNumber)
+    {
+        if (quotationLookup == null || string.IsNullOrWhiteSpace(materialNumber))
+            return null;
+
+        return quotationLookup.GetValueOrDefault(BuildMaterialKey(materialNumber));
+    }
+
+    private static string FormatQuotationPrice(AiQuotationDto quotation)
+    {
+        if (quotation == null) return string.Empty;
+
+        var parts = new List<string>();
+
+        if (quotation.SjAiCost > 0)
+            parts.Add($"SJ价 {quotation.SjAiCost.Value:0.##}");
+
+        if (quotation.KfOrOsAiCost > 0)
+            parts.Add($"KF/OS价 {quotation.KfOrOsAiCost.Value:0.##}");
+
+        return string.Join("，", parts);
     }
 
     private async Task<Dictionary<string, string>> BuildGoodsStatusLookupAsync(List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems, string soldToId, CancellationToken cancellationToken)

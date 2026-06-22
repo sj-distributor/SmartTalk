@@ -30,10 +30,7 @@ public partial class AiSpeechAssistantConnectService
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
                 Prompt = _ctx.Prompt,
-                Tools = _ctx.FunctionCalls
-                    .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
-                    .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
-                    .ToList(),
+                Tools = BuildTools(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
                 TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
@@ -61,6 +58,16 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
+    private List<object> BuildTools()
+    {
+        return _ctx.FunctionCalls
+            .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
+            .Select(x => JsonConvert.DeserializeObject<JObject>(x.Content))
+            .Where(x => x != null)
+            .Cast<object>()
+            .ToList();
+    }
+    
     /// <summary>
     /// Logs per-turn OpenAI token usage with assistant + call context so cost reports
     /// can be reconstructed from structured Serilog properties. Intentionally fire-and-
