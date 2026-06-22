@@ -1215,8 +1215,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
 
         var existingMappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: command.CompanyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var languagesToUpdate = items.Select(x => x.Language).ToHashSet();
-        var mappingsToDeactivate = existingMappings.Where(x => languagesToUpdate.Contains(x.Language)).ToList();
+        var mappingsToDeactivate = existingMappings.ToList();
 
         foreach (var mapping in mappingsToDeactivate)
         {

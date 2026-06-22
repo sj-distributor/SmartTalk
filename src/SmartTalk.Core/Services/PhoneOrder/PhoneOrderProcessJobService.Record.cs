@@ -133,7 +133,7 @@ public partial class PhoneOrderProcessJobService
         var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
 
         var client = new ChatClient(
-            "gpt-audio-2025-08-28",
+            _openAiSettings.RecordAnalyzeModel,
             new ApiKeyCredential(_openAiSettings.ApiKey),
             new OpenAIClientOptions
             {
@@ -355,9 +355,7 @@ public partial class PhoneOrderProcessJobService
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+        var recordAnalyzePrompt = (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
                   "分析報告的格式：交談主題：xxx\n\n " +
                   "來電號碼：#{call_from}\n\n " +
@@ -366,15 +364,27 @@ public partial class PhoneOrderProcessJobService
                   "待辦事件: \n1.xxx\n2.xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
-                .Replace("#{call_from}", callFrom ?? "")
-                .Replace("#{current_time}", currentTime ?? "")
-                .Replace("#{call_to}", callTo ?? "")
-                .Replace("#{customer_items}", customerItemsString ?? "")
-                .Replace("#{call_subject_cn}", callSubjectCn)
-                .Replace("#{call_subject_us}", callSubjectEn)
-                .Replace("#{menu_items}", menuItems ?? "")),
+            .Replace("#{call_from}", callFrom ?? "")
+            .Replace("#{current_time}", currentTime ?? "")
+            .Replace("#{call_to}", callTo ?? "")
+            .Replace("#{customer_items}", customerItemsString ?? "")
+            .Replace("#{call_subject_cn}", callSubjectCn)
+            .Replace("#{call_subject_us}", callSubjectEn)
+            .Replace("#{menu_items}", menuItems ?? "");
+
+        recordAnalyzePrompt +=
+            "\n\n輸出要求：\n" +
+            "1. 直接輸出最終分析報告正文，不要輸出任何確認、等待或寒暄語。\n" +
+            "2. 禁止輸出「好的」、「請稍等」、「我會」、「我將」、「以下是」、「正在生成」等過渡語。\n" +
+            "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
+            "4. 即使錄音模糊、靜音或無法識別，也必須按分析報告格式輸出，並在內容摘要中說明無法識別的原因。\n" +
+            "5. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。";
+
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(recordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
+            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。")
         ];
         
         return messages; 
