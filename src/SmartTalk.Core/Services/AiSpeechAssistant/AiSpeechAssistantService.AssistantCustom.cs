@@ -947,6 +947,8 @@ public partial class AiSpeechAssistantService
     
     private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
+        Log.Information("InitialAssistantKnowledgeAsync. DetailCount={DetailCount}", command.Details?.Count ?? 0);
+
         var knowledge = new AiSpeechAssistantKnowledge
         {
             Version = "1.0",
