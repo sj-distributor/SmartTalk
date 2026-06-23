@@ -1,9 +1,11 @@
 using AutoMapper;
 using NSubstitute;
+using Microsoft.Extensions.Configuration;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.Pos;
+using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
@@ -37,7 +39,8 @@ public class AutoAddLanguageCatalogTests
             Substitute.For<IAiSpeechAssistantDataProvider>(),
             Substitute.For<IPosDataProvider>(),
             Substitute.For<ISmartiesClient>(),
-            Substitute.For<IAiSpeechAssistantKnowledgePromptService>());
+            Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
+            new SalesSettingBuilder().Build());
 
         await sut.SaveKnowledgeSceneLanguageMappingsAsync(new SaveKnowledgeSceneLanguageMappingsCommand
         {
@@ -91,7 +94,8 @@ public class AutoAddLanguageCatalogTests
             Substitute.For<IAiSpeechAssistantDataProvider>(),
             Substitute.For<IPosDataProvider>(),
             Substitute.For<ISmartiesClient>(),
-            Substitute.For<IAiSpeechAssistantKnowledgePromptService>());
+            Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
+            new SalesSettingBuilder().Build());
 
         var response = await sut.SaveKnowledgeSceneLanguageMappingsAsync(new SaveKnowledgeSceneLanguageMappingsCommand
         {
@@ -105,5 +109,16 @@ public class AutoAddLanguageCatalogTests
         Assert.NotNull(response.Data);
         Assert.NotNull(response.Data.Mappings);
         Assert.All(response.Data.Mappings, x => Assert.Null(x.SceneId));
+    }
+
+    private sealed class SalesSettingBuilder
+    {
+        public SalesSetting Build()
+        {
+            return new SalesSetting(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Sales:CompanyName"] = "OME"
+            }).Build());
+        }
     }
 }

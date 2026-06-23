@@ -158,6 +158,8 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         var sourceSceneLookup = await BuildSourceSceneLookupAsync(company.Id, cancellationToken).ConfigureAwait(false);
         Log.Information("Scenes loaded. Count={SceneCount}", sourceSceneLookup.MappingScenes.Count);
+        if (company.Name.Equals(_salesSetting.CompanyName, StringComparison.OrdinalIgnoreCase) && sourceSceneLookup.MappingScenes.Count == 0)
+            throw new Exception($"Sales company [{_salesSetting.CompanyName}] has no active knowledge scene mapping.");
         
         var storeNames = customerGroups
             .Select(x => x.SalesKey)
