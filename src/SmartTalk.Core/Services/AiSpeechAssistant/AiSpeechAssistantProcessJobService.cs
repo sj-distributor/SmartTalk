@@ -40,6 +40,8 @@ public interface IAiSpeechAssistantProcessJobService : IScopedDependency
     Task SyncAiSpeechAssistantLanguageAsync(SyncAiSpeechAssistantLanguageCommand command, CancellationToken cancellationToken);
 
     Task SyncAiSpeechAssistantKnowledgePromptAsync(SyncAiSpeechAssistantKnowledgePromptCommand command, CancellationToken cancellationToken);
+
+    Task SyncAiSpeechAssistantKnowledgeDetailAsync(SyncAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
     
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
@@ -273,6 +275,26 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         await _speechAssistantDataProvider
             .UpdateAiSpeechAssistantKnowledgesAsync(updates, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SyncAiSpeechAssistantKnowledgeDetailAsync(SyncAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        var companyName = _salesSetting.CompanyName?.Trim();
+        if (string.IsNullOrWhiteSpace(companyName))
+        {
+            Log.Information("Skip syncing assistant knowledge details: Sales CompanyName is empty.");
+            return;
+        }
+
+        var company = await _posDataProvider.GetPosCompanyByNameAsync(companyName, cancellationToken).ConfigureAwait(false);
+        if (company == null)
+        {
+            Log.Information("Skip syncing assistant knowledge details: company not found: {CompanyName}", companyName);
+            return;
+        }
+
+        Log.Information("[Job] SyncAiSpeechAssistantKnowledgeDetail. CompanyId={CompanyId}", company.Id);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshKnowledgeDetailsByCompanyIdAsync(company.Id, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool TryMergeNormalizedJson(int knowledgeId, string knowledgeJson, IEnumerable<string> copyKnowledgePoints, out string mergedJson)
