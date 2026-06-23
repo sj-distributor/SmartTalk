@@ -1615,7 +1615,7 @@ public partial class AiSpeechAssistantService
                 ? copyToRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
                 : Enumerable.Empty<JObject>();
 
-            var copyFromRelatedJsons = copyFromRelatedLookup.TryGetValue(copyToKnowledge.Id, out var copyFromRelated)
+            var copyFromRelatedJsons = copyFromRelatedLookup.TryGetValue(copyFromKnowledge.Id, out var copyFromRelated)
                 ? copyFromRelated.Select(r => JObject.Parse(r.CopyKnowledgePoints ?? "{}"))
                 : Enumerable.Empty<JObject>();
 
@@ -1956,14 +1956,14 @@ public partial class AiSpeechAssistantService
             sourceKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: sourceKnowledge.AssistantId, isActive: true, cancellationToken:cancellationToken).ConfigureAwait(false);
 
         var effectiveSourceKnowledgeId = shouldSyncLastedKnowledge ? sourceKnowledge.Id : sourceKnowledgeId;
-        Log.Information("SyncCopiedKnowledges effective source id resolved. inputSourceId={InputSourceId}, effectiveSourceId={EffectiveSourceId}",
+        Log.Information("SyncCopiedKnowledges source ids resolved. inputSourceId={InputSourceId}, effectiveSourceId={EffectiveSourceId}",
             sourceKnowledgeId, effectiveSourceKnowledgeId);
         
-        var oldTargetMap = await GetAndDeactivateOldTargetsAsync(effectiveSourceKnowledgeId, cancellationToken).ConfigureAwait(false);
+        var oldTargetMap = await GetAndDeactivateOldTargetsAsync(sourceKnowledgeId, cancellationToken).ConfigureAwait(false);
 
         if (oldTargetMap.Count == 0) return;
         
-        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, effectiveSourceKnowledgeId, sourceKnowledge, cancellationToken).ConfigureAwait(false);
+        var rebuildResult = await RebuildTargetsAsync(oldTargetMap, sourceKnowledgeId, sourceKnowledge, cancellationToken).ConfigureAwait(false);
 
         if (rebuildResult.NewTargets.Count == 0) return;
 

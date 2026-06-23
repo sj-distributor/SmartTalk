@@ -59,7 +59,10 @@ public partial class EventHandlingService
 
         if (checkShouldSyncRelation)
         {
-            var sourceKnowledgeIdToSync = @event.ShouldSyncLastedKnowledge ? @event.LatestKnowledge.Id : @event.PrevKnowledge.Id;
+            // Keep the previous knowledge id as the sync anchor so we can find
+            // existing copied targets, while SyncCopiedKnowledgesIfRequiredAsync
+            // still upgrades them to the latest active knowledge version.
+            var sourceKnowledgeIdToSync = @event.PrevKnowledge.Id;
             Log.Information("Enqueue SyncCopiedKnowledges. sourceKnowledgeIdToSync={SourceKnowledgeIdToSync}, prevKnowledgeId={PrevKnowledgeId}, latestKnowledgeId={LatestKnowledgeId}",
                 sourceKnowledgeIdToSync, @event.PrevKnowledge.Id, @event.LatestKnowledge.Id);
 
