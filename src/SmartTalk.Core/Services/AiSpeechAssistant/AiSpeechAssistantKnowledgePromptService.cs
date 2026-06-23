@@ -18,8 +18,6 @@ public interface IAiSpeechAssistantKnowledgePromptService : IScopedDependency
 
     Task RefreshScenePromptsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken);
 
-    Task RefreshKnowledgeDetailsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken);
-
     Task RefreshKnowledgeDetailsByCompanyIdAsync(int companyId, CancellationToken cancellationToken);
 }
 
@@ -144,32 +142,6 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
 
         await RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task RefreshKnowledgeDetailsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken)
-    {
-        var distinctSceneIds = (sceneIds ?? [])
-            .Where(x => x > 0)
-            .Distinct()
-            .ToList();
-
-        if (distinctSceneIds.Count == 0)
-            return;
-
-        var sceneCompanies = await _knowledgeScenarioDataProvider
-            .GetKnowledgeSceneCompaniesBySceneIdsAsync(distinctSceneIds, isApplied: true, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-
-        var companyIds = sceneCompanies
-            .Select(x => x.CompanyId)
-            .Where(x => x > 0)
-            .Distinct()
-            .ToList();
-
-        foreach (var companyId in companyIds)
-        {
-            await RefreshKnowledgeDetailsByCompanyIdAsync(companyId, cancellationToken).ConfigureAwait(false);
-        }
     }
 
     public async Task RefreshKnowledgeDetailsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
