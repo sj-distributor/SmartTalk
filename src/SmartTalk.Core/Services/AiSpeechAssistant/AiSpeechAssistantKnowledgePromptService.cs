@@ -3,6 +3,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.KnowledgeScenario;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
@@ -16,6 +17,8 @@ public interface IAiSpeechAssistantKnowledgePromptService : IScopedDependency
     Task RefreshScenePromptsAsync(List<int> knowledgeIds, CancellationToken cancellationToken);
 
     Task RefreshScenePromptsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken);
+
+    Task RefreshKnowledgeDetailsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken);
 }
 
 public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowledgePromptService
@@ -141,6 +144,40 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         await RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task RefreshKnowledgeDetailsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken)
+    {
+        var distinctSceneIds = (sceneIds ?? [])
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+
+        if (distinctSceneIds.Count == 0)
+            return;
+
+        var relations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdsAsync(distinctSceneIds, cancellationToken).ConfigureAwait(false);
+        var knowledgeIds = relations.Select(x => x.KnowledgeId).Distinct().ToList();
+
+        if (knowledgeIds.Count == 0)
+            return;
+
+        foreach (var knowledgeId in knowledgeIds)
+        {
+            var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(knowledgeId: knowledgeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (knowledge == null)
+                continue;
+
+            var details = await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(knowledgeId, cancellationToken).ConfigureAwait(false);
+            if (details.Count > 0)
+                continue;
+
+            var fallbackDetails = await BuildDetailsFromCurrentSceneMappingsAsync(knowledge, cancellationToken).ConfigureAwait(false);
+            if (fallbackDetails.Count == 0)
+                continue;
+
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(fallbackDetails, true, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private static string ResolveSceneKnowledgeContent(KnowledgeSceneItem sceneKnowledge)
     {
         if (sceneKnowledge.Type == KnowledgeSceneItemType.File)
@@ -150,5 +187,66 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         }
 
         return sceneKnowledge.Content?.Trim() ?? string.Empty;
+    }
+
+    private async Task<List<AiSpeechAssistantKnowledgeDetail>> BuildDetailsFromCurrentSceneMappingsAsync(
+        AiSpeechAssistantKnowledge knowledge,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveKnowledgeLanguage(knowledge.ModelLanguage, out var language))
+            return [];
+
+        var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(
+            companyId: null,
+            sceneIds: null,
+            language: language,
+            isActive: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var sceneIds = mappings
+            .Select(x => x.SceneId)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+
+        if (sceneIds.Count == 0)
+            return [];
+
+        var sceneItems = await _knowledgeScenarioDataProvider
+            .GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        return sceneItems
+            .GroupBy(x => x.SceneId)
+            .SelectMany(group => group.Select(item => new AiSpeechAssistantKnowledgeDetail
+            {
+                KnowledgeId = knowledge.Id,
+                KnowledgeName = item.Name,
+                FormatType = item.Type == KnowledgeSceneItemType.File
+                    ? AiSpeechAssistantKonwledgeFormatType.FIle
+                    : item.Type == KnowledgeSceneItemType.FAQ
+                        ? AiSpeechAssistantKonwledgeFormatType.FAQ
+                        : AiSpeechAssistantKonwledgeFormatType.Text,
+                Content = item.Content,
+                FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName,
+                CreatedDate = DateTimeOffset.UtcNow
+            }))
+            .ToList();
+    }
+
+    private static bool TryResolveKnowledgeLanguage(string modelLanguage, out AutoAddLanguage? language)
+    {
+        language = null;
+
+        if (string.IsNullOrWhiteSpace(modelLanguage))
+            return false;
+
+        if (Enum.TryParse<AutoAddLanguage>(modelLanguage, true, out var parsedLanguage))
+        {
+            language = parsedLanguage;
+            return true;
+        }
+
+        return false;
     }
 }

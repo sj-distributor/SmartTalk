@@ -1242,6 +1242,10 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         else if (mappingsToDeactivate.Count > 0)
             await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneLanguageMappingsAsync(mappingsToDeactivate, true, cancellationToken).ConfigureAwait(false);
 
+        await _aiSpeechAssistantKnowledgePromptService.RefreshKnowledgeDetailsBySceneIdsAsync(
+            items.Select(x => x.SceneId).Distinct().ToList(),
+            cancellationToken).ConfigureAwait(false);
+
         return new SaveKnowledgeSceneLanguageMappingsResponse
         {
             Data = await BuildCompanyLanguageMappingsAsync(command.CompanyId, cancellationToken).ConfigureAwait(false)
