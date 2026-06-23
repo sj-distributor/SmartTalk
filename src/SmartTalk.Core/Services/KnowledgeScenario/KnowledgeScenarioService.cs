@@ -8,6 +8,7 @@ using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Settings.Sales;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
@@ -71,6 +72,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
+    private readonly SalesSetting _salesSetting;
 
     public KnowledgeScenarioService(
         IMapper mapper,
@@ -78,7 +80,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         IPosDataProvider posDataProvider,
         ISmartiesClient smartiesClient,
-        IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService)
+        IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
+        SalesSetting salesSetting)
     {
         _mapper = mapper;
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
@@ -86,6 +89,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         _posDataProvider = posDataProvider;
         _smartiesClient = smartiesClient;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
+        _salesSetting = salesSetting;
     }
 
     private static List<KnowledgeSceneItemDto> OrderSceneItems(IEnumerable<KnowledgeSceneItemDto> items)
@@ -1242,9 +1246,11 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         else if (mappingsToDeactivate.Count > 0)
             await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneLanguageMappingsAsync(mappingsToDeactivate, true, cancellationToken).ConfigureAwait(false);
 
-        await _aiSpeechAssistantKnowledgePromptService.RefreshKnowledgeDetailsBySceneIdsAsync(
-            items.Select(x => x.SceneId).Distinct().ToList(),
-            cancellationToken).ConfigureAwait(false);
+        var salesCompany = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
+        if (salesCompany != null && salesCompany.Id == command.CompanyId)
+        {
+            await _aiSpeechAssistantKnowledgePromptService.RefreshKnowledgeDetailsByCompanyIdAsync(command.CompanyId, cancellationToken).ConfigureAwait(false);
+        }
 
         return new SaveKnowledgeSceneLanguageMappingsResponse
         {
