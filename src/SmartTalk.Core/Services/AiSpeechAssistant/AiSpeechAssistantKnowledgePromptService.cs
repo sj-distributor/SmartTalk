@@ -189,9 +189,15 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             .Select(x => x.KnowledgeId)
             .Where(x => x > 0)
             .ToHashSet();
+        var mappedSceneIds = mappingByLanguage.Values.Distinct().ToList();
+        var sceneItems = mappedSceneIds.Count == 0
+            ? []
+            : await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(mappedSceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneItemsLookup = sceneItems
+            .GroupBy(x => x.SceneId)
+            .ToDictionary(x => x.Key, x => x.ToList());
 
         var detailsToAdd = new List<AiSpeechAssistantKnowledgeDetail>();
-        var sceneItemsCache = new Dictionary<int, List<KnowledgeSceneItem>>();
 
         foreach (var assistantKnowledge in assistantKnowledges)
         {
@@ -207,12 +213,9 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             if (!mappingByLanguage.TryGetValue(language.Value, out var sceneId))
                 continue;
 
-            if (!sceneItemsCache.TryGetValue(sceneId, out var items))
-            {
-                items = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(sceneId, cancellationToken).ConfigureAwait(false);
-                sceneItemsCache[sceneId] = items;
-            }
-
+            if (!sceneItemsLookup.TryGetValue(sceneId, out var items))
+                items = [];
+                
             if (items.Count == 0)
                 continue;
 
@@ -233,7 +236,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
 
         Log.Information(
             "[KnowledgeDetailSync] Prepared details. CompanyId={CompanyId}, DetailCount={DetailCount}, SceneCount={SceneCount}, ExistingDetailCount={ExistingDetailCount}",
-            companyId, detailsToAdd.Count, sceneItemsCache.Count, existingDetails.Count);
+            companyId, detailsToAdd.Count, sceneItemsLookup.Count, existingDetails.Count);
 
         if (detailsToAdd.Count > 0)
         {
