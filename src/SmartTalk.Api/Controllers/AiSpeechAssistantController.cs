@@ -139,6 +139,28 @@ public class AiSpeechAssistantController : ControllerBase
         
         return Ok(response);
     }
+
+    [Route("knowledge/capabilities"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeCapabilitiesResponse))]
+    public async Task<IActionResult> GetAiSpeechAssistantKnowledgeCapabilitiesAsync([FromQuery] GetAiSpeechAssistantKnowledgeCapabilitiesRequest request)
+    {
+        var response = await _mediator
+            .RequestAsync<GetAiSpeechAssistantKnowledgeCapabilitiesRequest, GetAiSpeechAssistantKnowledgeCapabilitiesResponse>(request)
+            .ConfigureAwait(false);
+        
+        return Ok(response);
+    }
+
+    [Route("knowledge/capabilities/save"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantKnowledgeCapabilitiesResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantKnowledgeCapabilitiesAsync([FromBody] UpdateAiSpeechAssistantKnowledgeCapabilitiesCommand command)
+    {
+        var response = await _mediator
+            .SendAsync<UpdateAiSpeechAssistantKnowledgeCapabilitiesCommand, UpdateAiSpeechAssistantKnowledgeCapabilitiesResponse>(command)
+            .ConfigureAwait(false);
+        
+        return Ok(response);
+    }
     
     [Route("knowledge/history"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeHistoryResponse))]
