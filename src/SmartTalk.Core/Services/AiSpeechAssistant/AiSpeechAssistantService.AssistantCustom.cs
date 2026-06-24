@@ -281,9 +281,6 @@ public partial class AiSpeechAssistantService
                 .ConfigureAwait(false);
         }
 
-        if (prevKnowledge == null)
-            await EnableDefaultKnowledgeCapabilitiesIfRequiredAsync(assistant, latestKnowledge, cancellationToken).ConfigureAwait(false);
-
         if (command.Premise != null)
         {
             if (!string.IsNullOrEmpty(command.Premise))
@@ -544,22 +541,10 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await UpdateAiSpeechAssistantConfigsAsync(assistant, command.TransferCallNumber, cancellationToken).ConfigureAwait(false);
-
-        if (command.PhoneNoiseReductionEnabled.HasValue)
-        {
-            if (!AssistantHasPhoneChannel(assistant))
-                throw new InvalidOperationException("Phone noise reduction can only be configured for phone assistants.");
-
-            await SetPhoneNoiseReductionAsync(assistant, command.PhoneNoiseReductionEnabled.Value, cancellationToken).ConfigureAwait(false);
-        }
-        
-        var assistantDto = _mapper.Map<AiSpeechAssistantDto>(assistant);
-        assistantDto.PhoneNoiseReductionEnabled = await GetPhoneNoiseReductionEnabledAsync(
-            assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
         
         return new UpdateAiSpeechAssistantResponse
         {
-            Data = assistantDto
+            Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
         };
     }
 
@@ -792,8 +777,7 @@ public partial class AiSpeechAssistantService
     {
         var assistant = await InitialAssistantRelatedInfoAsync(command, cancellationToken).ConfigureAwait(false);
         
-        var knowledge = await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
-        await EnableDefaultKnowledgeCapabilitiesIfRequiredAsync(assistant, knowledge, cancellationToken).ConfigureAwait(false);
+        await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
 
         return assistant;
     }
@@ -856,9 +840,6 @@ public partial class AiSpeechAssistantService
         await UpdateAgentIfRequiredAsync(assistant, agent, cancellationToken).ConfigureAwait(false);
 
         await UpdateAiSpeechAssistantConfigsAsync(assistant, agent.TransferCallNumber, cancellationToken).ConfigureAwait(false);
-
-        if (AssistantHasPhoneChannel(assistant))
-            await SetPhoneNoiseReductionAsync(assistant, true, cancellationToken).ConfigureAwait(false);
         
         return assistant;
     }
@@ -964,7 +945,7 @@ public partial class AiSpeechAssistantService
         return (agent, number, true);
     }
     
-    private async Task<AiSpeechAssistantKnowledge> InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
         Log.Information("InitialAssistantKnowledgeAsync. DetailCount={DetailCount}", command.Details?.Count ?? 0);
 
@@ -1027,8 +1008,6 @@ public partial class AiSpeechAssistantService
 
         if (!string.IsNullOrWhiteSpace(knowledge.Prompt))
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return knowledge;
     }
     
     private async Task<AiSpeechAssistantKnowledge> UpdatePreviousKnowledgeIfRequiredAsync(int assistantId, bool isActive, CancellationToken cancellationToken)

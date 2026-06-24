@@ -24,8 +24,6 @@ public class UpdateAiSpeechAssistantCommand : ICommand
     public bool IsTransferHuman  { get; set; }
     
     public string TransferCallNumber { get; set; }
-
-    public bool? PhoneNoiseReductionEnabled { get; set; }
 }
 
 public class UpdateAiSpeechAssistantResponse : SmartTalkResponse<AiSpeechAssistantDto>

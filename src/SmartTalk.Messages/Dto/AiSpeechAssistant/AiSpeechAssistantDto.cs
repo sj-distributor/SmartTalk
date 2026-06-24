@@ -49,8 +49,6 @@ public class AiSpeechAssistantDto
     
     public bool IsAutoGenerateOrder { get; set; }
 
-    public bool PhoneNoiseReductionEnabled { get; set; }
-
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }
