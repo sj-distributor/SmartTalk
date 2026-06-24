@@ -198,6 +198,8 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             .ToDictionary(x => x.Key, x => x.ToList());
 
         var detailsToAdd = new List<AiSpeechAssistantKnowledgeDetail>();
+        var promptBySceneId = new Dictionary<int, string>();
+        var knowledgeUpdates = new Dictionary<int, AiSpeechAssistantKnowledge>();
 
         foreach (var assistantKnowledge in assistantKnowledges)
         {
@@ -232,11 +234,20 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
                 FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName,
                 CreatedDate = DateTimeOffset.UtcNow
             }));
+
+            if (!promptBySceneId.TryGetValue(sceneId, out var scenePrompt))
+            {
+                scenePrompt = GenerateKnowledgePromptForSceneItems(items);
+                promptBySceneId[sceneId] = scenePrompt;
+            }
+
+            knowledge.Prompt = scenePrompt;
+            knowledgeUpdates[knowledge.Id] = knowledge;
         }
 
         Log.Information(
             "[KnowledgeDetailSync] Prepared details. CompanyId={CompanyId}, DetailCount={DetailCount}, SceneCount={SceneCount}, ExistingDetailCount={ExistingDetailCount}",
-            companyId, detailsToAdd.Count, sceneItemsLookup.Count, existingDetails.Count);
+            companyId, detailsToAdd.Count, promptBySceneId.Count, existingDetails.Count);
 
         if (detailsToAdd.Count > 0)
         {
@@ -247,6 +258,30 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         {
             Log.Information("[KnowledgeDetailSync] Nothing to save. CompanyId={CompanyId}", companyId);
         }
+
+        if (knowledgeUpdates.Count > 0)
+        {
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(knowledgeUpdates.Values.ToList(), true, cancellationToken).ConfigureAwait(false);
+            Log.Information("[KnowledgeDetailSync] Updated prompts. CompanyId={CompanyId}, KnowledgeCount={KnowledgeCount}", companyId, knowledgeUpdates.Count);
+        }
+    }
+
+    private static string GenerateKnowledgePromptForSceneItems(List<KnowledgeSceneItem> items)
+    {
+        if (items == null || items.Count == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        sb.AppendLine("场景知识点：");
+        foreach (var item in items)
+        {
+            var content = ResolveSceneKnowledgeContent(item);
+            if (!string.IsNullOrWhiteSpace(content))
+                sb.AppendLine(content);
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
     private static string ResolveSceneKnowledgeContent(KnowledgeSceneItem sceneKnowledge)
