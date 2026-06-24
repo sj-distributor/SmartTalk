@@ -206,9 +206,6 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             if (!knowledgeMap.TryGetValue(assistantKnowledge.KnowledgeId, out var knowledge))
                 continue;
 
-            if (detailKnowledgeIds.Contains(knowledge.Id))
-                continue;
-
             if (!TryResolveKnowledgeLanguage(knowledge.ModelLanguage, out var language))
                 continue;
 
@@ -221,28 +218,12 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             if (items.Count == 0)
                 continue;
 
-            detailsToAdd.AddRange(items.Select(item => new AiSpeechAssistantKnowledgeDetail
-            {
-                KnowledgeId = knowledge.Id,
-                KnowledgeName = item.Name,
-                FormatType = item.Type == KnowledgeSceneItemType.File
-                    ? AiSpeechAssistantKonwledgeFormatType.FIle
-                    : item.Type == KnowledgeSceneItemType.FAQ
-                        ? AiSpeechAssistantKonwledgeFormatType.FAQ
-                        : AiSpeechAssistantKonwledgeFormatType.Text,
-                Content = item.Content,
-                FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName,
-                CreatedDate = DateTimeOffset.UtcNow
-            }));
+            if (!detailKnowledgeIds.Contains(knowledge.Id))
+                detailsToAdd.AddRange(BuildKnowledgeDetails(knowledge.Id, items));
 
-            if (!promptBySceneId.TryGetValue(sceneId, out var scenePrompt))
-            {
-                scenePrompt = GenerateKnowledgePromptForSceneItems(items);
-                promptBySceneId[sceneId] = scenePrompt;
-            }
-
+            var scenePrompt = GetOrBuildScenePrompt(sceneId, items, promptBySceneId);
             knowledge.Prompt = scenePrompt;
-            knowledgeUpdates[knowledge.Id] = knowledge;
+            knowledgeUpdates.TryAdd(knowledge.Id, knowledge);
         }
 
         Log.Information(
@@ -282,6 +263,33 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         }
 
         return sb.ToString().TrimEnd();
+    }
+
+    private static string GetOrBuildScenePrompt(int sceneId, List<KnowledgeSceneItem> items, Dictionary<int, string> promptBySceneId)
+    {
+        if (promptBySceneId.TryGetValue(sceneId, out var prompt))
+            return prompt;
+
+        prompt = GenerateKnowledgePromptForSceneItems(items);
+        promptBySceneId[sceneId] = prompt;
+        return prompt;
+    }
+
+    private static List<AiSpeechAssistantKnowledgeDetail> BuildKnowledgeDetails(int knowledgeId, List<KnowledgeSceneItem> items)
+    {
+        return items.Select(item => new AiSpeechAssistantKnowledgeDetail
+        {
+            KnowledgeId = knowledgeId,
+            KnowledgeName = item.Name,
+            FormatType = item.Type == KnowledgeSceneItemType.File
+                ? AiSpeechAssistantKonwledgeFormatType.FIle
+                : item.Type == KnowledgeSceneItemType.FAQ
+                    ? AiSpeechAssistantKonwledgeFormatType.FAQ
+                    : AiSpeechAssistantKonwledgeFormatType.Text,
+            Content = item.Content,
+            FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName,
+            CreatedDate = DateTimeOffset.UtcNow
+        }).ToList();
     }
 
     private static string ResolveSceneKnowledgeContent(KnowledgeSceneItem sceneKnowledge)
