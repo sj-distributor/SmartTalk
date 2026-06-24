@@ -87,22 +87,94 @@ public partial class PhoneOrderProcessJobService
         List<string> customerIds,
         CancellationToken cancellationToken)
     {
-        var results = new List<ComplaintCustomerInvoiceMatchResult>();
+        var customerOrderContexts = await BuildCustomerComplaintInvoiceOrderContextsAsync(customerIds, cancellationToken).ConfigureAwait(false);
+        var results = customerOrderContexts.Select(x => new ComplaintCustomerInvoiceMatchResult
+        {
+            CustomerId = x.CustomerId,
+            QueryCustomerId = x.QueryCustomerId,
+            MatchResult = MatchComplaintInvoiceOrders(complaint, x.Orders, true)
+        }).ToList();
 
-        foreach (var customerId in customerIds)
+        await ApplyLlmProductMatchResultsAsync(complaint, customerOrderContexts, results, cancellationToken).ConfigureAwait(false);
+
+        return results;
+    }
+
+    private async Task<List<ComplaintCustomerInvoiceOrderContext>> BuildCustomerComplaintInvoiceOrderContextsAsync(
+        List<string> customerIds,
+        CancellationToken cancellationToken)
+    {
+        var tasks = customerIds.Select(async customerId =>
         {
             var queryCustomerId = NormalizeCustomerIdForOrderQuery(customerId);
             var orders = await GetComplaintInvoiceOrdersAsync(customerId, queryCustomerId, cancellationToken).ConfigureAwait(false);
 
-            results.Add(new ComplaintCustomerInvoiceMatchResult
+            return new ComplaintCustomerInvoiceOrderContext
             {
                 CustomerId = customerId,
                 QueryCustomerId = queryCustomerId,
-                MatchResult = MatchComplaintInvoiceOrders(complaint, orders, true)
-            });
-        }
+                Orders = orders
+            };
+        });
 
-        return results;
+        return (await Task.WhenAll(tasks).ConfigureAwait(false)).ToList();
+    }
+
+    private async Task ApplyLlmProductMatchResultsAsync(
+        ComplaintFeedbackExtraction complaint,
+        List<ComplaintCustomerInvoiceOrderContext> customerOrderContexts,
+        List<ComplaintCustomerInvoiceMatchResult> matchResults,
+        CancellationToken cancellationToken)
+    {
+        var products = (complaint.Products ?? new List<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (products.Count == 0) return;
+
+        var unmatchedContexts = customerOrderContexts
+            .Where(context =>
+            {
+                var result = matchResults.FirstOrDefault(x => IsSameCustomerMatchTarget(x.CustomerId, x.QueryCustomerId, context.CustomerId, context.QueryCustomerId));
+                return result?.MatchResult?.IsMatched != true && context.Orders.Count > 0;
+            })
+            .ToList();
+
+        if (unmatchedContexts.Count == 0) return;
+
+        var llmResults = await MatchComplaintInvoiceOrdersByLlmAsync(products, unmatchedContexts, cancellationToken).ConfigureAwait(false);
+        foreach (var llmResult in llmResults)
+        {
+            if (llmResult.IsMatched != true) continue;
+
+            var context = unmatchedContexts.FirstOrDefault(x =>
+                IsSameCustomerMatchTarget(llmResult.CustomerId, llmResult.QueryCustomerId, x.CustomerId, x.QueryCustomerId));
+
+            if (context == null) continue;
+
+            var matchedInvoiceNumbers = (llmResult.MatchedInvoiceNumbers ?? new List<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(NormalizeInvoiceNumber)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var matchedOrders = context.Orders
+                .Where(x => matchedInvoiceNumbers.Contains(NormalizeInvoiceNumber(x.InvNumber), StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            if (matchedOrders.Count == 0) continue;
+
+            var matchResult = matchResults.FirstOrDefault(x =>
+                IsSameCustomerMatchTarget(x.CustomerId, x.QueryCustomerId, context.CustomerId, context.QueryCustomerId));
+
+            if (matchResult == null) continue;
+
+            matchResult.MatchResult = ComplaintInvoiceMatchResult.Success(
+                string.IsNullOrWhiteSpace(llmResult.Reason) ? "商品匹配（LLM判断）" : $"商品匹配（LLM判断：{llmResult.Reason}）",
+                matchedOrders);
+        }
     }
 
     private async Task<List<ComplaintInvoiceOrder>> GetComplaintInvoiceOrdersAsync(
@@ -118,7 +190,21 @@ public partial class PhoneOrderProcessJobService
                 new GetOrderInformationByCustomerIdRequestDto { CustomerIds = new List<string> { queryCustomerId } },
                 cancellationToken).ConfigureAwait(false);
 
-            return BuildComplaintInvoiceOrders(response?.Data);
+            var orders = BuildComplaintInvoiceOrders(response?.Data);
+            Log.Information(
+                "Get complaint invoice orders succeeded. CustomerId={CustomerId}, QueryCustomerId={QueryCustomerId}, RawItemCount={RawItemCount}, InvoiceCount={InvoiceCount}, Orders={Orders}",
+                customerId,
+                queryCustomerId,
+                response?.Data?.Count ?? 0,
+                orders.Count,
+                orders.Select(x => new
+                {
+                    x.InvNumber,
+                    InvDate = x.InvDate?.ToString("yyyy-MM-dd"),
+                    x.MaterialNames
+                }).ToList());
+
+            return orders;
         }
         catch (Exception ex)
         {
@@ -193,23 +279,79 @@ public partial class PhoneOrderProcessJobService
                 return ComplaintInvoiceMatchResult.Success("送货日期匹配", dateMatches);
         }
 
-        var products = (complaint.Products ?? new List<string>())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(NormalizeText)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (products.Count > 0)
-        {
-            var productMatch = orders.FirstOrDefault(order =>
-                products.All(product => order.MaterialNames.Any(material => IsMaterialMatch(product, material))));
-
-            if (productMatch != null)
-                return ComplaintInvoiceMatchResult.Success("商品匹配", new List<ComplaintInvoiceOrder> { productMatch });
-        }
-
         return ComplaintInvoiceMatchResult.Fail("无法匹配订单");
+    }
+
+    private async Task<List<ComplaintLlmCustomerProductMatchResult>> MatchComplaintInvoiceOrdersByLlmAsync(
+        List<string> products,
+        List<ComplaintCustomerInvoiceOrderContext> customerOrderContexts,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var customerPayload = customerOrderContexts.Select(customer => new
+            {
+                customerId = customer.CustomerId,
+                queryCustomerId = customer.QueryCustomerId,
+                orders = customer.Orders.Select(order => new
+                {
+                    invNumber = order.InvNumber,
+                    invDate = order.InvDate?.ToString("yyyy-MM-dd"),
+                    materialNames = order.MaterialNames
+                }).ToList()
+            }).ToList();
+
+            var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
+            {
+                Messages = new List<CompletionsRequestMessageDto>
+                {
+                    new()
+                    {
+                        Role = "system",
+                        Content = new CompletionsStringContent(
+                            "你是一名订单商品匹配助手。请按客户判断投诉商品是否全部存在于同一张 invoice 的物料列表中。\n" +
+                            "匹配时允许繁简体、常见中英文名称、产地、包装描述差异，但必须是同一种核心商品；品牌/规格如果明确冲突则不能匹配；不能因为都是大类商品就误判为同一商品。\n" +
+                            "如果同一客户下有多张 invoice 都满足条件，可以返回多张。只返回 JSON，不要额外解释。\n" +
+                            "{\n" +
+                            "  \"results\": [\n" +
+                            "    {\n" +
+                            "      \"customerId\": \"原始客户ID\",\n" +
+                            "      \"queryCustomerId\": \"查询客户ID\",\n" +
+                            "      \"isMatched\": true,\n" +
+                            "      \"matchedInvoiceNumbers\": [\"匹配到的invoice单号\"],\n" +
+                            "      \"reason\": \"简短中文原因\"\n" +
+                            "    }\n" +
+                            "  ]\n" +
+                            "}")
+                    },
+                    new()
+                    {
+                        Role = "user",
+                        Content = new CompletionsStringContent(
+                            "投诉商品：\n" + JsonConvert.SerializeObject(products) + "\n\n" +
+                            "候选客户订单：\n" + JsonConvert.SerializeObject(customerPayload) + "\n\nJSON:")
+                    }
+                },
+                Model = OpenAiModel.Gpt4o,
+                ResponseFormat = new() { Type = "json_object" }
+            }, cancellationToken).ConfigureAwait(false);
+
+            var response = completionResult.Data.Response?.Trim();
+            var result = JsonConvert.DeserializeObject<ComplaintLlmProductMatchResponse>(response ?? string.Empty);
+
+            Log.Information(
+                "Complaint product LLM match result. Products={Products}, ResultCount={ResultCount}, Results={Results}",
+                products,
+                result?.Results?.Count ?? 0,
+                result?.Results);
+
+            return result?.Results ?? new List<ComplaintLlmCustomerProductMatchResult>();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Complaint product LLM match failed. Products={Products}", products);
+            return new List<ComplaintLlmCustomerProductMatchResult>();
+        }
     }
 
     private static string FormatComplaintFeedbackSection(
@@ -282,28 +424,29 @@ public partial class PhoneOrderProcessJobService
         return $"{customerId}（查询ID：{queryCustomerId}）";
     }
 
+    private static bool IsSameCustomerMatchTarget(
+        string leftCustomerId,
+        string leftQueryCustomerId,
+        string rightCustomerId,
+        string rightQueryCustomerId)
+    {
+        var hasCustomerId = !string.IsNullOrWhiteSpace(leftCustomerId) && !string.IsNullOrWhiteSpace(rightCustomerId);
+        var hasQueryCustomerId = !string.IsNullOrWhiteSpace(leftQueryCustomerId) && !string.IsNullOrWhiteSpace(rightQueryCustomerId);
+
+        if (hasCustomerId && hasQueryCustomerId)
+            return string.Equals(leftCustomerId, rightCustomerId, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(leftQueryCustomerId, rightQueryCustomerId, StringComparison.OrdinalIgnoreCase);
+
+        return (hasCustomerId && string.Equals(leftCustomerId, rightCustomerId, StringComparison.OrdinalIgnoreCase)) ||
+               (hasQueryCustomerId && string.Equals(leftQueryCustomerId, rightQueryCustomerId, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static string NormalizeInvoiceNumber(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
 
         var normalized = Regex.Replace(value.Trim(), "[^A-Za-z0-9]", string.Empty);
         return normalized.TrimStart('0');
-    }
-
-    private static string NormalizeText(string value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? string.Empty
-            : Regex.Replace(value.Trim().ToLowerInvariant(), "\\s+", string.Empty);
-    }
-
-    private static bool IsMaterialMatch(string normalizedProduct, string materialName)
-    {
-        var normalizedMaterial = NormalizeText(materialName);
-        return !string.IsNullOrWhiteSpace(normalizedProduct) &&
-               !string.IsNullOrWhiteSpace(normalizedMaterial) &&
-               (normalizedMaterial.Contains(normalizedProduct, StringComparison.OrdinalIgnoreCase) ||
-                normalizedProduct.Contains(normalizedMaterial, StringComparison.OrdinalIgnoreCase));
     }
 
     private static DateTime? ParseDate(string value)
@@ -348,6 +491,39 @@ public partial class PhoneOrderProcessJobService
         public string QueryCustomerId { get; set; }
 
         public ComplaintInvoiceMatchResult MatchResult { get; set; }
+    }
+
+    private sealed class ComplaintCustomerInvoiceOrderContext
+    {
+        public string CustomerId { get; set; }
+
+        public string QueryCustomerId { get; set; }
+
+        public List<ComplaintInvoiceOrder> Orders { get; set; } = new();
+    }
+
+    private sealed class ComplaintLlmProductMatchResponse
+    {
+        [JsonProperty("results")]
+        public List<ComplaintLlmCustomerProductMatchResult> Results { get; set; } = new();
+    }
+
+    private sealed class ComplaintLlmCustomerProductMatchResult
+    {
+        [JsonProperty("customerId")]
+        public string CustomerId { get; set; }
+
+        [JsonProperty("queryCustomerId")]
+        public string QueryCustomerId { get; set; }
+
+        [JsonProperty("isMatched")]
+        public bool IsMatched { get; set; }
+
+        [JsonProperty("matchedInvoiceNumbers")]
+        public List<string> MatchedInvoiceNumbers { get; set; } = new();
+
+        [JsonProperty("reason")]
+        public string Reason { get; set; }
     }
 
     private sealed class ComplaintInvoiceMatchResult
