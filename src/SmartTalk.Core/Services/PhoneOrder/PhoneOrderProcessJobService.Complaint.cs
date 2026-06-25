@@ -358,40 +358,44 @@ public partial class PhoneOrderProcessJobService
         ComplaintFeedbackExtraction complaint,
         List<ComplaintCustomerInvoiceMatchResult> customerMatchResults)
     {
-        static string JoinOrEmpty(IEnumerable<string> values)
+        static string JoinOrPending(IEnumerable<string> values)
         {
             var list = values?.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? new List<string>();
-            return list.Count == 0 ? "未识别" : string.Join("、", list);
+            return list.Count == 0 ? "暫無" : string.Join("、", list);
         }
 
         var builder = new StringBuilder();
         builder.AppendLine();
-        builder.AppendLine("投诉结构化信息：");
-        builder.AppendLine($"Invoice单号：{JoinOrEmpty(complaint.InvoiceNumbers)}");
-        builder.AppendLine($"投诉商品：{JoinOrEmpty(complaint.Products)}");
-        builder.AppendLine($"问题描述：{(string.IsNullOrWhiteSpace(complaint.ProblemDescription) ? "未识别" : complaint.ProblemDescription)}");
-        builder.AppendLine($"受影响数量：{(string.IsNullOrWhiteSpace(complaint.AffectedQuantity) ? "未识别" : complaint.AffectedQuantity)}");
-        builder.AppendLine($"送货日期：{(string.IsNullOrWhiteSpace(complaint.DeliveryDate) ? "未识别" : complaint.DeliveryDate)}");
-        builder.AppendLine();
-        builder.AppendLine("订单匹配结果：");
+        builder.AppendLine("投訴信息：");
 
-        foreach (var customerMatchResult in customerMatchResults ?? new List<ComplaintCustomerInvoiceMatchResult>())
+        var results = customerMatchResults ?? new List<ComplaintCustomerInvoiceMatchResult>();
+        for (var i = 0; i < results.Count; i++)
         {
+            var customerMatchResult = results[i];
             var matchResult = customerMatchResult.MatchResult ?? ComplaintInvoiceMatchResult.Fail("无法匹配订单");
             var customerLabel = BuildCustomerIdLabel(customerMatchResult.CustomerId, customerMatchResult.QueryCustomerId);
 
             if (!string.IsNullOrWhiteSpace(customerLabel))
-                builder.AppendLine($"客户ID：{customerLabel}");
+                builder.AppendLine($"客户ID:{customerLabel}");
+
+            builder.AppendLine($"Invoice单号:{JoinOrPending(complaint.InvoiceNumbers)}");
+            builder.AppendLine($"投诉商品:{JoinOrPending(complaint.Products)}");
+            builder.AppendLine($"问题描述:{(string.IsNullOrWhiteSpace(complaint.ProblemDescription) ? "暫無" : complaint.ProblemDescription)}");
+            builder.AppendLine($"受影响数量:{(string.IsNullOrWhiteSpace(complaint.AffectedQuantity) ? "暫無" : complaint.AffectedQuantity)}");
+            builder.AppendLine($"送货日期:{(string.IsNullOrWhiteSpace(complaint.DeliveryDate) ? "暫無" : complaint.DeliveryDate)}");
 
             if (matchResult.IsMatched)
             {
-                builder.AppendLine($"匹配成功：已锁定 Invoice {string.Join("、", matchResult.MatchedOrders.Select(x => x.InvNumber).Distinct())}");
-                builder.AppendLine($"命中规则：{matchResult.MatchReason}");
+                builder.AppendLine($"匹配成功:已锁定Invoice {string.Join("、", matchResult.MatchedOrders.Select(x => x.InvNumber).Distinct())}");
+                builder.AppendLine($"命中规则:{matchResult.MatchReason}");
             }
             else
             {
                 builder.AppendLine($"匹配失败：{matchResult.MatchReason}");
             }
+
+            if (i < results.Count - 1)
+                builder.AppendLine();
         }
 
         return builder.ToString().TrimEnd();
@@ -421,7 +425,7 @@ public partial class PhoneOrderProcessJobService
             string.Equals(customerId, queryCustomerId, StringComparison.OrdinalIgnoreCase))
             return queryCustomerId;
 
-        return $"{customerId}（查询ID：{queryCustomerId}）";
+        return $"{customerId}(查询ID:{queryCustomerId})";
     }
 
     private static bool IsSameCustomerMatchTarget(
