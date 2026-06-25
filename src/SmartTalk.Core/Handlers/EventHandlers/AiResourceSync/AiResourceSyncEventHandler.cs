@@ -3,6 +3,7 @@ using Mediator.Net.Contracts;
 using Serilog;
 using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.Jobs;
+using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Dto.Sales;
 using SmartTalk.Messages.Events.AiResourceSync;
 
@@ -22,6 +23,12 @@ public class AiResourceSyncEventHandler : IEventHandler<AiResourceSyncEvent>
         Log.Information("Start AiResourceSyncEventHandler");
 
         _backgroundJobClient.Enqueue<IAiResourceSyncProcessJobService>(
-            x => x.ExecuteSyncCrmSalesAutoCreateAsync(context.Message.Command, new List<CrmSalesAutoSyncCustomerDto>(), CancellationToken.None));
+            x => x.ExecuteSyncCrmSalesAutoCreateAsync(
+                new AiResourceSyncCommand
+                {
+                    ServiceProviderId = context.Message.ServiceProviderId,
+                    IsManual = context.Message.IsManual,
+                    InitiatedByUserId = context.Message.InitiatedByUserId
+                }, new List<CrmSalesAutoSyncCustomerDto>(), CancellationToken.None));
     }
 }

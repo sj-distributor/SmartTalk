@@ -38,18 +38,6 @@ public class AiResourceSyncServiceTests
     [Fact]
     public async Task AiResourceSyncEventHandler_EnqueuesBackgroundExecution()
     {
-        var crmClient = Substitute.For<ICrmClient>();
-        crmClient.GetSalesAutoSyncCustomersAsync(
-                Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns((
-                new List<CrmSalesAutoSyncCustomerDto>
-                {
-                    new() { CustomerId = "100" },
-                    new() { CustomerId = "200" }
-                },
-                2
-            ));
-        
         var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
         Expression<Func<IAiResourceSyncProcessJobService, Task>>? queuedExpression = null;
         backgroundJobClient
@@ -60,17 +48,13 @@ public class AiResourceSyncServiceTests
         var context = Substitute.For<IReceiveContext<AiResourceSyncEvent>>();
         context.Message.Returns(new AiResourceSyncEvent
         {
-            Command = new AiResourceSyncCommand
-            {
-                IsManual = true,
-                ServiceProviderId = 123,
-                InitiatedByUserId = 888
-            }
+            IsManual = true,
+            ServiceProviderId = 123,
+            InitiatedByUserId = 888
         });
 
         await handler.Handle(context, CancellationToken.None);
 
-        await crmClient.Received(1).GetSalesAutoSyncCustomersAsync(1, true, Arg.Any<CancellationToken>());
         backgroundJobClient.Received(1).Enqueue(Arg.Any<Expression<Func<IAiResourceSyncProcessJobService, Task>>>(), Arg.Any<string>());
         Assert.NotNull(queuedExpression);
         var methodCall = Assert.IsAssignableFrom<MethodCallExpression>(queuedExpression.Body);
@@ -421,9 +405,28 @@ public class AiResourceSyncServiceTests
 
         var knowledgeScenarioDataProvider = Substitute.For<IKnowledgeScenarioDataProvider>();
         knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(1, null, null, true, Arg.Any<CancellationToken>())
-            .Returns(new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeSceneLanguageMapping>());
+            .Returns(new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeSceneLanguageMapping>
+            {
+                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.English, CreatedAt = DateTimeOffset.UtcNow }
+            });
         knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
-            .Returns(new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeScene>());
+            .Returns(new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeScene>
+            {
+                new() { Id = 500, Status = KnowledgeSceneStatus.Published }
+            });
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+            .Returns(new List<KnowledgeSceneItem>
+            {
+                new()
+                {
+                    Id = 901,
+                    SceneId = 500,
+                    Name = "Scene item example",
+                    Type = KnowledgeSceneItemType.FAQ,
+                    Content = "scene item content",
+                    FileName = "scene-item.txt"
+                }
+            });
 
         var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
         redisSafeRunner.ExecuteWithLockAsync(

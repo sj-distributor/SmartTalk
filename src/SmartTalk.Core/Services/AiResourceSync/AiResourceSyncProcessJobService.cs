@@ -31,7 +31,10 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
 
     public async Task AiResourceSyncAsync(SchedulingAiResourceSyncCommand command, CancellationToken cancellationToken)
     { 
-       await ExecuteSyncCrmSalesAutoCreateAsync(new AiResourceSyncCommand(), new List<CrmSalesAutoSyncCustomerDto>(), cancellationToken).ConfigureAwait(false);
+       await ExecuteSyncCrmSalesAutoCreateAsync(new AiResourceSyncCommand
+       {
+           ServiceProviderId = 1
+       }, new List<CrmSalesAutoSyncCustomerDto>(), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken)
