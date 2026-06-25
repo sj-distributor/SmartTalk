@@ -374,17 +374,18 @@ public partial class PhoneOrderProcessJobService
             var customerMatchResult = results[i];
             var matchResult = customerMatchResult.MatchResult ?? ComplaintInvoiceMatchResult.Fail("无法匹配订单");
             var customerLabel = BuildCustomerIdLabel(customerMatchResult.CustomerId, customerMatchResult.QueryCustomerId);
+            var hasMatchedOrder = matchResult.IsMatched;
 
             if (!string.IsNullOrWhiteSpace(customerLabel))
                 builder.AppendLine($"客户ID:{customerLabel}");
 
-            builder.AppendLine($"Invoice单号:{JoinOrPending(complaint.InvoiceNumbers)}");
-            builder.AppendLine($"投诉商品:{JoinOrPending(complaint.Products)}");
-            builder.AppendLine($"问题描述:{(string.IsNullOrWhiteSpace(complaint.ProblemDescription) ? "暫無" : complaint.ProblemDescription)}");
-            builder.AppendLine($"受影响数量:{(string.IsNullOrWhiteSpace(complaint.AffectedQuantity) ? "暫無" : complaint.AffectedQuantity)}");
-            builder.AppendLine($"送货日期:{(string.IsNullOrWhiteSpace(complaint.DeliveryDate) ? "暫無" : complaint.DeliveryDate)}");
+            builder.AppendLine($"Invoice单号:{(hasMatchedOrder ? string.Join("、", matchResult.MatchedOrders.Select(x => x.InvNumber).Distinct()) : "暫無")}");
+            builder.AppendLine($"投诉商品:{(hasMatchedOrder ? JoinOrPending(complaint.Products) : "暫無")}");
+            builder.AppendLine($"问题描述:{(hasMatchedOrder && !string.IsNullOrWhiteSpace(complaint.ProblemDescription) ? complaint.ProblemDescription : "暫無")}");
+            builder.AppendLine($"受影响数量:{(hasMatchedOrder && !string.IsNullOrWhiteSpace(complaint.AffectedQuantity) ? complaint.AffectedQuantity : "暫無")}");
+            builder.AppendLine($"送货日期:{(hasMatchedOrder && !string.IsNullOrWhiteSpace(complaint.DeliveryDate) ? complaint.DeliveryDate : "暫無")}");
 
-            if (matchResult.IsMatched)
+            if (hasMatchedOrder)
             {
                 builder.AppendLine($"匹配成功:已锁定Invoice {string.Join("、", matchResult.MatchedOrders.Select(x => x.InvNumber).Distinct())}");
                 builder.AppendLine($"命中规则:{matchResult.MatchReason}");
