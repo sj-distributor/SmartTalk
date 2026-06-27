@@ -2,6 +2,7 @@ using Hangfire;
 using Mediator.Net;
 using SmartTalk.Core.Settings.AiResourceSync;
 using SmartTalk.Core.Settings.Jobs;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Commands.Sales;
 
@@ -26,4 +27,6 @@ public class SchedulingSyncCrmSalesAutoCreateRecurringJob : IRecurringJob
     public string JobId => nameof(SchedulingSyncCrmSalesAutoCreateRecurringJob);
 
     public string CronExpression => string.IsNullOrWhiteSpace(_setting.Value) ? Cron.Never() : _setting.Value;
+
+    public TimeZoneInfo TimeZone => PstTimeZone.Get();
 }
