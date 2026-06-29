@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -10,7 +11,17 @@ public partial class RealtimeAiService
 {
     private bool IsProviderSessionActive => _ctx.SessionCts is { IsCancellationRequested: false };
 
-    private bool UsesExternalTts => _ctx.TtsProvider?.TtsProviderType != RealtimeAiTtsProviderType.BuiltIn;
+    // The engine routes text-mode behaviour off the negotiated OutputMode (decided once at connect),
+    // not by re-inspecting the TTS provider's vendor type. Equivalent for any live session — the
+    // negotiator returns Text iff the TTS needs text input (i.e. a non-BuiltIn provider) — but it keeps
+    // OutputMode the single source of truth so a provider's type can't drift from the negotiated mode.
+    private bool UsesExternalTts => _ctx.OutputMode == RealtimeAiOutputMode.Text;
+
+    // The TTS provider implements exactly one direction sibling (audio passthrough vs text synthesizer);
+    // routing through these casts means a provider structurally cannot receive the half it doesn't own.
+    private IRealtimeAiAudioPassthrough AudioPassthrough => _ctx.TtsProvider as IRealtimeAiAudioPassthrough;
+
+    private IRealtimeAiTextSynthesizer TextSynthesizer => _ctx.TtsProvider as IRealtimeAiTextSynthesizer;
 
     private async Task OnWssMessageReceivedAsync(string rawMessage)
     {
@@ -34,7 +45,7 @@ public partial class RealtimeAiService
                         if (!string.IsNullOrEmpty(audioData.ItemId))
                             _ctx.LastAssistantItemId = audioData.ItemId;
 
-                        await _ctx.TtsProvider.HandleProviderAudioAsync(audioData.Base64Payload, _ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                        await (AudioPassthrough?.HandleProviderAudioAsync(audioData.Base64Payload, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
                     }
                     break;
 
@@ -64,10 +75,17 @@ public partial class RealtimeAiService
                 // FunctionCallSuggested when the response contains function calls, ResponseTurnCompleted otherwise.
                 case RealtimeAiWssEventType.FunctionCallSuggested:
                 case RealtimeAiWssEventType.ResponseTurnCompleted:
-                    if (parsedEvent.Data is RealtimeAiWssTextData completedTextData)
-                        await FlushProviderTextToTtsAsync(completedTextData.Text).ConfigureAwait(false);
-                    else if (_ctx.CurrentResponseHasTextOutput && !_ctx.CurrentResponseTextDoneHandled)
-                        await FlushProviderTextToTtsAsync().ConfigureAwait(false);
+                    // Only the external-TTS (text) path consumes the provider's response text. In audio
+                    // mode the BuiltIn provider's text handlers are no-ops and the transcript arrives via
+                    // output_audio_transcript events, so gating here keeps the audio path from running the
+                    // text-synthesis routing — production behaviour with BuiltIn is unchanged.
+                    if (UsesExternalTts)
+                    {
+                        if (parsedEvent.Data is RealtimeAiWssTextData completedTextData)
+                            await FlushProviderTextToTtsAsync(completedTextData.Text).ConfigureAwait(false);
+                        else if (_ctx.CurrentResponseHasTextOutput && !_ctx.CurrentResponseTextDoneHandled)
+                            await FlushProviderTextToTtsAsync().ConfigureAwait(false);
+                    }
 
                     if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
                         await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
@@ -81,7 +99,7 @@ public partial class RealtimeAiService
                     break;
 
                 case RealtimeAiWssEventType.ResponseAudioDone:
-                    await _ctx.TtsProvider.HandleProviderTextDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                    await (AudioPassthrough?.HandleProviderAudioDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
                     break;
                 
                 case RealtimeAiWssEventType.ResponseStarted:
@@ -269,11 +287,18 @@ public partial class RealtimeAiService
     {
         if (string.IsNullOrWhiteSpace(text)) return;
 
+        // First text of this external turn → it will wait for the TTS gate; arm the absolute hard
+        // ceiling so the turn can never hang past it (covers a provider that streams text then stalls
+        // without ever sending response.done). Exactly-once is guaranteed by the same handled latch.
+        // Gated on external-TTS mode: in audio mode the turn completes on provider-done without waiting,
+        // so a hard-ceiling watchdog must never arm there (defensive — audio mode emits no text today).
+        if (UsesExternalTts && !_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
+
         _ctx.CurrentResponseHasTextOutput = true;
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
         _ctx.CurrentResponseTextBuilder.Append(text);
 
-        await _ctx.TtsProvider.HandleProviderTextDeltaAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        await (TextSynthesizer?.HandleProviderTextDeltaAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
     }
 
     private async Task FlushProviderTextToTtsAsync(string completedText = null)
@@ -287,7 +312,7 @@ public partial class RealtimeAiService
 
         await EmitAssistantTextTranscriptIfApplicableAsync(completedText).ConfigureAwait(false);
 
-        await _ctx.TtsProvider.HandleProviderTextDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        await (TextSynthesizer?.HandleProviderTextDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -317,6 +342,10 @@ public partial class RealtimeAiService
 
     private void ResetCurrentResponseState()
     {
+        // Bump the turn generation first so any TTS-synthesis watchdog still pending from the previous
+        // turn no-ops when it fires (it captured the old generation).
+        Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
+
         _ctx.CurrentResponseHasTextOutput = false;
         _ctx.CurrentResponseTextDoneHandled = false;
         _ctx.CurrentResponseProviderTurnCompleted = false;
@@ -329,6 +358,8 @@ public partial class RealtimeAiService
     {
         if (await MarkProviderTurnCompletedAndShouldCompleteAsync().ConfigureAwait(false))
             await OnAiTurnCompletedAsync().ConfigureAwait(false);
+        else
+            ArmTtsSynthesisWatchdog();   // provider turn done but external TTS hasn't signalled yet
     }
 
     private async Task MarkTtsSynthesisCompletedAndCompleteWhenReadyAsync()

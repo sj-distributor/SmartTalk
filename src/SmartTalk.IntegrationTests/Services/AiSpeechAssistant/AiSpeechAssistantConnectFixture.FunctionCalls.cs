@@ -19,6 +19,7 @@ using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.IntegrationTests.Mocks;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;

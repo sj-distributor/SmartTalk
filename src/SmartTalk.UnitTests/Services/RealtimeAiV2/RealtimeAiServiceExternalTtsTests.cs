@@ -3,6 +3,7 @@ using Shouldly;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
+using SmartTalk.Core.Services.RealtimeAiV2.Negotiation;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -12,6 +13,28 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 public class RealtimeAiServiceExternalTtsTests : RealtimeAiServiceTestBase
 {
+    [Fact]
+    public async Task IncompatiblePairing_NonTextInferenceWithExternalTts_FailsLoudAtConnect()
+    {
+        // External TTS needs text input, but the inference provider declares no text output. The negotiator
+        // must throw at connect rather than bring up a session that would be silently mute (D1) — proven
+        // end-to-end through the real engine, not just as a pure-function unit.
+        var externalTts = new FakeExternalTtsProvider();
+        Switcher.TtsProvider(RealtimeAiTtsProviderType.MiniMax).Returns(externalTts);
+
+        ProviderAdapter.Capabilities.Returns(new RealtimeAiInferenceCapabilities
+        {
+            TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = false, CanEmitTextAlongsideAudio = false },
+            SupportsAudioOutput = true
+        });
+
+        // Timed token so a regression that swallowed the throw (and fell through to the read loop) fails
+        // fast with the wrong exception type instead of hanging the test.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        await Should.ThrowAsync<RealtimeAiOutputModeException>(() => Sut.ConnectAsync(CreateExternalTtsOptions(), cts.Token));
+    }
+
     [Fact]
     public async Task ProviderTextOutput_IsSynthesizedByExternalTtsAndSentToClient()
     {
@@ -238,7 +261,7 @@ public class RealtimeAiServiceExternalTtsTests : RealtimeAiServiceTestBase
         });
     }
 
-    private sealed class FakeExternalTtsProvider : IRealtimeAiTtsProvider
+    private sealed class FakeExternalTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiTextSynthesizer
     {
         private readonly bool _autoComplete;
 
@@ -272,11 +295,6 @@ public class RealtimeAiServiceExternalTtsTests : RealtimeAiServiceTestBase
         public Task InitializeAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
         {
             OutputSampleRate = config.SampleRate ?? 24000;
-            return Task.CompletedTask;
-        }
-
-        public Task HandleProviderAudioAsync(string base64Audio, CancellationToken cancellationToken)
-        {
             return Task.CompletedTask;
         }
 

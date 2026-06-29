@@ -14,6 +14,12 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 public class RealtimeAiServiceConcurrencyTests
 {
+    private static RealtimeAiInferenceCapabilities AudioCapableInference() => new()
+    {
+        TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false },
+        SupportsAudioOutput = true
+    };
+
     [Fact]
     public async Task TwoConcurrentSessions_OperateIndependently()
     {
@@ -30,7 +36,8 @@ public class RealtimeAiServiceConcurrencyTests
         switcher1.ProviderAdapter(Arg.Any<RealtimeAiProvider>()).Returns(providerAdapter1);
         switcher1.TtsProvider(Arg.Any<RealtimeAiTtsProviderType>()).Returns(new BuiltInRealtimeAiTtsProvider());
         providerAdapter1.GetHeaders(Arg.Any<RealtimeAiServerRegion>()).Returns(new Dictionary<string, string>());
-        providerAdapter1.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
+        providerAdapter1.Capabilities.Returns(AudioCapableInference());
+        providerAdapter1.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiOutputMode>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
 
         // Session 2 setup
         var fakeWs2 = new FakeWebSocket();
@@ -45,7 +52,8 @@ public class RealtimeAiServiceConcurrencyTests
         switcher2.ProviderAdapter(Arg.Any<RealtimeAiProvider>()).Returns(providerAdapter2);
         switcher2.TtsProvider(Arg.Any<RealtimeAiTtsProviderType>()).Returns(new BuiltInRealtimeAiTtsProvider());
         providerAdapter2.GetHeaders(Arg.Any<RealtimeAiServerRegion>()).Returns(new Dictionary<string, string>());
-        providerAdapter2.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
+        providerAdapter2.Capabilities.Returns(AudioCapableInference());
+        providerAdapter2.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiOutputMode>(), Arg.Any<RealtimeAiAudioCodec>()).Returns(new { });
 
         var sut1 = new RealtimeAiService(switcher1, timerManager1);
         var sut2 = new RealtimeAiService(switcher2, timerManager2);

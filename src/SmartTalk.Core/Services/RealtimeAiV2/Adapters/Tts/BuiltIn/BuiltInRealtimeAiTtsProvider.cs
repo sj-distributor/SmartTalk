@@ -3,7 +3,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.BuiltIn;
 
-public class BuiltInRealtimeAiTtsProvider : IRealtimeAiTtsProvider
+public class BuiltInRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiAudioPassthrough
 {
     public RealtimeAiTtsProviderType TtsProviderType => RealtimeAiTtsProviderType.BuiltIn;
 
@@ -34,12 +34,7 @@ public class BuiltInRealtimeAiTtsProvider : IRealtimeAiTtsProvider
         return AudioChunkReadyAsync?.Invoke(base64Audio) ?? Task.CompletedTask;
     }
 
-    public Task HandleProviderTextDeltaAsync(string textDelta, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-
-    public Task HandleProviderTextDoneAsync(CancellationToken cancellationToken)
+    public Task HandleProviderAudioDoneAsync(CancellationToken cancellationToken)
     {
         return SynthesisCompletedAsync?.Invoke() ?? Task.CompletedTask;
     }

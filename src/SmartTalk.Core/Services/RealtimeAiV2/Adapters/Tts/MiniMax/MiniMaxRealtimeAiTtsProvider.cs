@@ -8,7 +8,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 
-public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider
+public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiTextSynthesizer
 {
     private const string DefaultServiceUrl = "wss://api.minimax.io/ws/v1/t2a_v2";
     private const string DefaultModel = "speech-2.8-turbo";
@@ -75,11 +75,6 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider
         {
             _connectionLock.Release();
         }
-    }
-
-    public Task HandleProviderAudioAsync(string base64Audio, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
     }
 
     public async Task HandleProviderTextDeltaAsync(string textDelta, CancellationToken cancellationToken)

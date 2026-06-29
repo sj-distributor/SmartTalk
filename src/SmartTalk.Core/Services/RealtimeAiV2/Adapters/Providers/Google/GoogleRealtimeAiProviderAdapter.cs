@@ -23,7 +23,9 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return new Dictionary<string, string>();
     }
 
-    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiAudioCodec clientCodec)
+    // The current Google adapter only emits audio (it declares no text output), so the negotiator
+    // never hands it RealtimeAiOutputMode.Text; the parameter is accepted to satisfy the contract.
+    public object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiOutputMode outputMode, RealtimeAiAudioCodec clientCodec)
     {
         var modelConfig = options.ModelConfig;
 
@@ -184,4 +186,13 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
     public RealtimeAiAudioCodec GetPreferredCodec(RealtimeAiAudioCodec clientCodec) => RealtimeAiAudioCodec.PCM16;
 
     public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
+    
+    // The current Google adapter emits audio only (the modelTurn-text arm is an unfinished //todo),
+    // so it declares no text-output support and is fixed at PCM16. A capability gate must therefore
+    // never pair it with an external text-driven TTS provider.
+    public RealtimeAiInferenceCapabilities Capabilities { get; } = new()
+    {
+        TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = false, CanEmitTextAlongsideAudio = false },
+        SupportsAudioOutput = true
+    };
 }

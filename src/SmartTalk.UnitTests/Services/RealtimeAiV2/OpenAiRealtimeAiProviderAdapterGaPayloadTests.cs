@@ -54,7 +54,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
     {
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["type"]!.Value<string>().ShouldBe("session.update");
         json["session"]!["type"]!.Value<string>().ShouldBe("realtime");
@@ -67,7 +67,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         // (it is always inferred from session.type).
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["modalities"].ShouldBeNull();
         json["session"]!["output_modalities"]!.Values<string>().ShouldBe(new[] { "audio" });
@@ -79,7 +79,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         // `temperature` was removed from the GA session payload schema.
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["temperature"].ShouldBeNull();
     }
@@ -92,7 +92,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         // siblings on `session`.
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["input_audio_format"].ShouldBeNull();
@@ -113,7 +113,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         // an unknown property. Canonical Twilio sample emits {"type": "audio/pcmu"} only.
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), codec));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiOutputMode.Audio, codec));
 
         var inputFormat = json["session"]!["audio"]!["input"]!["format"]!;
         inputFormat["type"]!.Value<string>().ShouldBe(expectedType);
@@ -130,7 +130,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         // PCM16 rate is not fixed; the GA contract requires us to declare it explicitly.
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiAudioCodec.PCM16));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.PCM16));
 
         var inputFormat = json["session"]!["audio"]!["input"]!["format"]!;
         inputFormat["type"]!.Value<string>().ShouldBe("audio/pcm");
@@ -155,7 +155,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         var options = OptionsWithPromptAndVoice();
         options.ModelConfig.TurnDetection = new { type = "server_vad" };
 
-        var json = SerializeSession(adapter.BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var input = json["session"]!["audio"]!["input"]!;
         input["transcription"]!["model"]!.Value<string>().ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
@@ -167,7 +167,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
     {
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(voice: "shimmer"), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(voice: "shimmer"), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["output"]!["voice"]!.Value<string>().ShouldBe("shimmer");
     }
@@ -178,7 +178,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         // Preserves prior behavior: empty/null voice → alloy default.
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(voice: ""), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(voice: ""), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["output"]!["voice"]!.Value<string>().ShouldBe("alloy");
     }
@@ -188,7 +188,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
     {
         var adapter = NewAdapter();
 
-        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(prompt: "你是收銀員"), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeSession(adapter.BuildSessionConfig(OptionsWithPromptAndVoice(prompt: "你是收銀員"), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["instructions"]!.Value<string>().ShouldBe("你是收銀員");
     }

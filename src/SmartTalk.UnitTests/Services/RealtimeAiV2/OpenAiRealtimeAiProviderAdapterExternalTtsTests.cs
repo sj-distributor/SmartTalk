@@ -38,7 +38,9 @@ public class OpenAiRealtimeAiProviderAdapterExternalTtsTests
     [Fact]
     public void BuildSessionConfig_MiniMaxTts_UsesTextOnlyAndOmitsAudioOutput()
     {
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithMiniMaxTts(), RealtimeAiAudioCodec.MULAW));
+        // Text mode is now decided by the engine and passed explicitly; the adapter no longer infers it
+        // from options.TtsConfig (the OptionsWithMiniMaxTts payload is retained but irrelevant to output).
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithMiniMaxTts(), RealtimeAiOutputMode.Text, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["output_modalities"]!.Values<string>().ShouldBe(new[] { "text" });
         json["session"]!["audio"]!["input"].ShouldNotBeNull();

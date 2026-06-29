@@ -1,6 +1,8 @@
 using System.Net.WebSockets;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Negotiation;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
@@ -14,6 +16,12 @@ public partial class RealtimeAiService
 
         var serviceUri = new Uri(_ctx.Options.ModelConfig.ServiceUrl);
         var headers = _ctx.ProviderAdapter.GetHeaders(_ctx.Options.Region);
+
+        // Decide the output mode once from the inference provider's declared capabilities and whether
+        // the TTS provider needs text. Throws on an incompatible pairing (fail-loud, never silent mute).
+        _ctx.OutputMode = OutputModeNegotiator.Resolve(
+            _ctx.ProviderAdapter.Capabilities,
+            ttsRequiresTextInput: _ctx.TtsProvider.TtsProviderType != RealtimeAiTtsProviderType.BuiltIn);
 
         var ttsConfig = _ctx.Options.TtsConfig ?? new RealtimeAiTtsConfig();
         if (_ctx.TtsProvider.TtsProviderType == RealtimeAiTtsProviderType.BuiltIn)
@@ -29,7 +37,7 @@ public partial class RealtimeAiService
         if (_ctx.WssClient.CurrentState != WebSocketState.Open)
             throw new InvalidOperationException("Failed to connect to AI provider WebSocket.");
 
-        var sessionConfig = _ctx.ProviderAdapter.BuildSessionConfig(_ctx.Options, _ctx.ClientAdapter.NativeAudioCodec);
+        var sessionConfig = _ctx.ProviderAdapter.BuildSessionConfig(_ctx.Options, _ctx.OutputMode, _ctx.ClientAdapter.NativeAudioCodec);
         var configJson = JsonConvert.SerializeObject(sessionConfig, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 
         await _ctx.WssClient.SendMessageAsync(configJson, _ctx.SessionCts.Token).ConfigureAwait(false);
