@@ -27,8 +27,16 @@ public static class AudioCodecConverter
     /// </summary>
     public static byte[] ConvertForRecording(byte[] audio, RealtimeAiAudioCodec sourceCodec)
     {
-        var pcm = Convert(audio, sourceCodec, RealtimeAiAudioCodec.PCM16);
-        return Resample(pcm, GetSampleRate(sourceCodec), RecordingSampleRate);
+        return ConvertForRecording(audio, sourceCodec, GetSampleRate(sourceCodec));
+    }
+
+    public static byte[] ConvertForRecording(byte[] audio, RealtimeAiAudioCodec sourceCodec, int sourceSampleRate)
+    {
+        var pcm = sourceCodec == RealtimeAiAudioCodec.PCM16
+            ? audio
+            : Convert(audio, sourceCodec, RealtimeAiAudioCodec.PCM16);
+
+        return Resample(pcm, sourceSampleRate, RecordingSampleRate);
     }
 
     public static int GetSampleRate(RealtimeAiAudioCodec codec) => codec switch

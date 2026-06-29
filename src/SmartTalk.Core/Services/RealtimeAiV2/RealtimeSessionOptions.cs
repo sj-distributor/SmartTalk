@@ -58,58 +58,12 @@ public class RealtimeAiModelConfig
     public object TurnDetection { get; set; }
 
     /// <summary>
-    /// OpenAI-specific input audio noise reduction configuration. Ignored by other providers.
+    /// Vendor-specific model options, carried opaquely so this shared config stays vendor-agnostic.
+    /// The consumer sets a vendor-owned options object (e.g. <c>OpenAiRealtimeModelOptions</c>) and the
+    /// matching inference adapter casts and reads it; other adapters ignore it. Null when the provider
+    /// needs no extra options.
     /// </summary>
-    public object InputAudioNoiseReduction { get; set; }
-
-    /// <summary>
-    /// Optional ISO-639-1 language code (or <c>"yue"</c> for Cantonese) hinted to
-    /// OpenAI's transcription model. <c>null</c> or empty → no hint emitted, leaving
-    /// the GA <c>session.audio.input.transcription</c> object byte-equivalent to the
-    /// pre-hint payload. A non-null value is appended as the <c>language</c> property
-    /// next to <c>model</c>; the adapter relies on the caller's
-    /// <see cref="Newtonsoft.Json.NullValueHandling.Ignore"/> setting (active in
-    /// <c>RealtimeAiService.Connect</c>) to strip the property when the value is null.
-    /// </summary>
-    public string TranscriptionLanguage { get; set; }
-
-    /// <summary>
-    /// Optional override of the OpenAI transcription model string sent under
-    /// <c>session.audio.input.transcription.model</c>. <c>null</c> or empty →
-    /// adapter uses its compile-time default (currently <c>gpt-4o-transcribe</c>).
-    /// Recognised operator values: <c>"whisper-1"</c>, <c>"gpt-4o-mini-transcribe"</c>,
-    /// <c>"gpt-4o-transcribe"</c>. Unrecognised values are passed through verbatim
-    /// (operator's responsibility) — OpenAI will reject them server-side rather
-    /// than the adapter silently falling back.
-    /// </summary>
-    public string TranscriptionModel { get; set; }
-
-    /// <summary>
-    /// Optional cap on the response output tokens for a single AI turn, sent under
-    /// <c>session.max_response_output_tokens</c>. <c>null</c> → the field is omitted
-    /// from the payload (the caller's <see cref="Newtonsoft.Json.NullValueHandling.Ignore"/>
-    /// strips it), so OpenAI uses its server-side default. Positive integer → caps a
-    /// runaway monologue; OpenAI rejects non-positive integers server-side.
-    /// </summary>
-    public int? MaxResponseOutputTokens { get; set; }
-
-    /// <summary>
-    /// Optional playback-speed multiplier for the AI's audio output, sent under
-    /// <c>session.audio.output.speed</c>. <c>null</c> → the field is omitted (so
-    /// OpenAI uses 1.0, current behaviour). Range supported by OpenAI is 0.25 – 1.5
-    /// (1.0 = natural). Values outside the range are rejected by OpenAI server-side
-    /// rather than the adapter silently clamping.
-    /// </summary>
-    public decimal? OutputAudioSpeed { get; set; }
-
-    /// <summary>
-    /// Optional opt-in to OpenAI's official session tracing. <c>true</c> → adapter
-    /// emits <c>session.tracing = "auto"</c>, telling OpenAI to retain the session
-    /// in their trace dashboard for 30 days. <c>null</c> or <c>false</c> → the
-    /// <c>tracing</c> field is omitted (current behaviour). Use during customer
-    /// escalations to capture an intermittent reproduction; disable afterwards.
-    /// </summary>
-    public bool? EnableRealtimeTracing { get; set; }
+    public object VendorOptions { get; set; }
 }
 
 /// <summary>
@@ -156,6 +110,8 @@ public class RealtimeSessionOptions
     public RealtimeAiClientConfig ClientConfig { get; set; }
     
     public RealtimeAiModelConfig ModelConfig { get; set; }
+
+    public RealtimeAiTtsConfig TtsConfig { get; set; }
 
     public RealtimeAiConnectionProfile ConnectionProfile { get; set; }
 
