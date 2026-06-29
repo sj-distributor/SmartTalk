@@ -95,6 +95,73 @@ public partial class AiSpeechAssistantConnectFixture
     }
 
     [Fact]
+    public async Task ShouldUseInstructionAsPrompt_WhenConnectCommandHasInstruction()
+    {
+        // 代客致电 (KitchChat AI Call): connect URL 带 ?instruction= 时, 发给 OpenAI 的 session 指令应是该 instruction,
+        // 而不是 DB assistant prompt (non-breaking 覆盖)。无 instruction 时 ShouldReplacePromptVariables 已覆盖 = 照旧用 DB prompt。
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent
+            {
+                Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant, ServiceHours = null
+            };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id,
+                Prompt = "DB_PROMPT_MARKER_should_be_overridden",
+                IsActive = true, Version = "1.0"
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_INSTR", streamSid = "MZ_INSTR" }
+        }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+
+        const string instruction = "INSTRUCTION_MARKER_use_this_as_prompt — you are calling a merchant on behalf of a customer.";
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber,
+            To = TestDidNumber,
+            Host = TestHost,
+            Instruction = instruction,
+            TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            openaiWs.Register(builder);
+        });
+
+        openaiWs.SentMessages.ShouldNotBeEmpty();
+        var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
+        sessionUpdate.ShouldContain("INSTRUCTION_MARKER_use_this_as_prompt");          // 用了 instruction
+        sessionUpdate.ShouldNotContain("DB_PROMPT_MARKER_should_be_overridden");       // 没用 DB prompt
+    }
+
+    [Fact]
     public async Task ShouldBuildKnowledge_WithForwardedAssistantId()
     {
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
