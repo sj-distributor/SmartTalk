@@ -21,6 +21,9 @@ public class AiSpeechAssistantConnectContext
     public WebSocket TwilioWebSocket { get; set; }
     public PhoneOrderRecordType OrderRecordType { get; set; }
 
+    // 代客致电等场景: 调用方经 connect URL ?instruction= 传入的本通指令; 有值则覆盖 DB prompt (non-breaking)。
+    public string Instruction { get; set; }
+
     // Assistant & knowledge
     public string Prompt { get; set; }
     public string UserProfileJson { get; set; }

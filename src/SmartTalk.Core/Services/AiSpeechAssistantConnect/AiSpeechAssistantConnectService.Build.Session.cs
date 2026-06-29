@@ -31,7 +31,7 @@ public partial class AiSpeechAssistantConnectService
                 Voice = assistant.ModelVoice ?? "alloy",
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
-                Prompt = _ctx.Prompt,
+                Prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt,   // 代客致电: 有 instruction 则用作本通指令 (non-breaking)
                 Tools = BuildTools(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 VendorOptions = new OpenAiRealtimeModelOptions

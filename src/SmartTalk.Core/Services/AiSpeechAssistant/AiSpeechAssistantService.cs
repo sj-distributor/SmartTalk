@@ -204,7 +204,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, cancellationToken).ConfigureAwait(false);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, command.Instruction, cancellationToken).ConfigureAwait(false);
         
         CheckIfInServiceHours(agent);
         _aiSpeechAssistantStreamContext.TransferCallNumber = agent.TransferCallNumber;
@@ -241,7 +241,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
 
-    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, CancellationToken cancellationToken)
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(string from, string to, int? assistantId, int? numberId, int? agentId, string instruction, CancellationToken cancellationToken)
     {
         var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
@@ -349,7 +349,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
         }
         
-        _aiSpeechAssistantStreamContext.LastPrompt = finalPrompt;
+        // 代客致电等场景: connect URL 带了 ?instruction= 则用它作本通对话指令 (覆盖 DB prompt); 无则照旧 (non-breaking)。
+        _aiSpeechAssistantStreamContext.LastPrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : finalPrompt;
+
+        Log.Information($"The final prompt: {_aiSpeechAssistantStreamContext.LastPrompt}");
+
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
     }
