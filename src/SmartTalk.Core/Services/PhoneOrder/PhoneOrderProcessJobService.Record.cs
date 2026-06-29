@@ -167,7 +167,7 @@ public partial class PhoneOrderProcessJobService
         if (record.Scenario == DialogueScenarios.ComplaintFeedback)
         {
             var originalReportText = record.TranscriptionText;
-            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(originalReportText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(originalReportText, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
             if (!string.IsNullOrWhiteSpace(complaintSection))
                 record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
