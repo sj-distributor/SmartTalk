@@ -309,11 +309,11 @@ public class AiResourceSyncService : IAiResourceSyncService
                 cancellationToken).ConfigureAwait(false);
 
             var existingSalesAgent = existingAgents
-                .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.CrmAutoSync)
+                .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.AiResource)
                 .OrderByDescending(x => x.CreatedDate)
                 .FirstOrDefault(x => string.Equals(x.Name, salesAgentName, StringComparison.OrdinalIgnoreCase))
                 ?? existingAgents
-                    .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.CrmAutoSync)
+                    .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.AiResource)
                     .OrderByDescending(x => x.CreatedDate)
                     .FirstOrDefault();
 
@@ -346,7 +346,7 @@ public class AiResourceSyncService : IAiResourceSyncService
                     WaitInterval = 2500,
                     Brief = $"Auto created from CRM sync for {salesAgentName}",
                     AgentType = AgentType.Sales,
-                    SourceSystem = AgentSourceSystem.CrmAutoSync,
+                    SourceSystem = AgentSourceSystem.AiResource,
                     IsDisplay = true,
                     IsSurface = true
                 }, cancellationToken).ConfigureAwait(false);
@@ -470,7 +470,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             AssistantName = customerKnowledgeAssistantName,
             Greetings = _aiResourceSyncSetting.DefaultAssistantGreetings,
             AgentType = AgentType.Sales,
-            SourceSystem = AgentSourceSystem.CrmAutoSync,
+            SourceSystem = AgentSourceSystem.AiResource,
             IsDisplay = true,
             ModelLanguage = language,
             Channels = new List<AiSpeechAssistantChannel> { AiSpeechAssistantChannel.PhoneChat },

@@ -217,7 +217,7 @@ public class AgentDataProvider : IAgentDataProvider
             from posAgent in _repository.Query<PosAgent>()
             join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
             where posAgent.StoreId == storeId
-                  && agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+                  && agent.SourceSystem == AgentSourceSystem.AiResource
                   && agent.Type == AgentType.Sales
                   && agent.Name == agentName
             orderby agent.CreatedDate descending

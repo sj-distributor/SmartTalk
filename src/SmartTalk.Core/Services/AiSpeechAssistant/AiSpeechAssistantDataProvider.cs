@@ -166,6 +166,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeDetail> UpdateAiSpeechAssistantKnowledgeDetailAsync(AiSpeechAssistantKnowledgeDetail detail, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteAiSpeechAssistantKnowledgeDetailAsync(int detailId, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeleteAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<AiSpeechAssistantKnowledgeDetail>  GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(int detailId, CancellationToken cancellationToken = default);
     
@@ -846,6 +848,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
                 StoreName = store.Names,
                 KnowledgeId = knowledge.Id,
                 AiAgentName = agent.Name,
+                SourceSystem = agent.SourceSystem,
             };
 
         if (!string.IsNullOrWhiteSpace(keyWord))
@@ -899,7 +902,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             where posAgent.StoreId == storeId
-                  && agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+                  && agent.SourceSystem == AgentSourceSystem.AiResource
                   && assistant.Name == assistantName
             orderby assistant.CreatedDate descending
             select assistant;
@@ -913,7 +916,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
             join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
             join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
-            where agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+            where agent.SourceSystem == AgentSourceSystem.AiResource
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             select agentAssistant.AssistantId;
 
@@ -926,7 +929,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             from store in _repository.Query<CompanyStore>().Where(x => x.CompanyId == companyId)
             join posAgent in _repository.Query<PosAgent>() on store.Id equals posAgent.StoreId
             join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
-            where agent.SourceSystem == AgentSourceSystem.CrmAutoSync
+            where agent.SourceSystem == AgentSourceSystem.AiResource
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             select new CrmAutoSyncAssistantLocationDto
@@ -979,6 +982,16 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         var detail = await _repository.Query<AiSpeechAssistantKnowledgeDetail>().FirstOrDefaultAsync(x => x.Id == detailId, cancellationToken).ConfigureAwait(false);
 
         await _repository.DeleteAsync(detail, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (details == null || details.Count == 0)
+            return;
+
+        await _repository.DeleteAllAsync(details, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }

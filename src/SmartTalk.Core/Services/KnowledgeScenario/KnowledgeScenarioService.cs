@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Pos;
@@ -13,6 +14,7 @@ using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
@@ -73,6 +75,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     private readonly IPosDataProvider _posDataProvider;
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
     private readonly SalesSetting _salesSetting;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
 
     public KnowledgeScenarioService(
         IMapper mapper,
@@ -81,7 +84,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         IPosDataProvider posDataProvider,
         ISmartiesClient smartiesClient,
         IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
-        SalesSetting salesSetting)
+        SalesSetting salesSetting,
+        ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _mapper = mapper;
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
@@ -90,6 +94,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         _smartiesClient = smartiesClient;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
         _salesSetting = salesSetting;
+        _backgroundJobClient = backgroundJobClient;
     }
 
     private static List<KnowledgeSceneItemDto> OrderSceneItems(IEnumerable<KnowledgeSceneItemDto> items)
@@ -323,6 +328,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (knowledgeIds.Count != 0)
             await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
 
+        EnqueueKnowledgeCleanupJob(languageMappings);
+
         Log.Information("DeleteKnowledgeSceneAsync completed. SceneId={@SceneId}", scene.Id);
 
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
@@ -332,6 +339,25 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         {
             Data = sceneDto
         };
+    }
+
+    private void EnqueueKnowledgeCleanupJob(List<KnowledgeSceneLanguageMapping> removedMappings)
+    {
+        var cleanupTargets = (removedMappings ?? [])
+            .Where(x => x.CompanyId > 0)
+            .GroupBy(x => x.CompanyId)
+            .Select(x => new CleanupAiSpeechAssistantKnowledgeByLanguageCommand
+            {
+                CompanyId = x.Key,
+                Languages = x.Select(y => y.Language).Distinct().ToList()
+            })
+            .ToList();
+
+        foreach (var command in cleanupTargets)
+        {
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(
+                x => x.CleanupAiSpeechAssistantKnowledgeByLanguageAsync(command, CancellationToken.None));
+        }
     }
 
     private async Task<List<KnowledgeSceneItem>> AddKnowledgeSceneItemsInternalAsync(KnowledgeScene scene, List<KnowledgeSceneItemDto> items, bool checkExistingItems, CancellationToken cancellationToken)

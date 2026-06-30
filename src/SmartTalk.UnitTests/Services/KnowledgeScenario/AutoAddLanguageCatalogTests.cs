@@ -1,10 +1,12 @@
 using AutoMapper;
 using NSubstitute;
 using Microsoft.Extensions.Configuration;
+using System.Linq.Expressions;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Settings.Sales;
@@ -43,7 +45,8 @@ public class AutoAddLanguageCatalogTests
             Substitute.For<IPosDataProvider>(),
             Substitute.For<ISmartiesClient>(),
             Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
-            new SalesSettingBuilder().Build());
+            new SalesSettingBuilder().Build(),
+            Substitute.For<ISmartTalkBackgroundJobClient>());
 
         await sut.SaveKnowledgeSceneLanguageMappingsAsync(new SaveKnowledgeSceneLanguageMappingsCommand
         {
@@ -98,7 +101,8 @@ public class AutoAddLanguageCatalogTests
             Substitute.For<IPosDataProvider>(),
             Substitute.For<ISmartiesClient>(),
             Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
-            new SalesSettingBuilder().Build());
+            new SalesSettingBuilder().Build(),
+            Substitute.For<ISmartTalkBackgroundJobClient>());
 
         var response = await sut.SaveKnowledgeSceneLanguageMappingsAsync(new SaveKnowledgeSceneLanguageMappingsCommand
         {
@@ -141,7 +145,8 @@ public class AutoAddLanguageCatalogTests
             Substitute.For<IPosDataProvider>(),
             Substitute.For<ISmartiesClient>(),
             Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
-            new SalesSettingBuilder().Build());
+            new SalesSettingBuilder().Build(),
+            Substitute.For<ISmartTalkBackgroundJobClient>());
 
         var response = await sut.GetKnowledgeSceneLanguageMappingsAsync(new GetKnowledgeSceneLanguageMappingsRequest
         {
@@ -174,7 +179,6 @@ public class AutoAddLanguageCatalogTests
                 CreatedAt = DateTimeOffset.UtcNow
             }
         };
-
         var dataProvider = Substitute.For<IKnowledgeScenarioDataProvider>();
         dataProvider.GetKnowledgeScenesByIdsAsync(Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 54), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeScene> { scene });
@@ -198,6 +202,7 @@ public class AutoAddLanguageCatalogTests
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsBySceneIdAsync(54, Arg.Any<CancellationToken>())
             .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>());
+        var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
 
         var mapper = Substitute.For<IMapper>();
         mapper.Map<KnowledgeSceneDto>(Arg.Any<KnowledgeScene>())
@@ -221,7 +226,8 @@ public class AutoAddLanguageCatalogTests
             Substitute.For<IPosDataProvider>(),
             Substitute.For<ISmartiesClient>(),
             Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
-            new SalesSettingBuilder().Build());
+            new SalesSettingBuilder().Build(),
+            backgroundJobClient);
 
         await sut.DeleteKnowledgeSceneAsync(new DeleteKnowledgeSceneCommand
         {
@@ -233,6 +239,10 @@ public class AutoAddLanguageCatalogTests
             Arg.Is<List<KnowledgeSceneLanguageMapping>>(x => x.Count == 1 && x[0].SceneId == 54 && !x[0].IsActive),
             false,
             Arg.Any<CancellationToken>());
+        backgroundJobClient.Received(1)
+            .Enqueue<IAiSpeechAssistantProcessJobService>(
+                Arg.Any<Expression<Func<IAiSpeechAssistantProcessJobService, Task>>>(),
+                "default");
     }
 
     private sealed class SalesSettingBuilder
