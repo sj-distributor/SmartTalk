@@ -1171,6 +1171,7 @@ public partial class PhoneOrderService
         var missByHuman = callInRecords.Count(x => (x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman) && x.IsHumanAnswered != true);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callInRecords, start, end, dataType);
+        var scenarioCallCounts = BuildScenarioCallCounts(callInRecords);
 
         return new CallInDataDto
         {
@@ -1183,7 +1184,8 @@ public partial class PhoneOrderService
             CallInMissedByHumanCount = missByHuman,
             CallinTransferToHumanRate = transferRate,
             TotalCallInDurationSeconds = totalDuration,
-            TotalCallInDurationPerPeriod = totalDurationPerPeriod
+            TotalCallInDurationPerPeriod = totalDurationPerPeriod,
+            ScenarioCallCounts = scenarioCallCounts
         };
     }
 
@@ -1246,6 +1248,23 @@ public partial class PhoneOrderService
             .ToDictionary(
                 g => g.Key.ToString("yyyy-MM-dd"),
                 g => g.Sum(x => x.Duration ?? 0));
+    }
+
+    private static List<ScenarioCallCountDto> BuildScenarioCallCounts(List<PhoneOrderRecord> records)
+    {
+        var scenarioCounts = records
+            .Where(x => x.Scenario.HasValue)
+            .GroupBy(x => x.Scenario!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return Enum.GetValues<DialogueScenarios>()
+            .Where(x => x != DialogueScenarios.ToDoTask)
+            .Select(scenario => new ScenarioCallCountDto
+            {
+                Scenario = scenario,
+                Count = scenarioCounts.GetValueOrDefault(scenario)
+            })
+            .ToList();
     }
     
     private static Dictionary<string, int> GroupCountByRequestType(List<PosOrder> orders, Func<PosOrder, DateTimeOffset> dateSelector, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
