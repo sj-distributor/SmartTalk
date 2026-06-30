@@ -124,7 +124,7 @@ public class AiResourceSyncServiceTests
                     Id = 201,
                     Name = "Alice GroupA",
                     Type = AgentType.Sales,
-                    SourceSystem = AgentSourceSystem.CrmAutoSync,
+                    SourceSystem = AgentSourceSystem.AiResource,
                     CreatedDate = DateTimeOffset.UtcNow
                 }
             });
@@ -134,7 +134,7 @@ public class AiResourceSyncServiceTests
                 Id = 201,
                 Name = "Alice GroupA",
                 Type = AgentType.Sales,
-                SourceSystem = AgentSourceSystem.CrmAutoSync,
+                SourceSystem = AgentSourceSystem.AiResource,
                 CreatedDate = DateTimeOffset.UtcNow
             });
 
@@ -374,7 +374,7 @@ public class AiResourceSyncServiceTests
                     Id = 10347,
                     Name = "CHRISTINE.C 057",
                     Type = AgentType.Sales,
-                    SourceSystem = AgentSourceSystem.CrmAutoSync,
+                    SourceSystem = AgentSourceSystem.AiResource,
                     CreatedDate = DateTimeOffset.UtcNow
                 }
             });
