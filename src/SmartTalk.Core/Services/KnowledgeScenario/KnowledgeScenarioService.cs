@@ -277,6 +277,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (scene == null)
             throw new Exception($"DeleteKnowledgeScene Scene [{command.Id}] does not exist.");
 
+        var languageMappings = await _knowledgeScenarioDataProvider
+            .GetKnowledgeSceneLanguageMappingsAsync(sceneIds: [scene.Id], isActive: true, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var (_, histories) = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoriesAsync(sceneId: scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var historyItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoryItemsAsync(histories.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
@@ -293,6 +296,12 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             sceneCompanies.Where(x => x.StoreId.HasValue).Select(x => x.StoreId!.Value).ToList(),
             relations.Select(x => x.Id).ToList(),
             knowledgeIds);
+
+        if (languageMappings.Count != 0)
+        {
+            languageMappings.ForEach(x => x.IsActive = false);
+            await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneLanguageMappingsAsync(languageMappings, false, cancellationToken).ConfigureAwait(false);
+        }
 
         if (relations.Count != 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relations, false, cancellationToken).ConfigureAwait(false);
@@ -1269,7 +1278,7 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         var scenes = mappedSceneIds.Count == 0
             ? new List<KnowledgeScene>()
             : await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(mappedSceneIds, cancellationToken).ConfigureAwait(false);
-        
+
         var sceneNameLookup = scenes.ToDictionary(x => x.Id, x => x.Name);
 
         return new KnowledgeSceneAutoAddLanguageMappingsDto
@@ -1279,12 +1288,13 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
                 .Select(language =>
                 {
                     mappingLookup.TryGetValue(language, out var mapping);
+                    var hasValidScene = mapping != null && mapping.SceneId > 0 && sceneNameLookup.ContainsKey(mapping.SceneId);
                     return new KnowledgeSceneLanguageMappingDto
                     {
-                        MappingId = mapping?.Id,
+                        MappingId = hasValidScene ? mapping?.Id : null,
                         Language = language,
-                        SceneId = mapping?.SceneId,
-                        SceneName = mapping?.SceneId > 0 ? sceneNameLookup.GetValueOrDefault(mapping.SceneId) : null
+                        SceneId = hasValidScene ? mapping?.SceneId : null,
+                        SceneName = hasValidScene ? sceneNameLookup[mapping.SceneId] : null
                     };
                 })
                 .ToList()
