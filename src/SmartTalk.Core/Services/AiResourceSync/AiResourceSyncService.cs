@@ -14,6 +14,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Settings.AiResourceSync;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.Agent;
 using SmartTalk.Messages.Commands.AiResourceSync;
@@ -67,7 +68,7 @@ public class AiResourceSyncService : IAiResourceSyncService
     private readonly IWeChatClient _weChatClient;
     private readonly IRedisSafeRunner _redisSafeRunner;
     private readonly SalesSetting _salesSetting;
-    private readonly SalesAutoCreateSetting _salesAutoCreateSetting;
+    private readonly AiResourceSyncSetting _aiResourceSyncSetting;
 
     public AiResourceSyncService(
         IMediator mediator,
@@ -81,7 +82,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         IRedisSafeRunner redisSafeRunner,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         SalesSetting salesSetting,
-        SalesAutoCreateSetting salesAutoCreateSetting)
+        AiResourceSyncSetting aiResourceSyncSetting)
     {
         _mediator = mediator;
         _crmClient = crmClient;
@@ -93,7 +94,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         _weChatClient = weChatClient;
         _redisSafeRunner = redisSafeRunner;
         _salesSetting = salesSetting;
-        _salesAutoCreateSetting = salesAutoCreateSetting;
+        _aiResourceSyncSetting = aiResourceSyncSetting;
     }
 
     public async Task<AiResourceSyncEvent> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
@@ -467,7 +468,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             AgentId = salesAgentId,
             CreatedBy = initiatedByUserId,
             AssistantName = customerKnowledgeAssistantName,
-            Greetings = _salesAutoCreateSetting.DefaultAssistantGreetings,
+            Greetings = _aiResourceSyncSetting.DefaultAssistantGreetings,
             AgentType = AgentType.Sales,
             SourceSystem = AgentSourceSystem.CrmAutoSync,
             IsDisplay = true,
@@ -1105,7 +1106,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     public async Task SendNotifyAsync(bool isSuccess, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_salesAutoCreateSetting.NotifyRobotUrl))
+        if (string.IsNullOrWhiteSpace(_aiResourceSyncSetting.NotifyRobotUrl))
             return;
 
         var currentTime = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -1118,7 +1119,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             MentionedMobileList = "@all"
         };
 
-        await _weChatClient.SendWorkWechatRobotMessagesAsync(_salesAutoCreateSetting.NotifyRobotUrl,
+        await _weChatClient.SendWorkWechatRobotMessagesAsync(_aiResourceSyncSetting.NotifyRobotUrl,
             new SendWorkWechatGroupRobotMessageDto
             {
                 MsgType = "text",

@@ -16,6 +16,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Settings.AiResourceSync;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.Agent;
 using SmartTalk.Messages.Commands.AiResourceSync;
@@ -516,9 +517,9 @@ public class AiResourceSyncServiceTests
 
     private sealed class SalesAutoCreateSettingBuilder
     {
-        public SalesAutoCreateSetting Build()
+        public AiResourceSyncSetting Build()
         {
-            return new SalesAutoCreateSetting(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            return new AiResourceSyncSetting(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["SalesAutoCreate:NotifyRobotUrl"] = "https://example.com/robot",
                 ["SalesAutoCreate:DefaultAssistantGreetings"] = "Hello",
