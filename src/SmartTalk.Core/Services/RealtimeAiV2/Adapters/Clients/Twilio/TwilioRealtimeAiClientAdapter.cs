@@ -34,6 +34,14 @@ public class TwilioRealtimeAiClientAdapter : IRealtimeAiClientAdapter
                 if (startObj.TryGetProperty("callSid", out var callSidProp))
                     metadata["callSid"] = callSidProp.GetString();
 
+                // Twilio <Stream><Parameter name value> → start.customParameters。代客致电的本通 instruction 走这里可靠到达
+                // (URL 查询串在 Media Streams 不可靠)。原样并入 metadata, 供 OnClientStartAsync 取用。
+                if (startObj.TryGetProperty("customParameters", out var customParams) && customParams.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var param in customParams.EnumerateObject())
+                        metadata[param.Name] = param.Value.ValueKind == JsonValueKind.String ? param.Value.GetString() : param.Value.ToString();
+                }
+
                 return new ParsedClientMessage
                 {
                     Type = RealtimeAiClientMessageType.Start,
