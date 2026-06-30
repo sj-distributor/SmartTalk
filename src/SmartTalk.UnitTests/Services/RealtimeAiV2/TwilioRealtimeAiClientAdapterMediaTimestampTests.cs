@@ -122,4 +122,28 @@ public class TwilioRealtimeAiClientAdapterMediaTimestampTests
         parsed.Type.ShouldBe(RealtimeAiClientMessageType.Image);
         parsed.Timestamp.ShouldBe(9999L);
     }
+
+    [Fact]
+    public void ParseMessage_StartWithCustomParameters_SurfacesInstructionInMetadata()
+    {
+        // 代客致电: Twilio <Stream><Parameter name="instruction"> → start.customParameters。适配器必须把它并入 Metadata,
+        // 否则本通指令丢失 → AI 回退到默认 assistant 人设 (实测过默认 AIXV Link demo 人设泄漏)。
+        const string raw = """
+            {
+              "event": "start",
+              "start": {
+                "streamSid": "MZ-test",
+                "callSid": "CA-test",
+                "customParameters": { "instruction": "你是替顾客打电话问排队的助手" }
+              }
+            }
+            """;
+
+        var parsed = NewAdapter().ParseMessage(raw);
+
+        parsed.Type.ShouldBe(RealtimeAiClientMessageType.Start);
+        parsed.Metadata["instruction"].ShouldBe("你是替顾客打电话问排队的助手");
+        parsed.Metadata["callSid"].ShouldBe("CA-test");
+        parsed.Metadata["streamSid"].ShouldBe("MZ-test");
+    }
 }
