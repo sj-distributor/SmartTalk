@@ -17,6 +17,7 @@ public enum RealtimeAiWssEventType
     ResponseAudioDone,      // AI 的音频响应结束
     ResponseStarted,        // AI 开始一轮新的响应
     ResponseTextDelta,      // (如果适用) AI 的文本响应片段
+    ResponseTextDone,       // AI 的文本响应结束
     ResponseTurnCompleted,  // AI 完成了一轮完整的响应 (可能包含函数调用等)
     FunctionCallSuggested,  // AI 建议调用一个函数
     Error,                  // AI 服务商报告错误或引擎内部错误

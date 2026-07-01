@@ -1,0 +1,1 @@
+ALTER TABLE knowledge_scene_knowledge RENAME TO knowledge_scene_item;
