@@ -47,19 +47,21 @@ public partial class PhoneOrderProcessJobService
                     {
                         Role = "system",
                         Content = new CompletionsStringContent(
-                            "你是一名货品事故/退货投诉录音结构化助手。请只从输入的电话分析报告中提取客户明确表达的信息，不要猜测。\n" +
+                            "你是一名投诉录音结构化助手。请从输入的电话分析报告中提取所有投诉信息，包括货品问题、司机态度、配送服务等任何客户投诉的内容。\n" +
+                            "只提取客户明确表达的信息，不要猜测。\n" +
                             $"当前业务日期为 {pacificNow:yyyy-MM-dd}，遇到昨天、前天、上周五等模糊时间时，请换算为 yyyy-MM-dd。\n" +
-                            "每个 item 代表一个投诉商品，按商品分开输出各自的字段。如果客户没有逐一说明，相同的字段就填一样的值。\n" +
+                            "每个 item 代表一条独立投诉。如果客户投诉了多个问题（例如不同商品、司机和服务分开投诉），就按问题分开输出。\n" +
+                            "如果是司机或服务类投诉，productName 直接填投诉对象描述（如\"司机\"、\"配送\"、\"送货迟到\"等）。\n" +
                             "只返回 JSON，不要额外解释。字段如下：\n" +
                             "{\n" +
                             "  \"items\": [\n" +
                             "    {\n" +
-                            "      \"productName\": \"投诉商品名称\",\n" +
-                            "      \"invoiceNumbers\": [\"该商品的Invoice单号，可多个，没有则空数组\"],\n" +
-                            "      \"problemDescription\": \"该商品的问题描述，例如破损/缺少/品质问题/退货/其他\",\n" +
-                            "      \"affectedQuantity\": \"该商品的受影响数量，保留客户原始单位，没有则空字符串\",\n" +
-                            "      \"deliveryDate\": \"该商品的送货日期，yyyy-MM-dd，没有则空字符串\",\n" +
-                            "      \"deliveryDateText\": \"该商品的客户原始时间表达，例如昨天/前天，没有则空字符串\"\n" +
+                            "      \"productName\": \"投诉对象，货品问题填商品名，司机/服务问题填投诉对象描述\",\n" +
+                            "      \"invoiceNumbers\": [\"关联的Invoice单号，可多个，没有则空数组\"],\n" +
+                            "      \"problemDescription\": \"问题描述，例如破损/缺少/品质问题/态度差/迟到/送错/退货/其他\",\n" +
+                            "      \"affectedQuantity\": \"受影响数量，保留客户原始单位，没有则空字符串\",\n" +
+                            "      \"deliveryDate\": \"送货日期，yyyy-MM-dd，没有则空字符串\",\n" +
+                            "      \"deliveryDateText\": \"客户原始时间表达，例如昨天/前天，没有则空字符串\"\n" +
                             "    }\n" +
                             "  ]\n" +
                             "}")
@@ -308,7 +310,7 @@ public partial class PhoneOrderProcessJobService
 
                 builder.AppendLine($"  ─ 投诉单 {complaintIndex++}");
                 builder.AppendLine($"    Invoice单号:{(match.IsMatched && !string.IsNullOrWhiteSpace(match.MatchedInvoiceNumber) ? match.MatchedInvoiceNumber : "暫無")}");
-                builder.AppendLine($"    投诉商品:{match.ProductName}");
+                builder.AppendLine($"    投诉对象:{match.ProductName}");
                 builder.AppendLine($"    问题描述:{(!string.IsNullOrWhiteSpace(match.ProblemDescription) ? match.ProblemDescription : (item != null && !string.IsNullOrWhiteSpace(item.ProblemDescription) ? item.ProblemDescription : "暫無"))}");
                 builder.AppendLine($"    受影响数量:{(!string.IsNullOrWhiteSpace(match.AffectedQuantity) ? match.AffectedQuantity : (item != null && !string.IsNullOrWhiteSpace(item.AffectedQuantity) ? item.AffectedQuantity : "暫無"))}");
                 builder.AppendLine($"    送货日期:{(!string.IsNullOrWhiteSpace(match.DeliveryDate) ? match.DeliveryDate : (item != null && !string.IsNullOrWhiteSpace(item.DeliveryDate) ? item.DeliveryDate : "暫無"))}");
