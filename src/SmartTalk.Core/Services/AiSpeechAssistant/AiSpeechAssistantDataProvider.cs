@@ -30,6 +30,14 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
         List<int> assistantIds, RealtimeAiProvider provider, bool? isActive = null, CancellationToken cancellationToken = default);
 
+    Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallsAsync(
+        List<int> assistantIds,
+        List<string> names = null,
+        AiSpeechAssistantSessionConfigType? type = null,
+        RealtimeAiProvider? provider = null,
+        bool? isActive = null,
+        CancellationToken cancellationToken = default);
+
     Task<NumberPool> GetNumberAsync(int? numberId = null, bool? isUsed = null, CancellationToken cancellationToken = default);
     
     Task<List<NumberPool>> GetNumbersAsync(List<int> numberIds, CancellationToken cancellationToken);
@@ -242,6 +250,34 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             query = query.Where(x => x.IsActive == isActive.Value);
             
         return await query.ToListAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AiSpeechAssistantFunctionCall>> GetAiSpeechAssistantFunctionCallsAsync(
+        List<int> assistantIds,
+        List<string> names = null,
+        AiSpeechAssistantSessionConfigType? type = null,
+        RealtimeAiProvider? provider = null,
+        bool? isActive = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (assistantIds == null || assistantIds.Count == 0) return [];
+
+        var query = _repository.QueryNoTracking<AiSpeechAssistantFunctionCall>()
+            .Where(x => assistantIds.Contains(x.AssistantId));
+
+        if (names is { Count: > 0 })
+            query = query.Where(x => names.Contains(x.Name));
+
+        if (type.HasValue)
+            query = query.Where(x => x.Type == type.Value);
+
+        if (provider.HasValue)
+            query = query.Where(x => x.ModelProvider == provider.Value);
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<NumberPool> GetNumberAsync(int? numberId = null, bool? isUsed = null, CancellationToken cancellationToken = default)
