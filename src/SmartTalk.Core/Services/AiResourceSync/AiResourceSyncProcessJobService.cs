@@ -4,6 +4,7 @@ using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Commands.Sales;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Services.AiResourceSync;
@@ -33,7 +34,8 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
     { 
        await ExecuteSyncCrmSalesAutoCreateAsync(new AiResourceSyncCommand
        {
-           ServiceProviderId = 1
+           ServiceProviderId = 1,
+           InitiatedByUserId = CurrentUsers.InternalUser.Id
        }, new List<CrmSalesAutoSyncCustomerDto>(), cancellationToken).ConfigureAwait(false);
     }
 
