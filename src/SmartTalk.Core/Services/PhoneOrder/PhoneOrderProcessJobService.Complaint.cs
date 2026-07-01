@@ -1,11 +1,9 @@
 using System.Text;
-using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
-using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Sales;
 
@@ -16,24 +14,25 @@ public partial class PhoneOrderProcessJobService
     private async Task<string> BuildComplaintFeedbackAnalysisSectionAsync(
         string reportText,
         Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,
-        PhoneOrderRecord record,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(reportText)) return string.Empty;
 
-        var complaint = await ExtractComplaintFeedbackAsync(reportText, cancellationToken).ConfigureAwait(false);
+        var items = await ExtractComplaintItemsAsync(reportText, cancellationToken).ConfigureAwait(false);
+        if (items.Count == 0) return string.Empty;
+
         var customerIds = ParseCustomerIds(aiSpeechAssistant?.Name);
         var matchResults = customerIds.Count > 0
-            ? await MatchProductsToCustomersAsync(complaint, customerIds, cancellationToken).ConfigureAwait(false)
-            : new List<ProductCustomerMatchResult>
+            ? await MatchProductsToCustomersAsync(items, customerIds, cancellationToken).ConfigureAwait(false)
+            : items.Select(i => new ProductCustomerMatchResult
             {
-                new() { CustomerId = "未知", IsMatched = false, MatchReason = "无法匹配订单（未识别客户ID）" }
-            };
+                ProductName = i.ProductName, CustomerId = "未知", IsMatched = false, MatchReason = "无法匹配订单（未识别客户ID）"
+            }).ToList();
 
-        return FormatPerProductComplaintSection(complaint, matchResults, record);
+        return FormatPerProductComplaintSection(items, matchResults);
     }
 
-    private async Task<ComplaintFeedbackExtraction> ExtractComplaintFeedbackAsync(string reportText, CancellationToken cancellationToken)
+    private async Task<List<ComplaintExtractionItem>> ExtractComplaintItemsAsync(string reportText, CancellationToken cancellationToken)
     {
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
@@ -50,14 +49,19 @@ public partial class PhoneOrderProcessJobService
                         Content = new CompletionsStringContent(
                             "你是一名货品事故/退货投诉录音结构化助手。请只从输入的电话分析报告中提取客户明确表达的信息，不要猜测。\n" +
                             $"当前业务日期为 {pacificNow:yyyy-MM-dd}，遇到昨天、前天、上周五等模糊时间时，请换算为 yyyy-MM-dd。\n" +
+                            "每个 item 代表一个投诉商品，按商品分开输出各自的字段。如果客户没有逐一说明，相同的字段就填一样的值。\n" +
                             "只返回 JSON，不要额外解释。字段如下：\n" +
                             "{\n" +
-                            "  \"invoiceNumbers\": [\"Invoice单号，可多个，没有则空数组\"],\n" +
-                            "  \"products\": [\"投诉商品名称，可多个，没有则空数组\"],\n" +
-                            "  \"problemDescription\": \"问题描述，例如破损/缺少/品质问题/退货/其他\",\n" +
-                            "  \"affectedQuantity\": \"受影响数量，保留客户原始单位，没有则空字符串\",\n" +
-                            "  \"deliveryDate\": \"送货日期，yyyy-MM-dd，没有则空字符串\",\n" +
-                            "  \"deliveryDateText\": \"客户原始时间表达，例如昨天/前天，没有则空字符串\"\n" +
+                            "  \"items\": [\n" +
+                            "    {\n" +
+                            "      \"productName\": \"投诉商品名称\",\n" +
+                            "      \"invoiceNumbers\": [\"该商品的Invoice单号，可多个，没有则空数组\"],\n" +
+                            "      \"problemDescription\": \"该商品的问题描述，例如破损/缺少/品质问题/退货/其他\",\n" +
+                            "      \"affectedQuantity\": \"该商品的受影响数量，保留客户原始单位，没有则空字符串\",\n" +
+                            "      \"deliveryDate\": \"该商品的送货日期，yyyy-MM-dd，没有则空字符串\",\n" +
+                            "      \"deliveryDateText\": \"该商品的客户原始时间表达，例如昨天/前天，没有则空字符串\"\n" +
+                            "    }\n" +
+                            "  ]\n" +
                             "}")
                     },
                     new()
@@ -71,44 +75,46 @@ public partial class PhoneOrderProcessJobService
             }, cancellationToken).ConfigureAwait(false);
 
             var response = completionResult.Data.Response?.Trim();
-            var result = JsonConvert.DeserializeObject<ComplaintFeedbackExtraction>(response ?? string.Empty);
-            return result ?? new ComplaintFeedbackExtraction();
+            var result = JsonConvert.DeserializeObject<ComplaintExtractionResult>(response ?? string.Empty);
+            return result?.Items ?? new List<ComplaintExtractionItem>();
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Extract complaint feedback failed.");
-            return new ComplaintFeedbackExtraction();
+            Log.Warning(ex, "Extract complaint items failed.");
+            return new List<ComplaintExtractionItem>();
         }
     }
 
     private async Task<List<ProductCustomerMatchResult>> MatchProductsToCustomersAsync(
-        ComplaintFeedbackExtraction complaint,
+        List<ComplaintExtractionItem> items,
         List<string> customerIds,
         CancellationToken cancellationToken)
     {
-        var products = (complaint.Products ?? new List<string>())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        if (items.Count == 0) return new List<ProductCustomerMatchResult>();
 
-        if (products.Count == 0) return new List<ProductCustomerMatchResult>();
-
+        var productNames = items.Select(i => i.ProductName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var customerOrderContexts = await BuildCustomerComplaintInvoiceOrderContextsAsync(customerIds, cancellationToken).ConfigureAwait(false);
-        var results = products.Select(p => new ProductCustomerMatchResult { ProductName = p }).ToList();
+        var results = items.Select(i => new ProductCustomerMatchResult
+        {
+            ProductName = i.ProductName,
+            ProblemDescription = i.ProblemDescription,
+            AffectedQuantity = i.AffectedQuantity,
+            DeliveryDate = i.DeliveryDate
+        }).ToList();
 
         if (customerOrderContexts.Any(c => c.Orders.Count > 0))
         {
-            var llmResults = await MatchProductsByLlmAsync(products, customerOrderContexts, cancellationToken).ConfigureAwait(false);
+            var llmResults = await MatchProductsByLlmAsync(productNames, customerOrderContexts, cancellationToken).ConfigureAwait(false);
             foreach (var llm in llmResults)
             {
-                var r = results.FirstOrDefault(x => string.Equals(x.ProductName, llm.ProductName, StringComparison.OrdinalIgnoreCase));
-                if (r == null) continue;
-
-                r.CustomerId = llm.CustomerId;
-                r.QueryCustomerId = llm.QueryCustomerId;
-                r.IsMatched = llm.IsMatched;
-                r.MatchedInvoiceNumber = llm.MatchedInvoiceNumbers?.FirstOrDefault();
-                r.MatchReason = llm.Reason;
+                foreach (var r in results.Where(x => string.Equals(x.ProductName, llm.ProductName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    r.CustomerId = llm.CustomerId;
+                    r.QueryCustomerId = llm.QueryCustomerId;
+                    r.IsMatched = llm.IsMatched;
+                    r.MatchedInvoiceNumber = llm.MatchedInvoiceNumbers?.FirstOrDefault();
+                    r.MatchReason = llm.Reason;
+                }
             }
         }
 
@@ -273,15 +279,14 @@ public partial class PhoneOrderProcessJobService
     }
 
     private static string FormatPerProductComplaintSection(
-        ComplaintFeedbackExtraction complaint,
-        List<ProductCustomerMatchResult> productMatchResults,
-        PhoneOrderRecord record)
+        List<ComplaintExtractionItem> items,
+        List<ProductCustomerMatchResult> matchResults)
     {
         var builder = new StringBuilder();
         builder.AppendLine();
         builder.AppendLine("投訴信息：");
 
-        var grouped = (productMatchResults ?? new List<ProductCustomerMatchResult>())
+        var grouped = (matchResults ?? new List<ProductCustomerMatchResult>())
             .GroupBy(x => string.IsNullOrWhiteSpace(x.CustomerId) ? "未知" : x.CustomerId)
             .ToList();
 
@@ -297,24 +302,25 @@ public partial class PhoneOrderProcessJobService
                 builder.AppendLine("客户ID:未知");
 
             var complaintIndex = 1;
-            foreach (var productResult in group)
+            foreach (var match in group)
             {
-                var callTime = record?.CreatedDate.ToString("yyyy-MM-dd HH:mm") ?? "";
-                builder.AppendLine($"  ─ 投诉单 {complaintIndex++}（{callTime}）");
-                builder.AppendLine($"    Invoice单号:{(productResult.IsMatched && !string.IsNullOrWhiteSpace(productResult.MatchedInvoiceNumber) ? productResult.MatchedInvoiceNumber : "暫無")}");
-                builder.AppendLine($"    投诉商品:{productResult.ProductName}");
-                builder.AppendLine($"    问题描述:{(!string.IsNullOrWhiteSpace(complaint.ProblemDescription) ? complaint.ProblemDescription : "暫無")}");
-                builder.AppendLine($"    受影响数量:{(!string.IsNullOrWhiteSpace(complaint.AffectedQuantity) ? complaint.AffectedQuantity : "暫無")}");
-                builder.AppendLine($"    送货日期:{(!string.IsNullOrWhiteSpace(complaint.DeliveryDate) ? complaint.DeliveryDate : "暫無")}");
+                var item = items.FirstOrDefault(i => string.Equals(i.ProductName, match.ProductName, StringComparison.OrdinalIgnoreCase));
 
-                if (productResult.IsMatched)
+                builder.AppendLine($"  ─ 投诉单 {complaintIndex++}");
+                builder.AppendLine($"    Invoice单号:{(match.IsMatched && !string.IsNullOrWhiteSpace(match.MatchedInvoiceNumber) ? match.MatchedInvoiceNumber : "暫無")}");
+                builder.AppendLine($"    投诉商品:{match.ProductName}");
+                builder.AppendLine($"    问题描述:{(!string.IsNullOrWhiteSpace(match.ProblemDescription) ? match.ProblemDescription : (item != null && !string.IsNullOrWhiteSpace(item.ProblemDescription) ? item.ProblemDescription : "暫無"))}");
+                builder.AppendLine($"    受影响数量:{(!string.IsNullOrWhiteSpace(match.AffectedQuantity) ? match.AffectedQuantity : (item != null && !string.IsNullOrWhiteSpace(item.AffectedQuantity) ? item.AffectedQuantity : "暫無"))}");
+                builder.AppendLine($"    送货日期:{(!string.IsNullOrWhiteSpace(match.DeliveryDate) ? match.DeliveryDate : (item != null && !string.IsNullOrWhiteSpace(item.DeliveryDate) ? item.DeliveryDate : "暫無"))}");
+
+                if (match.IsMatched)
                 {
-                    builder.AppendLine($"    匹配成功:已锁定Invoice {productResult.MatchedInvoiceNumber}");
-                    builder.AppendLine($"    命中规则:{productResult.MatchReason}");
+                    builder.AppendLine($"    匹配成功:已锁定Invoice {match.MatchedInvoiceNumber}");
+                    builder.AppendLine($"    命中规则:{match.MatchReason}");
                 }
                 else
                 {
-                    builder.AppendLine($"    匹配失败：{productResult.MatchReason}");
+                    builder.AppendLine($"    匹配失败：{match.MatchReason}");
                 }
             }
 
@@ -352,13 +358,19 @@ public partial class PhoneOrderProcessJobService
         return $"{customerId}(查询ID:{queryCustomerId})";
     }
 
-    private sealed class ComplaintFeedbackExtraction
+    private sealed class ComplaintExtractionResult
     {
+        [JsonProperty("items")]
+        public List<ComplaintExtractionItem> Items { get; set; } = new();
+    }
+
+    private sealed class ComplaintExtractionItem
+    {
+        [JsonProperty("productName")]
+        public string ProductName { get; set; }
+
         [JsonProperty("invoiceNumbers")]
         public List<string> InvoiceNumbers { get; set; } = new();
-
-        [JsonProperty("products")]
-        public List<string> Products { get; set; } = new();
 
         [JsonProperty("problemDescription")]
         public string ProblemDescription { get; set; }
@@ -431,5 +443,11 @@ public partial class PhoneOrderProcessJobService
         public string MatchedInvoiceNumber { get; set; }
 
         public string MatchReason { get; set; }
+
+        public string ProblemDescription { get; set; }
+
+        public string AffectedQuantity { get; set; }
+
+        public string DeliveryDate { get; set; }
     }
 }
