@@ -6,6 +6,7 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
+using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
 
@@ -47,8 +48,6 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
 
     Task<List<KnowledgeSceneItem>> GetKnowledgeSceneItemsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken = default);
     
-    Task UpdateKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default);
-
     Task DeleteKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task AddKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> knowledges, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -64,6 +63,12 @@ public interface IKnowledgeScenarioDataProvider : IScopedDependency
     Task DeleteKnowledgeSceneCompaniesAsync(List<KnowledgeSceneCompany> knowledgeSceneCompanies, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task UpdateKnowledgeSceneCompanyAsync(KnowledgeSceneCompany knowledgeSceneCompany, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, AutoAddLanguage? language = null, bool? isActive = null, CancellationToken cancellationToken = default);
+
+    Task AddKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task UpdateKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<AgentKnowledgeDto>> GetAgentKnowledgeAsync(int storeId, string keyword, CancellationToken cancellationToken = default);
 }
@@ -386,15 +391,7 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    public async Task UpdateKnowledgeSceneItemAsync(KnowledgeSceneItem knowledge, bool forceSave = true, CancellationToken cancellationToken = default)
-    {
-        await _repository.UpdateAsync(knowledge, cancellationToken).ConfigureAwait(false);
-
-        if (forceSave)
-            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-    }
-
+    
     public async Task UpdateKnowledgeSceneItemsAsync(List<KnowledgeSceneItem> items, bool forceSave = true, CancellationToken cancellationToken = default)
     {
         if (items is { Count: > 0 })
@@ -408,6 +405,46 @@ public class KnowledgeScenarioDataProvider : IKnowledgeScenarioDataProvider
     {
         if (knowledges.Count != 0)
             await _repository.DeleteAllAsync(knowledges, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<KnowledgeSceneLanguageMapping>> GetKnowledgeSceneLanguageMappingsAsync(int? companyId = null, List<int> sceneIds = null, AutoAddLanguage? language = null, bool? isActive = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<KnowledgeSceneLanguageMapping>();
+
+        if (companyId.HasValue)
+            query = query.Where(x => x.CompanyId == companyId.Value);
+
+        if (sceneIds is { Count: > 0 })
+        {
+            var distinctSceneIds = sceneIds.Where(x => x > 0).Distinct().ToList();
+            query = query.Where(x => distinctSceneIds.Contains(x.SceneId));
+        }
+
+        if (language.HasValue)
+            query = query.Where(x => x.Language == language.Value);
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (mappings.Count != 0)
+            await _repository.InsertAllAsync(mappings, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateKnowledgeSceneLanguageMappingsAsync(List<KnowledgeSceneLanguageMapping> mappings, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (mappings.Count != 0)
+            await _repository.UpdateAllAsync(mappings, cancellationToken).ConfigureAwait(false);
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

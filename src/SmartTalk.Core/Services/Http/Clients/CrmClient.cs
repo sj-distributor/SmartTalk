@@ -1,9 +1,11 @@
 using System.Text;
 using Newtonsoft.Json;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.Crm;
+using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Services.Http.Clients;
 
@@ -20,6 +22,10 @@ public interface ICrmClient : IScopedDependency
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
 
     Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
+
+    Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, bool isGetTotalCount = true, CancellationToken cancellationToken = default);
+
+    Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default);
 }
 
 public class CrmClient : ICrmClient
@@ -133,5 +139,58 @@ public class CrmClient : ICrmClient
         };
 
         return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+    }
+
+    public async Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, bool isGetTotalCount = true, CancellationToken cancellationToken = default)
+    {
+        Log.Information("GetSalesAutoSyncCustomersAsync isGetTotalCount {@isGetTotalCount}", isGetTotalCount);
+        
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info";
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        var page = startPage > 0 ? startPage : 1;
+        var result = new List<CrmSalesAutoSyncCustomerDto>();
+
+        while (true)
+        {
+            var pagedUrl = $"{url}?page={page}";
+            var response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+
+            if (response?.Data == null || response.Data.Count == 0)
+                break;
+
+            result.AddRange(response.Data);
+            
+            if (!isGetTotalCount)
+            {
+                return (result, response.Total);
+            }
+
+            if (response.CurrentPage >= response.LastPage)
+                break;
+
+            page++;
+        }
+
+        return (result, result.Count > 0 ? null : 0);
+    }
+
+    public async Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sapId))
+            throw new ArgumentException("sapId cannot be null or empty.", nameof(sapId));
+
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customer-sales-follow-info-by-sap-id?sap_id={Uri.EscapeDataString(sapId.Trim())}";
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        return await _httpClient.GetAsync<CrmSalesAutoSyncCustomerDto>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
     }
 }
