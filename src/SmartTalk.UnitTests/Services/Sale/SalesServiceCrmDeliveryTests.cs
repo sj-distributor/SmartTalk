@@ -55,8 +55,64 @@ public class SalesServiceCrmDeliveryTests
 
         result.CustomerInfo.ShouldContain("SAP编号: 109782");
         result.CustomerInfo.ShouldNotContain("路线1: ELKG");
+        result.CustomerInfo.ShouldNotContain("送货/截单时区");
         result.DeliveryInfo.ShouldContain("路线1: ELKG");
         result.DeliveryInfo.ShouldContain("送货安排: 每周二、周四、周六 10:00-18:00");
+    }
+
+    [Fact]
+    public async Task BuildCrmKnowledgeByPhoneAsync_ShouldIncludeCutoffTimezone_WhenWarehouseMapped()
+    {
+        var sut = new SalesService(_crmClient, _salesClient);
+        var cancellationToken = CancellationToken.None;
+
+        _crmClient.GetCrmTokenAsync(cancellationToken).Returns("crm-token");
+        _crmClient.GetCustomersByPhoneNumberAsync(
+                Arg.Any<GetCustmoersByPhoneNumberRequestDto>(),
+                "crm-token",
+                cancellationToken)
+            .Returns([
+                new GetCustomersPhoneNumberDataDto
+                {
+                    SapId = "109782",
+                    CustomerName = "Test Customer",
+                    Warehouse = "1200"
+                }
+            ]);
+        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
+            .Returns([]);
+
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", cancellationToken);
+
+        result.CustomerInfo.ShouldContain("仓库: 1200");
+        result.CustomerInfo.ShouldContain("送货/截单时区: America/Los_Angeles");
+    }
+
+    [Fact]
+    public async Task BuildCrmKnowledgeByPhoneAsync_ShouldIncludeDistinctCutoffTimezones_WhenWarehouseTextHasMultipleCodes()
+    {
+        var sut = new SalesService(_crmClient, _salesClient);
+        var cancellationToken = CancellationToken.None;
+
+        _crmClient.GetCrmTokenAsync(cancellationToken).Returns("crm-token");
+        _crmClient.GetCustomersByPhoneNumberAsync(
+                Arg.Any<GetCustmoersByPhoneNumberRequestDto>(),
+                "crm-token",
+                cancellationToken)
+            .Returns([
+                new GetCustomersPhoneNumberDataDto
+                {
+                    SapId = "109782",
+                    CustomerName = "Test Customer",
+                    Warehouse = "101A, 101G"
+                }
+            ]);
+        _crmClient.GetDeliveryInfoByPhoneNumberAsync(Arg.Any<string>(), cancellationToken)
+            .Returns([]);
+
+        var result = await sut.BuildCrmKnowledgeByPhoneAsync("+19164284295", cancellationToken);
+
+        result.CustomerInfo.ShouldContain("送货/截单时区: America/New_York、America/Chicago");
     }
 
     [Fact]
