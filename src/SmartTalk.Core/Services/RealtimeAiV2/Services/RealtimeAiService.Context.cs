@@ -1,3 +1,6 @@
+using SmartTalk.Core.Services.RealtimeAiV2.Recording;
+using SmartTalk.Messages.Enums.RealtimeAi;
+
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
@@ -20,11 +23,23 @@ public partial class RealtimeAiService
         BuildConnectSwitcher();
         BuildRecordingIfRequired();
         BuildSessionActions();
+        ApplyMaxSessionDurationIfRequired();
+    }
+
+    private void ApplyMaxSessionDurationIfRequired()
+    {
+        if (_ctx.Options.MaxSessionDuration is not { } maxSessionDuration || maxSessionDuration <= TimeSpan.Zero)
+            return;
+
+        _ctx.SessionCts.CancelAfter(maxSessionDuration);
     }
 
     private void BuildRecordingIfRequired()
     {
-        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = new MemoryStream();
+        // RealtimeAiRecordingSettings.Create() picks UnboundedMemoryBuffer (default) or
+        // RollingWindowBuffer based on the BufferMode env var. Default preserves the
+        // pre-Phase-3 unbounded behaviour exactly.
+        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = RealtimeAiRecordingSettings.Create();
     }
 
     private void BuildSessionActions()
@@ -44,5 +59,6 @@ public partial class RealtimeAiService
         _ctx.WssClient = _realtimeAiSwitcher.WssClient(_ctx.Options.ModelConfig.Provider);
         _ctx.ClientAdapter = _realtimeAiSwitcher.ClientAdapter(_ctx.Options.ClientConfig.Client);
         _ctx.ProviderAdapter = _realtimeAiSwitcher.ProviderAdapter(_ctx.Options.ModelConfig.Provider);
+        _ctx.TtsProvider = _realtimeAiSwitcher.TtsProvider(_ctx.Options.TtsConfig?.ProviderType ?? RealtimeAiTtsProviderType.BuiltIn);
     }
 }

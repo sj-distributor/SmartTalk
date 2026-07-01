@@ -1,5 +1,6 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.EasyPos;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -12,7 +13,7 @@ public class PhoneOrderMapping : Profile
     public PhoneOrderMapping()
     {
         CreateMap<PhoneOrderRecord, PhoneOrderRecordDto>()
-            .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(src => TimeZoneInfo.ConvertTimeFromUtc(src.CreatedDate.UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles"))));
+            .ForMember(dest => dest.CreatedDate, opt => opt.MapFrom(src => TimeZoneInfo.ConvertTimeFromUtc(src.CreatedDate.UtcDateTime, PstTimeZone.Get())));
         
         CreateMap<PhoneOrderRecordDto, PhoneOrderRecord>();
         CreateMap<PhoneOrderConversation, PhoneOrderConversationDto>().ReverseMap();

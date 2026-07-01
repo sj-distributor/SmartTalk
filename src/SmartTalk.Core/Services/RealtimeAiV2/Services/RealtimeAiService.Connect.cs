@@ -1,6 +1,9 @@
 using System.Net.WebSockets;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Negotiation;
+using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -9,9 +12,24 @@ public partial class RealtimeAiService
     private async Task ConnectToProviderAsync()
     {
         SubscribeProviderEvents();
+        SubscribeTtsEvents();
 
         var serviceUri = new Uri(_ctx.Options.ModelConfig.ServiceUrl);
         var headers = _ctx.ProviderAdapter.GetHeaders(_ctx.Options.Region);
+
+        // Decide the output mode once from the inference provider's declared capabilities and whether
+        // the TTS provider needs text. Throws on an incompatible pairing (fail-loud, never silent mute).
+        _ctx.OutputMode = OutputModeNegotiator.Resolve(
+            _ctx.ProviderAdapter.Capabilities,
+            ttsRequiresTextInput: _ctx.TtsProvider.TtsProviderType != RealtimeAiTtsProviderType.BuiltIn);
+
+        var ttsConfig = _ctx.Options.TtsConfig ?? new RealtimeAiTtsConfig();
+        if (_ctx.TtsProvider.TtsProviderType == RealtimeAiTtsProviderType.BuiltIn)
+        {
+            ttsConfig.TargetCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
+        }
+
+        await _ctx.TtsProvider.InitializeAsync(ttsConfig, _ctx.SessionCts.Token).ConfigureAwait(false);
 
         if (_ctx.WssClient.CurrentState != WebSocketState.Open || _ctx.WssClient.EndpointUri != serviceUri)
             await _ctx.WssClient.ConnectAsync(serviceUri, headers, _ctx.SessionCts.Token).ConfigureAwait(false);
@@ -19,7 +37,7 @@ public partial class RealtimeAiService
         if (_ctx.WssClient.CurrentState != WebSocketState.Open)
             throw new InvalidOperationException("Failed to connect to AI provider WebSocket.");
 
-        var sessionConfig = _ctx.ProviderAdapter.BuildSessionConfig(_ctx.Options, _ctx.ClientAdapter.NativeAudioCodec);
+        var sessionConfig = _ctx.ProviderAdapter.BuildSessionConfig(_ctx.Options, _ctx.OutputMode, _ctx.ClientAdapter.NativeAudioCodec);
         var configJson = JsonConvert.SerializeObject(sessionConfig, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 
         await _ctx.WssClient.SendMessageAsync(configJson, _ctx.SessionCts.Token).ConfigureAwait(false);
@@ -39,6 +57,10 @@ public partial class RealtimeAiService
             await _ctx.SessionCts.CancelAsync().ConfigureAwait(false);
 
         UnsubscribeProviderEvents();
+        UnsubscribeTtsEvents();
+
+        if (_ctx.TtsProvider != null)
+            await _ctx.TtsProvider.StopAsync(CancellationToken.None).ConfigureAwait(false);
 
         if (_ctx.WssClient is { CurrentState: WebSocketState.Open })
             await _ctx.WssClient.DisconnectAsync(WebSocketCloseStatus.NormalClosure, reason, CancellationToken.None).ConfigureAwait(false);
@@ -63,5 +85,21 @@ public partial class RealtimeAiService
         _ctx.WssClient.MessageReceivedAsync -= OnWssMessageReceivedAsync;
         _ctx.WssClient.StateChangedAsync -= OnWssStateChangedAsync;
         _ctx.WssClient.ErrorOccurredAsync -= OnWssErrorOccurredAsync;
+    }
+
+    private void SubscribeTtsEvents()
+    {
+        _ctx.TtsProvider.AudioChunkReadyAsync += OnTtsAudioChunkReadyAsync;
+        _ctx.TtsProvider.SynthesisCompletedAsync += OnTtsSynthesisCompletedAsync;
+        _ctx.TtsProvider.SynthesisFailedAsync += OnTtsSynthesisFailedAsync;
+    }
+
+    private void UnsubscribeTtsEvents()
+    {
+        if (_ctx.TtsProvider == null) return;
+
+        _ctx.TtsProvider.AudioChunkReadyAsync -= OnTtsAudioChunkReadyAsync;
+        _ctx.TtsProvider.SynthesisCompletedAsync -= OnTtsSynthesisCompletedAsync;
+        _ctx.TtsProvider.SynthesisFailedAsync -= OnTtsSynthesisFailedAsync;
     }
 }

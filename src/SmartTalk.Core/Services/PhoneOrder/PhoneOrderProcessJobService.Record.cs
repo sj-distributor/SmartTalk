@@ -119,7 +119,7 @@ public partial class PhoneOrderProcessJobService
             }
         }
         
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
         var callSubjectCn = "通话主题:";
         var callSubjectEn = "Conversation topic:";
@@ -131,7 +131,7 @@ public partial class PhoneOrderProcessJobService
         var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
 
         var client = new ChatClient(
-            "gpt-4o-audio-preview",
+            _openAiSettings.RecordAnalyzeModel,
             new ApiKeyCredential(_openAiSettings.ApiKey),
             new OpenAIClientOptions
             {
@@ -142,7 +142,24 @@ public partial class PhoneOrderProcessJobService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-      
+
+        if (completion.Content.Count>0)
+        {
+            var contentTexts = completion.Content
+                .Select(content => content.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+
+            Log.Information(
+                "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
+                record.Id,
+                record.SessionId,
+                agent.Id,
+                aiSpeechAssistant?.Id,
+                aiSpeechAssistant?.Name,
+                contentTexts);
+        }
+
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
@@ -288,7 +305,7 @@ public partial class PhoneOrderProcessJobService
     {
         var timezone = !string.IsNullOrWhiteSpace(agent.Timezone)
             ? TimeZoneInfo.FindSystemTimeZoneById(agent.Timezone)
-            : TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+            : PstTimeZone.Get();
         var nowDate = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timezone);
 
         var utcDate = TimeZoneInfo.ConvertTimeToUtc(nowDate.Date, timezone);
@@ -385,21 +402,18 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-     private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
+    private async Task<List<ChatMessage>> ConfigureRecordAnalyzePromptAsync(
          Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, string callFrom,
          string callTo, string currentTime, byte[] audioContent, string callSubjectCn, string callSubjectEn, CancellationToken cancellationToken) 
     {
-        var soldToIds = !string.IsNullOrEmpty(aiSpeechAssistant.Name) ? aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-
-        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken);
-        var customerItemsString = string.Join(Environment.NewLine, soldToIds.Select(id => customerItemsCacheList.FirstOrDefault(c => c.Filter == id)?.CacheValue ?? ""));
+        var customerItemsCacheList = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(aiSpeechAssistant.Name, cancellationToken);
+        var customerItemsString = string.Join(Environment.NewLine,
+            customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
         
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+        var recordAnalyzePrompt = (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
                   "分析報告的格式如下：" +
                   "交談主題：xxx\n\n " +
@@ -409,15 +423,27 @@ public partial class PhoneOrderProcessJobService
                   "待辦事件: \n1.xxx\n2.xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
-                .Replace("#{call_from}", callFrom ?? "")
-                .Replace("#{current_time}", currentTime ?? "")
-                .Replace("#{call_to}", callTo ?? "")
-                .Replace("#{customer_items}", customerItemsString ?? "")
-                .Replace("#{call_subject_cn}", callSubjectCn)
-                .Replace("#{call_subject_us}", callSubjectEn)
-                .Replace("#{menu_items}", menuItems ?? "")),
+            .Replace("#{call_from}", callFrom ?? "")
+            .Replace("#{current_time}", currentTime ?? "")
+            .Replace("#{call_to}", callTo ?? "")
+            .Replace("#{customer_items}", customerItemsString ?? "")
+            .Replace("#{call_subject_cn}", callSubjectCn)
+            .Replace("#{call_subject_us}", callSubjectEn)
+            .Replace("#{menu_items}", menuItems ?? "");
+
+        recordAnalyzePrompt +=
+            "\n\n輸出要求：\n" +
+            "1. 直接輸出最終分析報告正文，不要輸出任何確認、等待或寒暄語。\n" +
+            "2. 禁止輸出「好的」、「請稍等」、「我會」、「我將」、「以下是」、「正在生成」等過渡語。\n" +
+            "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
+            "4. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。\n" +
+            "5. 「客人下單內容」不是必填項。只有在錄音中明確聽到客戶下單且包含可識別的物料，才可以輸出具體下單內容。\n";
+
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(recordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
+            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。沒有明確下單時，請寫「客人下單內容：無明確下單」")
         ];
 
         return messages;
@@ -460,7 +486,7 @@ public partial class PhoneOrderProcessJobService
         var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
 
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
 
         foreach (var storeOrder in extractedOrders)
@@ -656,6 +682,11 @@ public partial class PhoneOrderProcessJobService
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
+
+        if (!string.IsNullOrWhiteSpace(baseNumber) &&
+            candidates.Contains(baseNumber, StringComparer.OrdinalIgnoreCase))
+            return baseNumber;
+
         if (candidates.Count == 1) return candidates.First();
 
         var isCase = !string.IsNullOrWhiteSpace(unit) && (unit.Contains("case", StringComparison.OrdinalIgnoreCase) || unit.Contains("箱"));
@@ -772,15 +803,17 @@ public partial class PhoneOrderProcessJobService
                 {
                     Role = "system",
                     Content = new CompletionsStringContent(
-                        "你需要帮我从电话录音报告中判断两个维度：" +
-                        "1. 是否真人接听（IsHumanAnswered）：" +
-                        "   - 如果客户有自然对话、提问、回应、表达等语气，说明是真人接听，返回 true。" +
-                        "   - 如果是语音信箱、系统提示、无人应答，返回 false。" +
-                        "2. 客人态度是否友好（IsCustomerFriendly）：" +
-                        "   - 如果语气平和、客气、积极配合，返回 true。" +
-                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。" +
-                        "输出格式务必是 JSON：" +
-                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}" +
+                        "你需要帮我从电话录音报告中判断两个维度：\n" +
+                        "1. 是否真人接听（IsHumanAnswered）：\n" +
+                        "   - 默认返回 true，表示是真人接听。报告中明确显示是真人接听时候也需要返回true\n" +
+                        "   - 当报告中 1.无法判断是否是真人；2.转接语音信箱、系统提示、无人接听；3.对面为重复系统音提示；4.生硬的AI回复，5.分析报告不完整，6.报告中明确显示非真人接听 都需要返回 false。表示非真人接听\n" +
+                        "例子：" +
+                        "“转接语音信箱“，“非真人接听”，“无人应答”，“对面为重复系统音提示”\n" +
+                        "2. 客人态度是否友好（IsCustomerFriendly）：\n" +
+                        "   - 如果语气平和、客气、积极配合，返回 true。\n" +
+                        "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。\n" +
+                        "输出格式务必是 JSON：\n" +
+                        "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "\n\n样例：\n" +
                         "input: 通話主題：客戶查詢價格。\n內容摘要：客戶開場問候並詢問價格，語氣平和，最後表示感謝。\noutput: {\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
                         "input: 通話主題：外呼無人接聽。\n內容摘要：撥號後自動語音提示‘您撥打的電話暫時無法接通’。\noutput: {\"IsHumanAnswered\": false, \"IsCustomerFriendly\": false}\n"

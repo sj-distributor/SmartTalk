@@ -26,6 +26,7 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
     {
         _googleSettings = googleSettings;
         _webSocket = new ClientWebSocket();
+        _webSocket.Options.KeepAliveInterval = RealtimeAiWebSocketSettings.ResolveKeepAliveInterval();
     }
 
     public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)

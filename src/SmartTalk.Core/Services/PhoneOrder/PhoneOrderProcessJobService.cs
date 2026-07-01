@@ -12,6 +12,7 @@ using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.Twilio;
+using SmartTalk.Core.Utils;
 using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Messages.Commands.PhoneOrder;
 
@@ -30,6 +31,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly IFfmpegService _ffmpegService;
     private readonly ITwilioService _twilioService;
     private readonly OpenAiSettings _openAiSettings;
+    private readonly IOpenaiClient _openaiClient;
     private readonly TwilioSettings _twilioSettings;
     private readonly IPosUtilService _posUtilService;
     private readonly ISmartiesClient _smartiesClient;
@@ -52,6 +54,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ITwilioService twilioService,
         TwilioSettings twilioSettings,
         OpenAiSettings openAiSettings,
+        IOpenaiClient openaiClient,
         ISmartiesClient smartiesClient,
         TranslationClient translationClient,
         IPhoneOrderService phoneOrderService,
@@ -72,6 +75,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _twilioService = twilioService;
         _twilioSettings = twilioSettings;
         _openAiSettings = openAiSettings;
+        _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _translationClient = translationClient;
         _phoneOrderService = phoneOrderService;
@@ -102,7 +106,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
 
     private (DateTimeOffset Start, DateTimeOffset End) GetQueryTimeRange()
     {
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         
         var startLocal = new DateTime(2025, 8, 1, 0, 0, 0);
         var endLocal = new DateTime(2025, 8, 31, 23, 59, 59);
