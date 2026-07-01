@@ -116,4 +116,7 @@ public class PhoneOrderRecord : IEntity
     
     [Column("is_completed")]
     public bool IsCompleted { get; set; } = false;
+
+    [Column("source_provider"), StringLength(36)]
+    public string SourceProvider { get; set; }
 }

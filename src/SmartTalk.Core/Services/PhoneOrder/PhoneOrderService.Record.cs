@@ -30,6 +30,7 @@ using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Events.PhoneOrder;
 using SmartTalk.Core.Extensions;
+using SmartTalk.Core.Constants;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -42,6 +43,8 @@ public partial interface IPhoneOrderService
     Task<PhoneOrderRecordUpdatedEvent> UpdatePhoneOrderRecordAsync(UpdatePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
+
+    Task ReceiveAixvolinkPhoneOrderRecordAsync(ReceiveAixvolinkPhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
@@ -172,6 +175,52 @@ public partial class PhoneOrderService
         }
 
         record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
+
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ReceiveAixvolinkPhoneOrderRecordAsync(ReceiveAixvolinkPhoneOrderRecordCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.RecordingUrl)) return;
+
+        if (command.AgentId <= 0)
+        {
+            Log.Warning("AIXVOLINK record skipped because AgentId is missing.");
+            return;
+        }
+
+        var recordContent = await _httpClientFactory.GetAsync<byte[]>(command.RecordingUrl, cancellationToken).ConfigureAwait(false);
+        var transcription = await _speechToTextService.SpeechToTextAsync(
+            recordContent,
+            fileType: TranscriptionFileType.Wav,
+            responseFormat: TranscriptionResponseFormat.Text,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
+        var recordName = $"{Guid.NewGuid():N}.wav";
+
+        var record = new PhoneOrderRecord
+        {
+            SessionId = Guid.NewGuid().ToString("N"),
+            AgentId = command.AgentId,
+            AssistantId = command.AssistantId,
+            Language = SelectLanguageEnum(detection.Language),
+            CreatedDate = command.CallTime == default ? DateTimeOffset.UtcNow : command.CallTime,
+            Status = PhoneOrderRecordStatus.Recieved,
+            OrderRecordType = command.OrderRecordType,
+            PhoneNumber = command.CallerNumber,
+            IncomingCallNumber = command.CalleeNumber,
+            Url = command.RecordingUrl,
+            SourceProvider = PhoneOrderSourceProviders.Aixvolink
+        };
+
+        if (await CheckPhoneOrderRecordDurationAsync(recordContent, cancellationToken).ConfigureAwait(false))
+        {
+            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordContent, recordName, detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
 
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
