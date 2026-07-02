@@ -15,13 +15,13 @@ public interface ISalesClient : IScopedDependency
     Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken);
     
     Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken);
-    
-    Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
+
+    Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken);
 
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
-    
+
     Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
-    
+
     Task<GetAiOrderItemsByDeliveryDateResponseDto> GetAiOrderItemsByDeliveryDateAsync(GetAiOrderItemsByDeliveryDateRequestDto request, CancellationToken cancellationToken);
 
     Task<QueryGoodsStatusResponseDto> QueryGoodsStatusAsync(QueryGoodsStatusRequestDto request, CancellationToken cancellationToken);

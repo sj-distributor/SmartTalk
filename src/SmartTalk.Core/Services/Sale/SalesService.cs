@@ -79,16 +79,22 @@ public class SalesService : ISalesService
             
             var goodsStatusLookup = await BuildGoodsStatusLookupAsync(askItems, orderItems, soldToId, cancellationToken).ConfigureAwait(false);
             
+            string ResolveOrderHistoryLevelCode(SalesOrderHistoryDto item)
+            {
+                return !string.IsNullOrWhiteSpace(item?.Level5) ? item.Level5 : item?.LevelCode;
+            }
+
             var levelCodes = askItems.Where(x => !string.IsNullOrWhiteSpace(x.LevelCode))
                 .Select(x =>
                 {
                     var levelCode = x.LevelCode.Trim();
                     return levelCode[..Math.Min(levelCode.Length, 15)];
                 })
-                .Concat(orderItems.Where(x => !string.IsNullOrWhiteSpace(x.LevelCode))
+                .Concat(orderItems.Select(ResolveOrderHistoryLevelCode)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
                     .Select(x =>
                     {
-                        var levelCode = x.LevelCode.Trim();
+                        var levelCode = x.Trim();
                         return levelCode[..Math.Min(levelCode.Length, 15)];
                     }))
                 .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -156,8 +162,7 @@ public class SalesService : ISalesService
             }
 
             allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material, x.Plant, x.MaterialType)));
-            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber, x.Plant, x.MaterialType)));
-                
+            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, ResolveOrderHistoryLevelCode(x), x.MaterialNumber, x.Plant, x.MaterialType)));
         }
 
         return string.Join(Environment.NewLine, allItems.Distinct().Take(150));

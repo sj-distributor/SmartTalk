@@ -27,8 +27,10 @@ public class SalesOrderHistoryDto
     public DateTime? LastInvoiceDate { get; set; }
     
     public string LevelCode { get; set; }
-    
+
+    public string Level5 { get; set; }
+
     public string MaterialType { get; set; }
-    
+
     public string Plant { get; set; }
 }

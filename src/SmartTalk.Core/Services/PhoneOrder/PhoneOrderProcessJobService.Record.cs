@@ -144,21 +144,24 @@ public partial class PhoneOrderProcessJobService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-      
-        var contentTexts = completion.Content
-            .Select(content => content.Text)
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .ToList();
-            
-        Log.Information(
-            "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
-            record.Id,
-            record.SessionId,
-            agent.Id,
-            aiSpeechAssistant?.Id,
-            aiSpeechAssistant?.Name,
-            contentTexts);
-        
+
+        if (completion.Content.Count > 0)
+        {
+            var contentTexts = completion.Content
+                .Select(content => content.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+
+            Log.Information(
+                "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
+                record.Id,
+                record.SessionId,
+                agent.Id,
+                aiSpeechAssistant?.Id,
+                aiSpeechAssistant?.Name,
+                contentTexts);
+        }
+
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
         
@@ -401,14 +404,16 @@ public partial class PhoneOrderProcessJobService
                 {
                     Role = "system",
                     Content = new CompletionsStringContent(
-                        "你需要帮我从电话录音报告中判断两个维度：" +
-                        "1. 是否真人接听（IsHumanAnswered）：" +
-                        "   - 如果客户有自然对话、提问、回应、表达等语气，说明是真人接听，返回 true。" +
-                        "   - 如果是语音信箱、系统提示、无人应答，返回 false。" +
-                        "2. 客人态度是否友好（IsCustomerFriendly）：" +
+                        "你需要帮我从电话录音报告中判断两个维度：\n" +
+                        "1. 是否真人接听（IsHumanAnswered）：\n" +
+                        "   - 默认返回 true，表示是真人接听。报告中明确显示是真人接听时候也需要返回true\n" +
+                        "   - 当报告中 1.无法判断是否是真人；2.转接语音信箱、系统提示、无人接听；3.对面为重复系统音提示；4.生硬的AI回复，5.分析报告不完整，6.报告中明确显示非真人接听 都需要返回 false。表示非真人接听\n" +
+                        "例子：" +
+                        "“转接语音信箱“，“非真人接听”，“无人应答”，“对面为重复系统音提示”\n" +
+                        "2. 客人态度是否友好（IsCustomerFriendly）：\n" +
                         "   - 如果语气平和、客气、积极配合，返回 true。" +
                         "   - 如果语气恶劣、冷淡、负面或不耐烦，返回 false。" +
-                        "输出格式务必是 JSON：" +
+                        "输出格式务必是 JSON：\n" +
                         "{\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}" +
                         "\n\n样例：\n" +
                         "input: 通話主題：客戶查詢價格。\n內容摘要：客戶開場問候並詢問價格，語氣平和，最後表示感謝。\noutput: {\"IsHumanAnswered\": true, \"IsCustomerFriendly\": true}\n" +
@@ -667,7 +672,7 @@ public partial class PhoneOrderProcessJobService
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
-        
+
         if (!string.IsNullOrWhiteSpace(baseNumber) &&
             candidates.Contains(baseNumber, StringComparer.OrdinalIgnoreCase))
             return baseNumber;
