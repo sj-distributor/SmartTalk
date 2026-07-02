@@ -14,6 +14,8 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Infrastructure;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -47,6 +49,8 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
     private readonly IFfmpegService _ffmpegService;
     private readonly IPosUtilService _posUtilService;
     private readonly IRealtimeAiService _realtimeAiService;
+    private readonly RealtimeAiTtsConfigResolver _ttsConfigResolver;
+    private readonly IMiniMaxTtsSynthesizer _miniMaxTtsSynthesizer;
 
     #endregion
 
@@ -67,9 +71,11 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
-        IRealtimeAiService realtimeAiService, 
-        IOpenaiClient openaiClient, 
-        ISmartiesClient smartiesClient, 
+        IRealtimeAiService realtimeAiService,
+        RealtimeAiTtsConfigResolver ttsConfigResolver,
+        IMiniMaxTtsSynthesizer miniMaxTtsSynthesizer,
+        IOpenaiClient openaiClient,
+        ISmartiesClient smartiesClient,
         ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _clock = clock;
@@ -81,6 +87,8 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _ffmpegService = ffmpegService;
         _posUtilService = posUtilService;
         _realtimeAiService = realtimeAiService;
+        _ttsConfigResolver = ttsConfigResolver;
+        _miniMaxTtsSynthesizer = miniMaxTtsSynthesizer;
         _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _backgroundJobClient = backgroundJobClient;
