@@ -51,7 +51,7 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
 
                 await _aiResourceSyncService.RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, true, null, cancellationToken).ConfigureAwait(false);
 
-                if (!command.IsManual && attempt > 1)
+                if (!command.IsManual)
                     await _aiResourceSyncService.SendNotifyAsync(true, cancellationToken).ConfigureAwait(false);
 
                 return;
