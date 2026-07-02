@@ -164,6 +164,15 @@ public partial class PhoneOrderProcessJobService
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
+        if (record.Scenario == DialogueScenarios.ComplaintFeedback)
+        {
+            var originalReportText = record.TranscriptionText;
+            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(originalReportText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(complaintSection))
+                record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
+        }
+
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         
         var reports = new List<PhoneOrderRecordReport>();
@@ -395,7 +404,6 @@ public partial class PhoneOrderProcessJobService
                   "來電號碼：#{call_from}\n\n " +
                   "內容摘要:xxx \n\n " +
                   "客人情感與情緒(无法判断时默认为平缓): xxx \n\n " +
-                  "待辦事件: \n1.xxx\n2.xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
             .Replace("#{call_from}", callFrom ?? "")

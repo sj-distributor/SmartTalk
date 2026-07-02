@@ -795,6 +795,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.ConfirmPickupTime:
                                             await ProcessRecordOrderPickupTimeAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
+
+                                        case OpenAiToolConstants.CollectComplaintInfo:
+                                            await ProcessCollectComplaintInfoAsync(outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
                                         
                                         case OpenAiToolConstants.RepeatOrder:
                                         case OpenAiToolConstants.SatisfyOrder:
@@ -918,6 +922,38 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         _aiSpeechAssistantStreamContext.OrderItems.Comments = JsonConvert.DeserializeObject<AiSpeechAssistantOrderDto>(jsonDocument.GetProperty("arguments").ToString())?.Comments ?? string.Empty;
         
+        await SendToWebSocketAsync(_openaiWebSocket, recordSuccess, cancellationToken);
+        await SendToWebSocketAsync(_openaiWebSocket, new { type = "response.create" }, cancellationToken);
+    }
+
+    private async Task ProcessCollectComplaintInfoAsync(JsonElement jsonDocument, CancellationToken cancellationToken)
+    {
+        AiSpeechAssistantComplaintInfoDto incoming = null;
+
+        try
+        {
+            incoming = JsonConvert.DeserializeObject<AiSpeechAssistantComplaintInfoDto>(jsonDocument.GetProperty("arguments").ToString());
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Deserialize complaint info failed. Arguments: {Arguments}", jsonDocument.GetProperty("arguments").ToString());
+        }
+
+        _aiSpeechAssistantStreamContext.ComplaintInfo = AiSpeechAssistantComplaintInfoHelper.Merge(_aiSpeechAssistantStreamContext.ComplaintInfo, incoming);
+
+        var recordSuccess = new
+        {
+            type = "conversation.item.create",
+            item = new
+            {
+                type = "function_call_output",
+                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                output = AiSpeechAssistantComplaintInfoHelper.BuildFunctionOutput(_aiSpeechAssistantStreamContext.ComplaintInfo)
+            }
+        };
+
+        _aiSpeechAssistantStreamContext.LastMessage = recordSuccess;
+
         await SendToWebSocketAsync(_openaiWebSocket, recordSuccess, cancellationToken);
         await SendToWebSocketAsync(_openaiWebSocket, new { type = "response.create" }, cancellationToken);
     }
@@ -1268,6 +1304,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+
+        _aiSpeechAssistantStreamContext.LastPrompt = AiSpeechAssistantComplaintInfoHelper.AppendPromptInstructionIfEnabled(
+            _aiSpeechAssistantStreamContext.LastPrompt,
+            functions.Select(x => x.Name));
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

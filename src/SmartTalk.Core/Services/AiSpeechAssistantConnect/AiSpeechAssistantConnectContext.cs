@@ -44,6 +44,7 @@ public class AiSpeechAssistantConnectContext
     // Call state
     public bool IsTransfer { get; set; }
     public AiSpeechAssistantOrderDto OrderItems { get; set; }
+    public AiSpeechAssistantComplaintInfoDto ComplaintInfo { get; set; } = new();
     public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
     public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
 }
