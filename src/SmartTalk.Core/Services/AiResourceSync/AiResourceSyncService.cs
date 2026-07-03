@@ -55,6 +55,8 @@ public class AiResourceSyncService : IAiResourceSyncService
     private const int MaxDetailEntriesPerCategoryToPersist = 50;
 
     private record SalesKnowledgeSyncTask(string StoreName, CrmSalesAutoSyncCustomerDto SeedCustomer, CrmSalesAutoSyncCustomerGroup MergedGroup);
+    
+    private sealed record StoreLockResult(CompanyStore Store, bool IsCreated);
   
     private record SourceSceneLookup(Dictionary<AutoAddLanguage, KnowledgeScene> MappingScenes, Dictionary<int, List<KnowledgeSceneItem>> SceneItems);
  
@@ -175,7 +177,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             .Select(x => new { Store = x, StoreName = GetStoreName(x.Names) })
             .Where(x => !string.IsNullOrWhiteSpace(x.StoreName) && storeNames.Contains(x.StoreName))
             .GroupBy(x => x.StoreName)
-            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store);
+            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store, StringComparer.OrdinalIgnoreCase);
         
         var salesAgentCache = new Dictionary<string, Agent>(StringComparer.OrdinalIgnoreCase);
         var customerKnowledgeAssistantCache = new Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant>(StringComparer.OrdinalIgnoreCase);
@@ -263,26 +265,53 @@ public class AiResourceSyncService : IAiResourceSyncService
         }
 
         Log.Information("Store create. StoreName={StoreName}", storeName);
-        
-        var createResponse = await _mediator.SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(new CreateCompanyStoreCommand
-        {
-            CompanyId = companyId,
-            CreatedBy = initiatedByUserId,
-            Names = BuildStoreNamesJson(storeName),
-            Address = "625 VISTA WAY, MILPITAS, CA 95035",
-            Description = $"Auto created from CRM sync for {customer.SalesName}",
-            PhoneNumbers = new List<string> { "0123456789" },
-            Latitude = "37.4249177",
-            Longitude = "-121.8891812",
-        }, cancellationToken).ConfigureAwait(false);
-        
-        stats.CreatedStoreCount++;
-        store = await _posDataProvider.GetPosCompanyStoreAsync(id: createResponse.Data.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-        store.IsTaskEnabled = true;
-        store.Timezone = "America/Los_Angeles";
-        await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var storeResult = await _redisSafeRunner.ExecuteWithLockAsync(
+            $"crm-auto-sync:store:{companyId}:{storeName}",
+            async () =>
+            {
+                var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [companyId], cancellationToken: cancellationToken).ConfigureAwait(false);
+                var existingStore = existingStores
+                    .Where(x => string.Equals(GetStoreName(x.Names), storeName, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(x => x.CreatedDate)
+                    .FirstOrDefault();
+
+                if (existingStore != null)
+                {
+                    Log.Information("Store reuse after lock. StoreId={StoreId}, StoreName={StoreName}", existingStore.Id, storeName);
+                    return new StoreLockResult(existingStore, false);
+                }
+
+                var createResponse = await _mediator.SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(new CreateCompanyStoreCommand
+                {
+                    CompanyId = companyId,
+                    CreatedBy = initiatedByUserId,
+                    Names = BuildStoreNamesJson(storeName),
+                    Address = "625 VISTA WAY, MILPITAS, CA 95035",
+                    Description = $"Auto created from CRM sync for {customer.SalesName}",
+                    PhoneNumbers = new List<string> { "0123456789" },
+                    Latitude = "37.4249177",
+                    Longitude = "-121.8891812",
+                }, cancellationToken).ConfigureAwait(false);
+
+                stats.CreatedStoreCount++;
+                var createdStore = await _posDataProvider.GetPosCompanyStoreAsync(id: createResponse.Data.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+                createdStore.IsTaskEnabled = true;
+                createdStore.Timezone = "America/Los_Angeles";
+                await _posDataProvider.UpdatePosCompanyStoresAsync([createdStore], cancellationToken: cancellationToken).ConfigureAwait(false);
+                return new StoreLockResult(createdStore, true);
+            },
+            expiry: TimeSpan.FromMinutes(2),
+            wait: TimeSpan.FromSeconds(5),
+            retry: TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+
+        store = storeResult.Store;
+        if (store == null)
+            throw new Exception($"Store create failed. CompanyId={companyId}, StoreName={storeName}");
+
         storeMap[storeName] = store;
-        RecordCreatedStore(stats, store.Id, storeName);
+        if (storeResult.IsCreated)
+            RecordCreatedStore(stats, store.Id, storeName);
         
         Log.Information("Store created. StoreId={StoreId}, StoreName={StoreName}", store.Id, storeName);
         return store;
