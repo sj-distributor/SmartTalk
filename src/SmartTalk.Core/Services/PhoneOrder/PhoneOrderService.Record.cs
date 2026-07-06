@@ -79,7 +79,7 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
         
-        var assistantId = request.AssistantId ?? request.AiAssistantId;
+        var assistantId = request.AssistantId;
         var orderIds = request.OrderIds?
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .SelectMany(x => x.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
