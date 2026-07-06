@@ -18,7 +18,7 @@ public class ReceiveAixvolinkPhoneOrderRecordCommandHandler : ICommandHandler<Re
 
     public Task Handle(IReceiveContext<ReceiveAixvolinkPhoneOrderRecordCommand> context, CancellationToken cancellationToken)
     {
-        _backgroundJobClient.Enqueue<IPhoneOrderService>(x => x.ReceiveAixvolinkPhoneOrderRecordAsync(context.Message, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
+        _backgroundJobClient.Enqueue<IPhoneOrderService>(x => x.ReceiveAixvolinkPhoneOrderRecordAsync(context.Message, cancellationToken), HangfireConstants.InternalHostingAixvolinkPhoneOrder);
 
         return Task.CompletedTask;
     }
