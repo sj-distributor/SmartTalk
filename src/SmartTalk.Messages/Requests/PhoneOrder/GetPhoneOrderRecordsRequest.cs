@@ -27,6 +27,8 @@ public class GetPhoneOrderRecordsRequest : IRequest
     
     public int? AssistantId { get; set; }
 
+    public int? AiAssistantId { get; set; }
+
     public bool IsFilteringScenarios { get; set; } = false;
 }
 
