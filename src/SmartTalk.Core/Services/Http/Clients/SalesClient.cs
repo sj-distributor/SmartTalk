@@ -52,13 +52,11 @@ public class SalesClient : ISalesClient
     {
         if (request.CustomerNumbers == null || request.CustomerNumbers.Count == 0)
             throw new ArgumentException("CustomerNumbers cannot be null or empty.");
-        
+
         var queryString = new StringBuilder("?");
         
         foreach (var customerNumber in request.CustomerNumbers)
-        {
             queryString.Append("CustomerNumbers=").Append(Uri.EscapeDataString(customerNumber)).Append('&');
-        }
         
         var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAskInfoDetailListByCustomer" + queryString.ToString().TrimEnd('&');
 
