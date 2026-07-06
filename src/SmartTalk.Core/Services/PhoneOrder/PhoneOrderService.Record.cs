@@ -191,13 +191,22 @@ public partial class PhoneOrderService
     {
         if (string.IsNullOrWhiteSpace(command.RecordingUrl)) return;
 
+        var recordingUrl = command.RecordingUrl.Trim();
+
+        if (await _phoneOrderDataProvider.PhoneOrderRecordExistsBySourceProviderAndUrlAsync(
+                PhoneOrderSourceProviders.Aixvolink, recordingUrl, cancellationToken).ConfigureAwait(false))
+        {
+            Log.Information("AIXVOLINK record skipped because recording url already exists. RecordingUrl: {RecordingUrl}", recordingUrl);
+            return;
+        }
+
         if (command.AgentId <= 0)
         {
             Log.Warning("AIXVOLINK record skipped because AgentId is missing.");
             return;
         }
 
-        var recordContent = await _httpClientFactory.GetAsync<byte[]>(command.RecordingUrl, cancellationToken).ConfigureAwait(false);
+        var recordContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
         var transcription = await _speechToTextService.SpeechToTextAsync(
             recordContent,
             fileType: TranscriptionFileType.Wav,
@@ -218,7 +227,7 @@ public partial class PhoneOrderService
             OrderRecordType = command.OrderRecordType,
             PhoneNumber = command.CallerNumber,
             IncomingCallNumber = command.CalleeNumber,
-            Url = command.RecordingUrl,
+            Url = recordingUrl,
             SourceProvider = PhoneOrderSourceProviders.Aixvolink
         };
 
@@ -228,7 +237,7 @@ public partial class PhoneOrderService
             return;
         }
 
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordContent, recordName, detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordContent, recordName, detection.Language, SpeechMaticsJobScenario.AixvolinkReleased, cancellationToken).ConfigureAwait(false);
 
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }

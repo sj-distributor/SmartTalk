@@ -44,6 +44,8 @@ public partial interface IPhoneOrderDataProvider
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordAsync(int? recordId = null, DateTimeOffset? createdDate = null, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecord> GetPhoneOrderRecordByTranscriptionJobIdAsync(string transcriptionJobId, CancellationToken cancellationToken = default);
+
+    Task<bool> PhoneOrderRecordExistsBySourceProviderAndUrlAsync(string sourceProvider, string url, CancellationToken cancellationToken = default);
     
     Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
         DateTimeOffset dayShiftTime, DateTimeOffset nightShiftTime, DateTimeOffset endTime, CancellationToken cancellationToken);
@@ -294,6 +296,17 @@ public partial class PhoneOrderDataProvider
         result.record.RestaurantInfo = result.restaurant;
         
         return result.record;
+    }
+
+    public async Task<bool> PhoneOrderRecordExistsBySourceProviderAndUrlAsync(string sourceProvider, string url, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceProvider) || string.IsNullOrWhiteSpace(url))
+            return false;
+
+        return await _repository.Query<PhoneOrderRecord>()
+            .AsNoTracking()
+            .AnyAsync(x => x.SourceProvider == sourceProvider && x.Url == url, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<List<GetPhoneOrderRecordsForRestaurantCountDto>> GetPhoneOrderRecordsForRestaurantCountAsync(
