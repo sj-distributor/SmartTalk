@@ -185,13 +185,6 @@ public partial class PhoneOrderService
 
         var recordingUrl = command.RecordingUrl.Trim();
 
-        if (await _phoneOrderDataProvider.PhoneOrderRecordExistsBySourceProviderAndUrlAsync(
-                PhoneOrderSourceProviders.Aixvolink, recordingUrl, cancellationToken).ConfigureAwait(false))
-        {
-            Log.Information("AIXVOLINK record skipped because recording url already exists. RecordingUrl: {RecordingUrl}", recordingUrl);
-            return;
-        }
-
         if (command.AgentId <= 0)
         {
             Log.Warning("AIXVOLINK record skipped because AgentId is missing.");
