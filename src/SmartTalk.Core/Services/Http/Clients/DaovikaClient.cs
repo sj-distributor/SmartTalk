@@ -11,8 +11,6 @@ public interface IDaovikaClient : IScopedDependency
 
 public class DaovikaClient : IDaovikaClient
 {
-    private const string SalesGroupTableId = "fc7a74fc-ea1f-4be1-93c3-03ed190a2c56";
-
     private readonly DaovikaSetting _daovikaSetting;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
 
@@ -27,9 +25,12 @@ public class DaovikaClient : IDaovikaClient
         if (string.IsNullOrWhiteSpace(phoneNumber))
             return string.Empty;
 
+        if (string.IsNullOrWhiteSpace(_daovikaSetting.SalesGroupTableId))
+            throw new InvalidOperationException("Daovika:SalesGroupTableId is not configured.");
+
         var queryPhoneNumber = phoneNumber.Trim();
         var url = $"{_daovikaSetting.BaseUrl}/api/external/table/query"
-                  + $"?tableId={SalesGroupTableId}"
+                  + $"?tableId={Uri.EscapeDataString(_daovikaSetting.SalesGroupTableId)}"
                   + $"&apiKey={Uri.EscapeDataString(_daovikaSetting.ApiKey)}"
                   + "&field=phoneNumber&op=eq"
                   + $"&value={Uri.EscapeDataString(queryPhoneNumber)}"
