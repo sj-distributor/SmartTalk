@@ -21,6 +21,8 @@ public class GetPhoneOrderRecordsRequest : IRequest
     
     public DateTimeOffset? Date { get; set; }
     
+    public List<string> OrderIds { get; set; }
+
     public string OrderId { get; set; }
     
     public int? AssistantId { get; set; }

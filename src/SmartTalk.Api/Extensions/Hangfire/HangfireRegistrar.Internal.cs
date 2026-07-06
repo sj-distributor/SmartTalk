@@ -33,6 +33,13 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
 
         services.AddHangfireServer(opt =>
         {
+            opt.WorkerCount = 20;
+            opt.Queues = new[] { HangfireConstants.InternalHostingAixvolinkPhoneOrder };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingAixvolinkPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
+        });
+
+        services.AddHangfireServer(opt =>
+        {
             opt.WorkerCount = 5;
             opt.Queues = new[] { HangfireConstants.InternalHostingSipServer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingSipServer.ToUpper()}-{Guid.NewGuid()}";
