@@ -86,10 +86,7 @@ public partial class PhoneOrderService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList() ?? [];
 
-        if (!string.IsNullOrWhiteSpace(request.OrderId) && !orderIds.Contains(request.OrderId.Trim(), StringComparer.OrdinalIgnoreCase))
-            orderIds.Add(request.OrderId.Trim());
-
-        Log.Information("Get phone order records: {@AgentIds}, {Name}, {Start}, {End}, {OrderId}, {@OrderIds}, {DialogueScenarios}, {AssistantId}", agentIds, request.Name, utcStart, utcEnd, request.OrderId, orderIds, request.DialogueScenarios, assistantId);
+        Log.Information("Get phone order records: {@AgentIds}, {Name}, {Start}, {End}, {@OrderIds}, {DialogueScenarios}, {AssistantId}", agentIds, request.Name, utcStart, utcEnd, orderIds, request.DialogueScenarios, assistantId);
         
         var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.DialogueScenarios, assistantId, orderIds, cancellationToken).ConfigureAwait(false);
         
