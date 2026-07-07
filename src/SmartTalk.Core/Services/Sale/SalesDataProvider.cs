@@ -48,6 +48,7 @@ public class SalesDataProvider : ISalesDataProvider
     private const string CustomerItemsCacheKey = "customer_items";
     private const string CustomerInfoCacheKey = "customer_info";
     private const string DeliveryInfoCacheKey = "delivery_info";
+    private const int MaxCustomerItemsPromptLines = 150;
 
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
@@ -88,7 +89,8 @@ public class SalesDataProvider : ISalesDataProvider
         if (!filters.Contains(trimmedAssistantName, StringComparer.OrdinalIgnoreCase))
             filters.Add(trimmedAssistantName);
 
-        return await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, filters, cancellationToken).ConfigureAwait(false);
+        var caches = await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, filters, cancellationToken).ConfigureAwait(false);
+        return LimitCustomerItemsCaches(caches, trimmedAssistantName);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
@@ -157,6 +159,33 @@ public class SalesDataProvider : ISalesDataProvider
             .Where(x => x.CacheKey == cacheKey && filters.Contains(x.Filter))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static List<AiSpeechAssistantKnowledgeVariableCache> LimitCustomerItemsCaches(
+        List<AiSpeechAssistantKnowledgeVariableCache> caches,
+        string filter)
+    {
+        var items = caches
+            .Where(c => !string.IsNullOrWhiteSpace(c.CacheValue))
+            .SelectMany(c => c.CacheValue.Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries))
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .Take(MaxCustomerItemsPromptLines)
+            .ToList();
+
+        if (items.Count == 0) return [];
+
+        return
+        [
+            new AiSpeechAssistantKnowledgeVariableCache
+            {
+                CacheKey = CustomerItemsCacheKey,
+                Filter = filter,
+                CacheValue = string.Join(Environment.NewLine, items),
+                LastUpdated = caches.Max(c => c.LastUpdated)
+            }
+        ];
     }
     
     private async Task UpsertPhoneScopedCacheAsync(
