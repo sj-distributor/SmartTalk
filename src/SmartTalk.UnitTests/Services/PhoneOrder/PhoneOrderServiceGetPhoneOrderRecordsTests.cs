@@ -39,7 +39,12 @@ public class PhoneOrderServiceGetPhoneOrderRecordsTests
         {
             AgentId = 2800,
             AssistantId = 1265,
-            OrderIds = ["09b85b3d-98c4-4c73-b940-500f9bdf1a0e", "00000000-0000-0000-0000-000000000001"]
+            OrderIds = ["09b85b3d-98c4-4c73-b940-500f9bdf1a0e, 00000000-0000-0000-0000-000000000001"]
+        };
+        var expectedOrderIds = new List<string>
+        {
+            "09b85b3d-98c4-4c73-b940-500f9bdf1a0e",
+            "00000000-0000-0000-0000-000000000001"
         };
 
         _phoneOrderDataProvider
@@ -66,7 +71,7 @@ public class PhoneOrderServiceGetPhoneOrderRecordsTests
             Arg.Any<DateTimeOffset?>(),
             Arg.Any<List<DialogueScenarios>>(),
             1265,
-            Arg.Is<List<string>>(x => x.SequenceEqual(request.OrderIds)),
+            Arg.Is<List<string>>(x => x.SequenceEqual(expectedOrderIds)),
             Arg.Any<CancellationToken>());
     }
 
