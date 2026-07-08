@@ -54,6 +54,7 @@ public class SalesDataProvider : ISalesDataProvider
     private const string DeliveryProgressCacheKey = "delivery_progress";
     private const string CustomerInfoCacheKey = "customer_info";
     private const string DeliveryInfoCacheKey = "delivery_info";
+    private const int MaxCustomerItemsPromptLines = 150;
 
     private readonly IRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
@@ -94,7 +95,8 @@ public class SalesDataProvider : ISalesDataProvider
         if (!filters.Contains(trimmedAssistantName, StringComparer.OrdinalIgnoreCase))
             filters.Add(trimmedAssistantName);
 
-        return await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, filters, cancellationToken).ConfigureAwait(false);
+        var caches = await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, filters, cancellationToken).ConfigureAwait(false);
+        return LimitCustomerItemsCaches(caches, trimmedAssistantName);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
@@ -119,12 +121,12 @@ public class SalesDataProvider : ISalesDataProvider
 
     public async Task UpsertCustomerInfoCacheAsync(string phoneNumber, string cacheValue, bool forceSave, CancellationToken cancellationToken)
     {
-        await UpsertKnowledgeVariableCacheAsync(CustomerInfoCacheKey, phoneNumber, cacheValue, forceSave, cancellationToken).ConfigureAwait(false);
+        await UpsertPhoneScopedCacheAsync(CustomerInfoCacheKey, phoneNumber, cacheValue, forceSave, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task UpsertDeliveryInfoCacheAsync(string phoneNumber, string cacheValue, bool forceSave, CancellationToken cancellationToken)
     {
-        await UpsertKnowledgeVariableCacheAsync(DeliveryInfoCacheKey, phoneNumber, cacheValue, forceSave, cancellationToken).ConfigureAwait(false);
+        await UpsertPhoneScopedCacheAsync(DeliveryInfoCacheKey, phoneNumber, cacheValue, forceSave, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<AiSpeechAssistantKnowledgeVariableCache> GetCustomerInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken)
@@ -170,6 +172,33 @@ public class SalesDataProvider : ISalesDataProvider
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
     }
+
+    private static List<AiSpeechAssistantKnowledgeVariableCache> LimitCustomerItemsCaches(
+        List<AiSpeechAssistantKnowledgeVariableCache> caches,
+        string filter)
+    {
+        var items = caches
+            .Where(c => !string.IsNullOrWhiteSpace(c.CacheValue))
+            .SelectMany(c => c.CacheValue.Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries))
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .Take(MaxCustomerItemsPromptLines)
+            .ToList();
+
+        if (items.Count == 0) return [];
+
+        return
+        [
+            new AiSpeechAssistantKnowledgeVariableCache
+            {
+                CacheKey = CustomerItemsCacheKey,
+                Filter = filter,
+                CacheValue = string.Join(Environment.NewLine, items),
+                LastUpdated = caches.Max(c => c.LastUpdated)
+            }
+        ];
+    }
     
     private async Task UpsertKnowledgeVariableCacheAsync(
         string cacheKey,
@@ -188,6 +217,39 @@ public class SalesDataProvider : ISalesDataProvider
             {
                 CacheKey = cacheKey,
                 Filter = filter,
+                CacheValue = cacheValue,
+                LastUpdated = DateTimeOffset.UtcNow
+            };
+            await _repository.InsertAsync(cache, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            cache.CacheValue = cacheValue;
+            cache.LastUpdated = DateTimeOffset.UtcNow;
+            await _repository.UpdateAsync(cache, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task UpsertPhoneScopedCacheAsync(
+        string cacheKey,
+        string phoneNumber,
+        string cacheValue,
+        bool forceSave,
+        CancellationToken cancellationToken)
+    {
+        var cache = await _repository.FirstOrDefaultAsync<AiSpeechAssistantKnowledgeVariableCache>(
+            x => x.CacheKey == cacheKey && x.Filter == phoneNumber,
+            cancellationToken).ConfigureAwait(false);
+
+        if (cache == null)
+        {
+            cache = new AiSpeechAssistantKnowledgeVariableCache
+            {
+                CacheKey = cacheKey,
+                Filter = phoneNumber,
                 CacheValue = cacheValue,
                 LastUpdated = DateTimeOffset.UtcNow
             };
