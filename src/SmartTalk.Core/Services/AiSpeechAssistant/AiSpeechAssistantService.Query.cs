@@ -555,7 +555,9 @@ public partial class AiSpeechAssistantService
             assistant.Knowledge = knowledges.Where(k => k.AssistantId == assistant.Id).FirstOrDefault();
             
             assistant.TransferCallNumber = humanContacts.Where(h => h.AssistantId == assistant.Id).FirstOrDefault()?.HumanPhone ?? string.Empty;
-            assistant.PhoneNoiseReductionEnabled = noiseReductionFunctionCalls.Any(x => x.AssistantId == assistant.Id);
+            assistant.PhoneNoiseReductionEnabled = noiseReductionFunctionCalls.Any(x =>
+                x.AssistantId == assistant.Id &&
+                x.ModelProvider == assistant.ModelProvider);
         }
     }
 }

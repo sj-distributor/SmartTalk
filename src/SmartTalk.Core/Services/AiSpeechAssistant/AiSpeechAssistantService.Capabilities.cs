@@ -198,8 +198,8 @@ public partial class AiSpeechAssistantService
         List<AiSpeechAssistantFunctionCall> functionCalls,
         List<Sales> sales)
     {
-        var repeatOrderEnabled = IsFunctionCallActive(functionCalls, record.Assistant.Id, OpenAiToolConstants.RepeatOrder) &&
-                                 IsFunctionCallActive(functionCalls, record.Assistant.Id, OpenAiToolConstants.SatisfyOrder) &&
+        var repeatOrderEnabled = IsFunctionCallActive(functionCalls, record.Assistant, OpenAiToolConstants.RepeatOrder) &&
+                                 IsFunctionCallActive(functionCalls, record.Assistant, OpenAiToolConstants.SatisfyOrder) &&
                                  record.Assistant.ManualRecordWholeAudio;
 
         var hifoodDataEnabled = IsHifoodDataEnabled(record.Agent, record.Assistant, sales);
@@ -228,10 +228,14 @@ public partial class AiSpeechAssistantService
                 : knowledge.Brief;
     }
 
-    private static bool IsFunctionCallActive(List<AiSpeechAssistantFunctionCall> functionCalls, int assistantId, string name)
+    private static bool IsFunctionCallActive(
+        List<AiSpeechAssistantFunctionCall> functionCalls,
+        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
+        string name)
     {
         return functionCalls.Any(x =>
-            x.AssistantId == assistantId &&
+            x.AssistantId == assistant.Id &&
+            x.ModelProvider == assistant.ModelProvider &&
             x.Type == AiSpeechAssistantSessionConfigType.Tool &&
             string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) &&
             x.IsActive);
