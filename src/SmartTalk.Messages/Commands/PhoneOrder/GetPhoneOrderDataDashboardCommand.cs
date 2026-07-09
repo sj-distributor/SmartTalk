@@ -55,6 +55,8 @@ public class CallInDataDto
     public double TotalCallInDurationSeconds { get; set; } 
     
     public Dictionary<string, double> TotalCallInDurationPerPeriod { get; set; } = new();
+
+    public List<ScenarioCallCountDto> ScenarioCallCounts { get; set; } = [];
     
 }
 
@@ -94,4 +96,11 @@ public class RestaurantDataDto
     public Dictionary<string,int> OrderCountPerPeriod { get; set; } = new();
     
     public Dictionary<string,int> CancelledOrderCountPerPeriod { get; set; } = new();
+}
+
+public class ScenarioCallCountDto
+{
+    public DialogueScenarios Scenario { get; set; }
+
+    public int Count { get; set; }
 }
