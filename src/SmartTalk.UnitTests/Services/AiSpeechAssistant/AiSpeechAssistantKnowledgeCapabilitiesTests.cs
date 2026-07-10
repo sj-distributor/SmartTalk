@@ -23,6 +23,7 @@ using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Services.Twilio;
@@ -362,7 +363,6 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             harness.Sut = new AiSpeechAssistantService(
                 Substitute.For<IClock>(),
                 Substitute.For<IMapper>(),
-                Substitute.For<ICrmClient>(),
                 currentUser,
                 new AzureSetting(configuration),
                 Substitute.For<ICacheManager>(),
@@ -370,14 +370,15 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 Substitute.For<IFfmpegService>(),
                 new OpenAiSettings(configuration),
                 Substitute.For<ISmartiesClient>(),
+                Substitute.For<IPosUtilService>(),
                 new ZhiPuAiSettings(configuration),
                 Substitute.For<IRedisSafeRunner>(),
                 posDataProvider,
-                Substitute.For<IPosUtilService>(),
                 Substitute.For<IPhoneOrderService>(),
                 harness.AgentDataProvider,
                 Substitute.For<IAttachmentService>(),
                 harness.SalesDataProvider,
+                Substitute.For<ISpeechMaticsService>(),
                 Substitute.For<ISpeechToTextService>(),
                 Substitute.For<IFileTextExtractor>(),
                 new WorkWeChatKeySetting(configuration),
