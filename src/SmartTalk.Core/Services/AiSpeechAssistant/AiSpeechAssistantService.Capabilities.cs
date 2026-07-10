@@ -729,7 +729,7 @@ public partial class AiSpeechAssistantService
     private static bool IsSharedCrmAutoSyncSalesAgent(Agent agent)
     {
         return agent.Type == AgentType.Sales &&
-               agent.SourceSystem == AgentSourceSystem.CrmAutoSync;
+               agent.SourceSystem == AgentSourceSystem.AiResource;
     }
 
     private class KnowledgeCapabilityContext
