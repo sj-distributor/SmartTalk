@@ -1476,7 +1476,7 @@ public partial class AiSpeechAssistantService
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCallAsync([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
-            if (assistant.IsTransferHuman)
+            if (assistant.IsTransferHuman && !string.IsNullOrWhiteSpace(transferCallNumber))
             {
                 if (humanConcat == null)
                 {

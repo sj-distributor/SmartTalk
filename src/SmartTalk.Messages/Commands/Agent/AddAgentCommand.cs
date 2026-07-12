@@ -27,6 +27,8 @@ public class AddAgentCommand : HasServiceProviderId, ICommand
     
     public string ServiceHours { get; set; }
 
+    public List<AgentTransferCallConfigDto> AgentTransferCallConfigs { get; set; }
+
     public AiSpeechAssistantChannel Channel { get; set; } = AiSpeechAssistantChannel.PhoneChat;
 
     public AgentType AgentType { get; set; } = AgentType.Agent;
