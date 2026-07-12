@@ -1,9 +1,7 @@
 using System.Net.WebSockets;
 using Serilog;
 using AutoMapper;
-using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Utils;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Pos;
@@ -17,7 +15,6 @@ using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
-using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
@@ -49,6 +46,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
     private readonly IFfmpegService _ffmpegService;
     private readonly IPosUtilService _posUtilService;
     private readonly IRealtimeAiService _realtimeAiService;
+    private readonly IAgentTransferCallRoutingService _agentTransferCallRoutingService;
     private readonly RealtimeAiTtsConfigResolver _ttsConfigResolver;
     private readonly IMiniMaxTtsSynthesizer _miniMaxTtsSynthesizer;
 
@@ -72,6 +70,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
         IRealtimeAiService realtimeAiService,
+        IAgentTransferCallRoutingService agentTransferCallRoutingService,
         RealtimeAiTtsConfigResolver ttsConfigResolver,
         IMiniMaxTtsSynthesizer miniMaxTtsSynthesizer,
         IOpenaiClient openaiClient,
@@ -87,6 +86,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _ffmpegService = ffmpegService;
         _posUtilService = posUtilService;
         _realtimeAiService = realtimeAiService;
+        _agentTransferCallRoutingService = agentTransferCallRoutingService;
         _ttsConfigResolver = ttsConfigResolver;
         _miniMaxTtsSynthesizer = miniMaxTtsSynthesizer;
         _openaiClient = openaiClient;
@@ -165,8 +165,13 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         if (agent?.IsReceiveCall != true)
             throw new AiAssistantNotAvailableException("No active agent");
 
+        var transferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
+
         _ctx.AgentId = agent.Id;
-        _ctx.TransferCallNumber = agent.TransferCallNumber;
+        _ctx.TimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
+        _ctx.AgentTransferCallConfigs = transferCallConfigs;
+        _ctx.TransferCallNumber = _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(transferCallConfigs) ?? agent.TransferCallNumber;
+        _ctx.HumanContactPhone = agent.TransferCallNumber;
 
         return agent;
     }
@@ -188,8 +193,8 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
     private void EnsureServiceAvailable(Agent agent)
     {
-        (_ctx.IsInAiServiceHours, _ctx.IsEnableManualService) = CheckIfInServiceHours(
-            agent.ServiceHours, agent.IsTransferHuman, agent.TransferCallNumber, _clock.Now);
+        (_ctx.IsInAiServiceHours, _ctx.IsEnableManualService) = _agentTransferCallRoutingService.CheckIfInServiceHours(
+            agent.ServiceHours, agent.IsTransferHuman, _ctx.TransferCallNumber, _clock.Now, _ctx.TimeZone);
 
         Log.Information("[AiAssistant] Service hours checked, InService: {InService}, ManualFallback: {ManualFallback}", _ctx.IsInAiServiceHours, _ctx.IsEnableManualService);
 
@@ -197,22 +202,4 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
             throw new AiAssistantNotAvailableException("Out of service hours, no manual fallback");
     }
 
-    public static (bool IsInServiceHours, bool IsEnableManualService) CheckIfInServiceHours(
-        string serviceHoursJson, bool isTransferHuman, string transferCallNumber, DateTimeOffset utcNow)
-    {
-        if (serviceHoursJson == null)
-            return (true, isTransferHuman && !string.IsNullOrEmpty(transferCallNumber));
-
-        var pstTime = TimeZoneInfo.ConvertTime(utcNow, PstTimeZone.Get());
-
-        var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(serviceHoursJson);
-        var specificWorkingHours = workingHours?.FirstOrDefault(x => x.DayOfWeek == pstTime.DayOfWeek);
-
-        var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
-
-        var isInService = specificWorkingHours != null &&
-                          specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
-
-        return (isInService, isTransferHuman && !string.IsNullOrEmpty(transferCallNumber));
-    }
 }

@@ -84,6 +84,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IPosUtilService _posUtilService;
     private readonly IPhoneOrderService _phoneOrderService;
     private readonly IAgentDataProvider _agentDataProvider;
+    private readonly IAgentTransferCallRoutingService _agentTransferCallRoutingService;
     private readonly IAttachmentService _attachmentService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechToTextService _speechToTextService;
@@ -104,6 +105,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly List<byte[]> _wholeAudioBufferBytes;
     private readonly WebSocket _openaiWebSocket;
     private AiSpeechAssistantStreamContextDto _aiSpeechAssistantStreamContext;
+    private List<AgentTransferCallConfig> _agentTransferCallConfigs = [];
+    private TimeZoneInfo _agentTimeZone = PstTimeZone.Get();
 
     public AiSpeechAssistantService(
         IClock clock,
@@ -122,6 +125,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPosUtilService posUtilService,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
+        IAgentTransferCallRoutingService agentTransferCallRoutingService,
         IAttachmentService attachmentService,
         ISalesDataProvider salesDataProvider,
         ISpeechToTextService speechToTextService,
@@ -153,6 +157,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _posDataProvider = posDataProvider;
         _posUtilService = posUtilService;
         _agentDataProvider = agentDataProvider;
+        _agentTransferCallRoutingService = agentTransferCallRoutingService;
         _phoneOrderService = phoneOrderService;
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
@@ -205,14 +210,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, command.Instruction, cancellationToken).ConfigureAwait(false);
         
-        CheckIfInServiceHours(agent);
-        _aiSpeechAssistantStreamContext.TransferCallNumber = agent.TransferCallNumber;
+        _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
+        _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
+        _aiSpeechAssistantStreamContext.TransferCallNumber =
+            _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(_agentTransferCallConfigs) ?? agent.TransferCallNumber;
+
+        (_aiSpeechAssistantStreamContext.IsInAiServiceHours, _aiSpeechAssistantStreamContext.IsEnableManualService) =
+            _agentTransferCallRoutingService.CheckIfInServiceHours(
+                agent.ServiceHours, agent.IsTransferHuman, _aiSpeechAssistantStreamContext.TransferCallNumber,
+                _clock.Now, _agentTimeZone);
 
         if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
             return new AiSpeechAssistantConnectCloseEvent();
         
         _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
-            : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(_aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
+            : _agentTransferCallConfigs.Count > 0
+                ? agent.TransferCallNumber
+                : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(
+                    _aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
         
         await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
         
@@ -946,6 +961,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information("Start transfer call");
         
         if (_aiSpeechAssistantStreamContext.IsTransfer) return;
+
+        if (_agentTransferCallConfigs.Count > 0)
+            _aiSpeechAssistantStreamContext.HumanContactPhone =
+                _agentTransferCallRoutingService.SelectTransferCallNumber(_agentTransferCallConfigs, _clock.Now, _agentTimeZone) ??
+                _aiSpeechAssistantStreamContext.HumanContactPhone;
         
         if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.HumanContactPhone))
         {
@@ -1284,34 +1304,4 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         };
     }
     
-    public void CheckIfInServiceHours(Agent agent)
-    {
-        if (agent.ServiceHours == null)
-        {
-            _aiSpeechAssistantStreamContext.IsInAiServiceHours = true;
-            
-            return;
-        }
-        
-        var utcNow = DateTimeOffset.UtcNow;
-
-        var pstZone = PstTimeZone.Get();
-
-        var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
-        
-        var dayOfWeek = pstTime.DayOfWeek;
-        
-        var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(agent.ServiceHours);
-        
-        Log.Information("Parsed service hours; {@WorkingHours}", workingHours);
-        
-        var specificWorkingHours = workingHours.Where(x => x.DayOfWeek == dayOfWeek).FirstOrDefault();
-        
-        Log.Information("Matched specific service hours: {@SpecificWorkingHours} and the pstTime: {@PstTime}", specificWorkingHours, pstTime);
-        
-        var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
-
-        _aiSpeechAssistantStreamContext.IsInAiServiceHours = specificWorkingHours != null && specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
-        _aiSpeechAssistantStreamContext.IsEnableManualService = agent.IsTransferHuman && !string.IsNullOrEmpty(agent.TransferCallNumber);
-    }
 }

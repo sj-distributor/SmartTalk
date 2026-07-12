@@ -1,6 +1,8 @@
 using Newtonsoft.Json;
+using NSubstitute;
 using Shouldly;
-using SmartTalk.Core.Services.AiSpeechAssistantConnect;
+using SmartTalk.Core.Services.Agents;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Messages.Dto.Agent;
 using Xunit;
 
@@ -8,6 +10,7 @@ namespace SmartTalk.UnitTests.Services.AiSpeechAssistantConnect;
 
 public class CheckIfInServiceHoursTests
 {
+    private readonly AgentTransferCallRoutingService _routingService = new(Substitute.For<IPosDataProvider>());
     private static readonly TimeZoneInfo PstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
 
     /// <summary>
@@ -34,7 +37,7 @@ public class CheckIfInServiceHoursTests
     [Fact]
     public void NullServiceHours_ReturnsInService()
     {
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             null, false, null, DateTimeOffset.UtcNow);
 
         inService.ShouldBeTrue();
@@ -43,7 +46,7 @@ public class CheckIfInServiceHoursTests
     [Fact]
     public void NullServiceHours_ManualServiceEnabled_WhenTransferConfigured()
     {
-        var (_, manualService) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (_, manualService) = _routingService.CheckIfInServiceHours(
             null, true, "+15551234567", DateTimeOffset.UtcNow);
 
         manualService.ShouldBeTrue();
@@ -52,7 +55,7 @@ public class CheckIfInServiceHoursTests
     [Fact]
     public void NullServiceHours_ManualServiceDisabled_WhenNoTransferNumber()
     {
-        var (_, manualService) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (_, manualService) = _routingService.CheckIfInServiceHours(
             null, true, null, DateTimeOffset.UtcNow);
 
         manualService.ShouldBeFalse();
@@ -61,7 +64,7 @@ public class CheckIfInServiceHoursTests
     [Fact]
     public void NullServiceHours_ManualServiceDisabled_WhenTransferHumanFalse()
     {
-        var (_, manualService) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (_, manualService) = _routingService.CheckIfInServiceHours(
             null, false, "+15551234567", DateTimeOffset.UtcNow);
 
         manualService.ShouldBeFalse();
@@ -75,7 +78,7 @@ public class CheckIfInServiceHoursTests
         // 2026-02-16 is Monday
         var utcNow = PstToUtc(2026, 2, 16, 12, 0);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
 
         inService.ShouldBeTrue();
@@ -88,7 +91,7 @@ public class CheckIfInServiceHoursTests
         var json = BuildServiceHours((1, new TimeSpan(9, 0, 0), new TimeSpan(17, 0, 0)));
         var utcNow = PstToUtc(2026, 2, 16, 18, 0);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
 
         inService.ShouldBeFalse();
@@ -100,7 +103,7 @@ public class CheckIfInServiceHoursTests
         var json = BuildServiceHours((1, new TimeSpan(9, 0, 0), new TimeSpan(17, 0, 0)));
         var utcNow = PstToUtc(2026, 2, 16, 9, 0);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
 
         inService.ShouldBeTrue();
@@ -112,7 +115,7 @@ public class CheckIfInServiceHoursTests
         var json = BuildServiceHours((1, new TimeSpan(9, 0, 0), new TimeSpan(17, 0, 0)));
         var utcNow = PstToUtc(2026, 2, 16, 17, 0);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
 
         inService.ShouldBeTrue();
@@ -125,7 +128,7 @@ public class CheckIfInServiceHoursTests
         var json = BuildServiceHours((2, new TimeSpan(9, 0, 0), new TimeSpan(17, 0, 0)));
         var utcNow = PstToUtc(2026, 2, 16, 12, 0); // Monday
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
 
         inService.ShouldBeFalse();
@@ -140,7 +143,7 @@ public class CheckIfInServiceHoursTests
             (1, new TimeSpan(13, 0, 0), new TimeSpan(17, 0, 0)));
         var utcNow = PstToUtc(2026, 2, 16, 14, 0);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
 
         inService.ShouldBeTrue();
@@ -155,7 +158,7 @@ public class CheckIfInServiceHoursTests
             (1, new TimeSpan(13, 0, 0), new TimeSpan(17, 0, 0)));
         var utcNow = PstToUtc(2026, 2, 16, 12, 0);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
 
         inService.ShouldBeFalse();
@@ -172,8 +175,17 @@ public class CheckIfInServiceHoursTests
         var json = JsonConvert.SerializeObject(hours);
         var utcNow = PstToUtc(2026, 2, 16, 12, 0);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, utcNow);
+
+        inService.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void SerializedNullServiceHours_ReturnsNotInService()
+    {
+        var (inService, _) = _routingService.CheckIfInServiceHours(
+            "null", false, null, DateTimeOffset.UtcNow);
 
         inService.ShouldBeFalse();
     }
@@ -185,7 +197,7 @@ public class CheckIfInServiceHoursTests
         var json = BuildServiceHours((1, new TimeSpan(9, 0, 0), new TimeSpan(10, 0, 0)));
         var utcNow = PstToUtc(2026, 2, 16, 18, 0);
 
-        var (inService, manualService) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, manualService) = _routingService.CheckIfInServiceHours(
             json, true, "+15551234567", utcNow);
 
         inService.ShouldBeFalse();
@@ -199,9 +211,39 @@ public class CheckIfInServiceHoursTests
         var json = BuildServiceHours((1, new TimeSpan(9, 0, 0), new TimeSpan(9, 1, 0)));
         var utc = TimeZoneInfo.ConvertTimeToUtc(new DateTime(2026, 2, 16, 9, 0, 59), PstZone);
 
-        var (inService, _) = AiSpeechAssistantConnectService.CheckIfInServiceHours(
+        var (inService, _) = _routingService.CheckIfInServiceHours(
             json, false, null, new DateTimeOffset(utc, TimeSpan.Zero));
 
         inService.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ServiceHours_UsesAgentTimeZone()
+    {
+        var json = BuildServiceHours((1, new TimeSpan(8, 0, 0), new TimeSpan(10, 0, 0)));
+        var utcNow = new DateTimeOffset(2026, 2, 16, 17, 0, 0, TimeSpan.Zero);
+        var losAngeles = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+        var newYork = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+
+        _routingService.CheckIfInServiceHours(
+                json, false, null, utcNow, losAngeles).IsInServiceHours
+            .ShouldBeTrue();
+        _routingService.CheckIfInServiceHours(
+                json, false, null, utcNow, newYork).IsInServiceHours
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public void MissingTimeZone_UsesPstByDefault()
+    {
+        var json = BuildServiceHours((1, new TimeSpan(8, 0, 0), new TimeSpan(10, 0, 0)));
+        var utcNow = new DateTimeOffset(2026, 2, 16, 17, 0, 0, TimeSpan.Zero);
+
+        var defaultResult = _routingService.CheckIfInServiceHours(
+            json, false, null, utcNow);
+        var explicitPstResult = _routingService.CheckIfInServiceHours(
+            json, false, null, utcNow, PstZone);
+
+        defaultResult.ShouldBe(explicitPstResult);
     }
 }
