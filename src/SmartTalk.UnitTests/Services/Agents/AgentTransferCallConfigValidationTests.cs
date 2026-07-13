@@ -24,7 +24,7 @@ public class AgentTransferCallConfigValidationTests
         };
 
         var exception = Should.Throw<ValidationException>(() =>
-            AgentService.ValidateAgentTransferCallConfigs(true, configs));
+            AgentService.ValidateAgentTransferCallConfigs(true, "+12065550100", configs));
 
         exception.Message.ShouldContain("ServiceHours is required");
     }
@@ -41,6 +41,34 @@ public class AgentTransferCallConfigValidationTests
             }
         };
 
-        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(true, configs));
+        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(true, null, configs));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TransferEnabled_AcceptsLegacyNumberWhenConfigsAreNotProvided(bool useEmptyConfigs)
+    {
+        List<AgentTransferCallConfigDto> configs = useEmptyConfigs ? [] : null!;
+
+        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(
+            true, "+12065550100", configs));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TransferEnabled_RejectsRequestWhenNeitherLegacyNumberNorConfigsAreProvided(bool useEmptyConfigs)
+    {
+        List<AgentTransferCallConfigDto> configs = useEmptyConfigs ? [] : null!;
+
+        Should.Throw<ValidationException>(() => AgentService.ValidateAgentTransferCallConfigs(
+            true, null, configs));
+    }
+
+    [Fact]
+    public void TransferDisabled_DoesNotRequireLegacyNumberOrConfigs()
+    {
+        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(false, null, null));
     }
 }
