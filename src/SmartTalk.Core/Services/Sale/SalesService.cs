@@ -33,6 +33,23 @@ public class SalesService : ISalesService
         ["7"] = "周日"
     };
 
+    private static readonly Dictionary<string, string[]> TimezoneWarehouseMapping = new(StringComparer.Ordinal)
+    {
+        ["America/New_York"] = ["101A"],
+        ["America/Los_Angeles"] = ["101D", "1050", "1060", "1070", "1200", "1250", "1400", "1450", "1600", "1800"],
+        ["America/Chicago"] = ["101G", "101J", "102B"],
+        ["America/Denver"] = ["101H", "102H"]
+    };
+
+    private static readonly Dictionary<string, string> WarehouseTimezoneLookup = TimezoneWarehouseMapping
+        .SelectMany(mapping => mapping.Value.Select(warehouse => new { Warehouse = warehouse, Timezone = mapping.Key }))
+        .ToDictionary(x => x.Warehouse, x => x.Timezone, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly char[] WarehouseCodeSeparators =
+    [
+        ' ', '\t', '\r', '\n', ',', '，', ';', '；', '/', '\\', '|', '、'
+    ];
+
     private readonly ICrmClient _crmClient;
     private readonly ISalesClient _salesClient;
 
@@ -66,9 +83,10 @@ public class SalesService : ISalesService
                     cancellationToken).ConfigureAwait(false);
 
             var orderItems = orderResponse?.Data ?? new List<SalesOrderHistoryDto>();
+            var goodsStatusLookup = await BuildGoodsStatusLookupAsync(askItems, orderItems, soldToId, cancellationToken).ConfigureAwait(false);
 
             var levelCodes = askItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)
-                .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.LevelCode)).Select(x => x.LevelCode)).Distinct()
+                .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.Level5)).Select(x => x.Level5)).Distinct()
                 .ToList();
 
             var materials = askItems.Where(x => !string.IsNullOrEmpty(x.Material)).Select(x => x.Material)
@@ -93,12 +111,13 @@ public class SalesService : ISalesService
             var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?.ToDictionary(h => h.LevelCode5, h => h)
                               ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>();
 
-            string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null)
+            string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null, string plant = null, string rtype = null)
             {
                 var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
                 var name = parts.Length > 4 ? $"{parts[0]}{parts[4]}" : parts.FirstOrDefault() ?? "";
                 var brand = parts.Length > 1 ? parts[1] : "";
                 var size = parts.Length > 3 ? parts[3] : "";
+                var status = string.IsNullOrWhiteSpace(materialNumber) || string.IsNullOrWhiteSpace(plant) ? string.Empty : goodsStatusLookup.GetValueOrDefault(BuildGoodsStatusKey(materialNumber, plant, rtype), string.Empty);
 
                 string aliasText = "";
                 MaterialPartInfoDto partInfo = null;
@@ -113,14 +132,14 @@ public class SalesService : ISalesService
                         string.Equals(p.MaterialNumber, materialNumber, StringComparison.OrdinalIgnoreCase));
                 }
 
-                return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, " +
+                return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, status: {status}, " +
                        $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
                        $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
                        $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr}";
             }
 
-            allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material)));
-            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.LevelCode, x.MaterialNumber)));
+            allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material, x.Plant, x.MaterialType)));
+            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, x.Level5, x.MaterialNumber, x.Plant, x.MaterialType)));
         }
 
         return string.Join(Environment.NewLine, allItems.Distinct().Take(150));
@@ -270,6 +289,9 @@ public class SalesService : ISalesService
         customerInfo.AppendLine($"- 客户名称: {customer.CustomerName}");
         customerInfo.AppendLine($"- 地址: {customer.Street}");
         customerInfo.AppendLine($"- 仓库: {customer.Warehouse}");
+        var timezone = ResolveWarehouseTimezone(customer.Warehouse);
+        if (!string.IsNullOrWhiteSpace(timezone))
+            customerInfo.AppendLine($"- 送货/截单时区: {timezone}");
         customerInfo.AppendLine($"- 备注: {customer.HeaderNote1}");
 
         if (customer.Contacts == null || customer.Contacts.Count == 0) return;
@@ -381,6 +403,32 @@ public class SalesService : ISalesService
         return $"{entry ?? "未配置"}-{leave ?? "未配置"}";
     }
 
+    private static string ResolveWarehouseTimezone(string warehouse)
+    {
+        var warehouseCodes = ExtractWarehouseCodes(warehouse);
+        if (warehouseCodes.Count == 0) return null;
+
+        var timezones = warehouseCodes
+            .Select(code => WarehouseTimezoneLookup.TryGetValue(code, out var timezone) ? timezone : null)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return timezones.Count == 0 ? null : string.Join("、", timezones);
+    }
+
+    private static List<string> ExtractWarehouseCodes(string warehouse)
+    {
+        if (string.IsNullOrWhiteSpace(warehouse)) return [];
+
+        return warehouse
+            .Split(WarehouseCodeSeparators, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private static string NormalizePhone(string phoneNumber)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber)) return phoneNumber;
@@ -419,5 +467,52 @@ public class SalesService : ISalesService
             }
             builder.AppendLine();
         }
+    }
+
+    private static string BuildGoodsStatusKey(string material, string plant, string rtype)
+    {
+        return $"{material?.Trim().ToUpperInvariant()}|{plant?.Trim().ToUpperInvariant()}|{(rtype ?? string.Empty).Trim().ToUpperInvariant()}";
+    }
+
+    private async Task<Dictionary<string, string>> BuildGoodsStatusLookupAsync(List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems, string soldToId, CancellationToken cancellationToken)
+    {
+        var goodsStatusRequestItems = BuildGoodsStatusRequestItems(askItems, orderItems);
+
+        if (goodsStatusRequestItems.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var goodsStatusResponse = await _salesClient.QueryGoodsStatusAsync(new QueryGoodsStatusRequestDto { List = goodsStatusRequestItems }, cancellationToken).ConfigureAwait(false);
+
+        if (goodsStatusResponse?.ResultCode != 200 || goodsStatusResponse.ResultData == null)
+        {
+            Log.Warning("QueryGoodsStatusAsync returned non-success response for soldToId {SoldToId}. ResultCode: {ResultCode}, ResultMsg: {ResultMsg}", soldToId, goodsStatusResponse?.ResultCode, goodsStatusResponse?.ResultMsg);
+
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return goodsStatusResponse.ResultData.GroupBy(x => BuildGoodsStatusKey(x.Material, x.Plant, x.Rtype))
+            .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.Status ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static List<QueryGoodsStatusItemDto> BuildGoodsStatusRequestItems(List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems)
+    {
+        return askItems
+            .Where(x => !string.IsNullOrWhiteSpace(x.Material) && !string.IsNullOrWhiteSpace(x.Plant))
+            .Select(x => new QueryGoodsStatusItemDto
+            {
+                Material = x.Material,
+                Plant = x.Plant,
+                Rtype = x.MaterialType ?? string.Empty
+            })
+            .Concat(orderItems
+                .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber) && !string.IsNullOrWhiteSpace(x.Plant))
+                .Select(x => new QueryGoodsStatusItemDto
+                {
+                    Material = x.MaterialNumber,
+                    Plant = x.Plant,
+                    Rtype = x.MaterialType ?? string.Empty
+                }))
+            .DistinctBy(x => BuildGoodsStatusKey(x.Material, x.Plant, x.Rtype))
+            .ToList();
     }
 }

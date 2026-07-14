@@ -1,7 +1,7 @@
 using AutoMapper;
 using SmartTalk.Core.Domain.AISpeechAssistant;
-using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
 
@@ -17,6 +17,7 @@ public class AiSpeechAssistantMapping : Profile
 
         CreateMap<AddAiSpeechAssistantKnowledgeCommand, AiSpeechAssistantKnowledge>();
         CreateMap<AiSpeechAssistantKnowledge, AiSpeechAssistantKnowledgeDto>().ReverseMap();
+        CreateMap<AiSpeechAssistantKnowledgeSceneRelation, AiSpeechAssistantKnowledgeSceneRelationDto>();
         CreateMap<NumberPool, NumberPoolDto>().ReverseMap();
 
         CreateMap<UpdateAiSpeechAssistantCommand, AiSpeechAssistant>()
@@ -29,10 +30,11 @@ public class AiSpeechAssistantMapping : Profile
         CreateMap<AgentAssistant, AgentAssistantDto>().ReverseMap();
         CreateMap<AiSpeechAssistantSession, AiSpeechAssistantSessionDto>().ReverseMap();
         CreateMap<ExtractedOrderItemDto, AiOrderItemDto>()
-            .ForMember(dest => dest.AiMaterialDesc, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.AiMaterialDesc, opt => opt.MapFrom(src => src.AiMaterialDesc))
             .ForMember(dest => dest.MaterialQuantity, opt => opt.MapFrom(src => src.Quantity))
             .ForMember(dest => dest.MaterialNumber, opt => opt.MapFrom(src => src.MaterialNumber))
-            .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit));
+            .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit))
+            .ForMember(dest => dest.IsTargetQuantity, opt => opt.MapFrom(src => src.IsTargetQuantity));
         CreateMap<AiSpeechAssistantInboundRoute, AiSpeechAssistantInboundRouteDto>().ReverseMap();
 
         CreateMap<AiSpeechAssistantKnowledgeCopyRelatedDto, AiSpeechAssistantKnowledgeCopyRelated>().ReverseMap();

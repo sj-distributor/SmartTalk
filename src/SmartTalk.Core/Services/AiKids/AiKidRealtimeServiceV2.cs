@@ -7,7 +7,11 @@ using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Settings.MiniMax;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
@@ -15,6 +19,7 @@ using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Hr;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.AiKids;
@@ -26,24 +31,32 @@ public interface IAiKidRealtimeServiceV2 : IScopedDependency
 
 public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 {
+    private static readonly TimeSpan TestLinkMaxSessionDuration = TimeSpan.FromMinutes(30);
+
     private readonly ISmartiesClient _smartiesClient;
     private readonly IAttachmentService _attachmentService;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IRealtimeAiService _realtimeAiService;
+    private readonly MiniMaxTtsSettings _miniMaxTtsSettings;
+    private readonly RealtimeAiTtsConfigResolver _ttsConfigResolver;
 
     public AiKidRealtimeServiceV2(
         ISmartiesClient smartiesClient,
         IAttachmentService attachmentService,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        IRealtimeAiService realtimeAiService)
+        IRealtimeAiService realtimeAiService,
+        MiniMaxTtsSettings miniMaxTtsSettings,
+        RealtimeAiTtsConfigResolver ttsConfigResolver)
     {
         _smartiesClient = smartiesClient;
         _attachmentService = attachmentService;
         _backgroundJobClient = backgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _realtimeAiService = realtimeAiService;
+        _miniMaxTtsSettings = miniMaxTtsSettings;
+        _ttsConfigResolver = ttsConfigResolver;
     }
 
     public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
@@ -51,6 +64,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         var assistant = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Could not find assistant by id: {command.AssistantId}");
+
+        var forceChinese = command.OrderRecordType == PhoneOrderRecordType.TestLink;
+        var ttsSampleRate = forceChinese ? 24000 : _miniMaxTtsSettings.SampleRate;
 
         var timer = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantTimerByAssistantIdAsync(assistant.Id, cancellationToken).ConfigureAwait(false);
@@ -68,6 +84,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 Client = RealtimeAiClient.Default
             },
             ModelConfig = modelConfig,
+            TtsConfig = BuildTtsConfig(assistant, ttsSampleRate),
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
                 ProfileId = assistant.Id.ToString()
@@ -75,6 +92,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             WebSocket = command.WebSocket,
             Region = command.Region,
             EnableRecording = true,
+            MaxSessionDuration = orderRecordType == PhoneOrderRecordType.TestLink ? TestLinkMaxSessionDuration : (TimeSpan?)null,
             IdleFollowUp = timer != null
                 ? new RealtimeSessionIdleFollowUp
                 {
@@ -133,6 +151,17 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
     }
 
+    private RealtimeAiTtsConfig BuildTtsConfig(Domain.AISpeechAssistant.AiSpeechAssistant assistant, int sampleRate)
+    {
+        return _ttsConfigResolver.Resolve(new RealtimeAiTtsRequest
+        {
+            AssistantId = assistant.Id,
+            ModelVoice = assistant.ModelVoice,
+            SampleRate = sampleRate,
+            SourceSampleRate = sampleRate
+        });
+    }
+
     private async Task<RealtimeAiModelConfig> BuildModelConfigAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
@@ -160,7 +189,10 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 .Select(x => x.Config)
                 .ToList(),
             TurnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).Config,
-            InputAudioNoiseReduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction).Config
+            VendorOptions = new OpenAiRealtimeModelOptions
+            {
+                InputAudioNoiseReduction = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction).Config
+            }
         };
     }
 
@@ -170,10 +202,15 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         if (assistant?.Knowledge == null || string.IsNullOrEmpty(assistant.Knowledge.Prompt))
             return string.Empty;
 
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-        var finalPrompt = assistant.Knowledge.Prompt
+        var finalPrompt = string.Join("\n\n", new[]
+            {
+                assistant.Knowledge.Prompt?.Trim(),
+                assistant.Knowledge.ScenePrompt?.Trim()
+            }
+            .Where(x => !string.IsNullOrWhiteSpace(x)))
             .Replace("#{current_time}", currentTime)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 

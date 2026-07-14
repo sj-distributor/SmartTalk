@@ -17,6 +17,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Services.Linphone;
 using SmartTalk.Core.Domain.Pos;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -29,6 +30,7 @@ using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Pos;
 using SmartTalk.Messages.Events.PhoneOrder;
 using SmartTalk.Core.Extensions;
+using SmartTalk.Core.Constants;
 using TranscriptionFileType = SmartTalk.Messages.Enums.STT.TranscriptionFileType;
 using TranscriptionResponseFormat = SmartTalk.Messages.Enums.STT.TranscriptionResponseFormat;
 
@@ -42,6 +44,8 @@ public partial interface IPhoneOrderService
 
     Task ReceivePhoneOrderRecordAsync(ReceivePhoneOrderRecordCommand command, CancellationToken cancellationToken);
 
+    Task ReceiveAixvolinkPhoneOrderRecordAsync(ReceiveAixvolinkPhoneOrderRecordCommand command, CancellationToken cancellationToken);
+
     Task ExtractPhoneOrderRecordAiMenuAsync(List<SpeechMaticsSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken);
 
     Task<AddOrUpdateManualOrderResponse> AddOrUpdateManualOrderAsync(AddOrUpdateManualOrderCommand command, CancellationToken cancellationToken);
@@ -54,7 +58,7 @@ public partial interface IPhoneOrderService
 
     Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken);
     
-    Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken);
+    Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardCommand command, CancellationToken cancellationToken);
     
     Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken);
     
@@ -75,9 +79,16 @@ public partial class PhoneOrderService
                 ? (await _posDataProvider.GetPosAgentsAsync(storeIds: [request.StoreId.Value], cancellationToken: cancellationToken).ConfigureAwait(false)).Select(x => x.AgentId).ToList()
                 : [];
         
-        Log.Information("Get phone order records: {@AgentIds}, {Name}, {Start}, {End}, {OrderId}, {DialogueScenarios}, {AssistantId}", agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, request.AssistantId);
+        var assistantId = request.AssistantId;
+        var orderIds = request.OrderIds?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .SelectMany(x => x.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
+
+        Log.Information("Get phone order records: {@AgentIds}, {Name}, {Start}, {End}, {@OrderIds}, {DialogueScenarios}, {AssistantId}", agentIds, request.Name, utcStart, utcEnd, orderIds, request.DialogueScenarios, assistantId);
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.OrderId, request.DialogueScenarios, request.AssistantId, cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(agentIds, request.Name, utcStart, utcEnd, request.DialogueScenarios, assistantId, orderIds, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get phone order records Count: {@Count}", records.Count);
         
@@ -171,6 +182,54 @@ public partial class PhoneOrderService
         }
 
         record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(command.RecordContent, command.RecordName ?? Guid.NewGuid().ToString("N") + ".wav", detection.Language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
+
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ReceiveAixvolinkPhoneOrderRecordAsync(ReceiveAixvolinkPhoneOrderRecordCommand command, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.RecordingUrl)) return;
+
+        var recordingUrl = command.RecordingUrl.Trim();
+
+        if (command.AgentId <= 0)
+        {
+            Log.Warning("AIXVOLINK record skipped because AgentId is missing.");
+            return;
+        }
+
+        var recordContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
+        var transcription = await _speechToTextService.SpeechToTextAsync(
+            recordContent,
+            fileType: TranscriptionFileType.Wav,
+            responseFormat: TranscriptionResponseFormat.Text,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
+        var recordName = $"{Guid.NewGuid():N}.wav";
+
+        var record = new PhoneOrderRecord
+        {
+            SessionId = Guid.NewGuid().ToString("N"),
+            AgentId = command.AgentId,
+            AssistantId = command.AssistantId,
+            Language = SelectLanguageEnum(detection.Language),
+            CreatedDate = command.CallTime == default ? DateTimeOffset.UtcNow : command.CallTime,
+            Status = PhoneOrderRecordStatus.Recieved,
+            OrderRecordType = command.OrderRecordType,
+            PhoneNumber = command.CallerNumber,
+            IncomingCallNumber = command.CalleeNumber,
+            Url = recordingUrl,
+            SourceProvider = PhoneOrderSourceProviders.Aixvolink
+        };
+
+        if (await CheckPhoneOrderRecordDurationAsync(recordContent, cancellationToken).ConfigureAwait(false))
+        {
+            await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.NoContent, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordContent, recordName, detection.Language, SpeechMaticsJobScenario.AixvolinkReleased, cancellationToken).ConfigureAwait(false);
 
         await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
     }
@@ -576,7 +635,7 @@ public partial class PhoneOrderService
 
         if (match.Success) time = match.Groups[1].Value;
 
-        return TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)), TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles"));
+        return TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(long.Parse(time)), PstTimeZone.Get());
     }
 
     private async Task UpdatePhoneOrderRecordSpecificFieldsAsync(int recordId, int modifiedBy, string tips, string lastModifiedByName, CancellationToken cancellationToken)
@@ -626,7 +685,7 @@ public partial class PhoneOrderService
     {
         if (!inputDate.HasValue) return (null, null);
 
-        var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstTimeZone = PstTimeZone.Get();
 
         var pstDate = new DateTime(inputDate.Value.Year, inputDate.Value.Month, inputDate.Value.Day, 0, 0, 0);
         var pstStart = new DateTimeOffset(pstDate, pstTimeZone.GetUtcOffset(pstDate));
@@ -707,14 +766,16 @@ public partial class PhoneOrderService
                 .ToDictionary(g => g.Key, g => g.First().Language ?? string.Empty);
         }
 
-        var (utcStart, utcEnd) = GetCompanyCallReportUtcRange(request.ReportType);
+        var (utcStart, utcEnd) = ConvertChinaDateRangeToUtcRange(request.StartDate, request.EndDate);
 
         var records = assistantIds.Count == 0
             ? []
             : await _phoneOrderDataProvider.GetPhoneOrderRecordsByAssistantIdsAsync(assistantIds, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
+        Log.Information("GetPhoneOrderCompanyCallReportAsync records count{@Count}", records.Count);
+        
         var reportRows = BuildCompanyCallReportRows(records, assistantIds, assistantNameMap, assistantLanguageMap, latestRecords, daysWindow);
-        var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, request.ReportType, cancellationToken).ConfigureAwait(false);
+        var fileUrl = await ToCompanyCallReportExcelAsync(reportRows, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderCompanyCallReportResponse { Data = fileUrl };
     }
@@ -784,6 +845,9 @@ public partial class PhoneOrderService
                 var scenarioCounts = Enum.GetValues<DialogueScenarios>()
                     .ToDictionary(scenario => scenario, scenario => groupRecords.Count(x => x.Scenario == scenario));
 
+                Log.Information(
+                    "Company call report row assistantId:{AssistantId}, customerId:{CustomerId}, totalCalls:{TotalCalls}, invalidCalls:{InvalidCalls}, recordIds:{RecordIds}", assistantId, string.IsNullOrWhiteSpace(assistantName) ? assistantId.ToString() : assistantName, groupRecords.Count, scenarioCounts.GetValueOrDefault(DialogueScenarios.InvalidCall), groupRecords.Select(x => x.Id).ToList());
+
                 var daysSinceLastCallText = latestRecord == null
                     ? $"超过{daysWindow}天"
                     : CalculateDaysSinceLastCallText(latestRecord.CreatedDate, todayChina, chinaZone);
@@ -810,7 +874,7 @@ public partial class PhoneOrderService
     {
         if (month < 1 || month > 12) throw new ArgumentOutOfRangeException(nameof(month));
 
-        var tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"); // PT, 含 DST
+        var tz = PstTimeZone.Get(); // PT, 含 DST
 
         var startLocal = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
@@ -866,6 +930,19 @@ public partial class PhoneOrderService
         return (new DateTimeOffset(weekStartUtc), new DateTimeOffset(weekEndUtc));
     }
 
+    private static (DateTimeOffset StartUtc, DateTimeOffset EndUtc) ConvertChinaDateRangeToUtcRange(DateTime startDate, DateTime endDate)
+    {
+        if (endDate <= startDate) throw new ArgumentException("EndDate must be greater than StartDate.");
+
+        var chinaZone = GetChinaTimeZone();
+        var chinaStart = DateTime.SpecifyKind(startDate, DateTimeKind.Unspecified);
+        var chinaEnd = DateTime.SpecifyKind(endDate, DateTimeKind.Unspecified);
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(chinaStart, chinaZone);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(chinaEnd, chinaZone);
+
+        return (new DateTimeOffset(startUtc), new DateTimeOffset(endUtc));
+    }
+
     private static TimeZoneInfo GetChinaTimeZone()
     {
         try
@@ -889,7 +966,7 @@ public partial class PhoneOrderService
     
     private string ConvertUtcToPst(DateTimeOffset utcTime)
     {
-        var pstTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstTimeZone = PstTimeZone.Get();
         
         var pstTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime.UtcDateTime, pstTimeZone);
         
@@ -980,45 +1057,27 @@ public partial class PhoneOrderService
     }
 
     private async Task<string> ToCompanyCallReportExcelAsync(
-        IReadOnlyList<CompanyCallReportRow> rows, PhoneOrderCallReportType reportType, CancellationToken cancellationToken)
+        IReadOnlyList<CompanyCallReportRow> rows, CancellationToken cancellationToken)
     {
         using var workbook = new XLWorkbook();
         var ws = workbook.AddWorksheet("Sheet1");
 
         var scenarios = Enum.GetValues<DialogueScenarios>();
-        var prefix = reportType == PhoneOrderCallReportType.Daily
-            ? "当日"
-            : reportType == PhoneOrderCallReportType.LastWeek
-                ? "上周"
-                : "本周";
 
         var headers = new List<string>
         {
             "customer id",
-            "客人語種"
+            "客人語種",
+            "有效通話量合計（所有通話-無效通話）",
+            "AI下单数量"
         };
-
-        if (reportType == PhoneOrderCallReportType.Daily)
-        {
-            headers.Add("當日有效通話量合計（所有通話-無效通話）");
-        }
-        else
-        {
-            headers.Add($"{prefix}有call入 Sales");
-            headers.Add($"{prefix}有效通話量（下单+转接+咨询）");
-        }
-
-        headers.Add($"{prefix}AI下单数量");
 
         foreach (var scenario in scenarios)
         {
-            headers.Add($"{prefix}{scenario.GetDescription()}");
+            headers.Add(scenario.GetDescription());
         }
-
-        if (reportType == PhoneOrderCallReportType.Daily)
-        {
-            headers.Add("多久沒來電");
-        }
+        
+        headers.Add("多久沒來電");
 
         for (var col = 0; col < headers.Count; col++)
             ws.Cell(1, col + 1).Value = headers[col];
@@ -1036,34 +1095,16 @@ public partial class PhoneOrderService
             ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerId;
             ws.Cell(rowIndex + 2, colIndex++).Value = row.CustomerLanguage ?? string.Empty;
 
-            if (reportType == PhoneOrderCallReportType.Daily)
+            var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
+            ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
+            ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
+
+            foreach (var scenario in scenarios)
             {
-                var invalidCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.InvalidCall);
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls - invalidCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
-
-                foreach (var scenario in scenarios)
-                {
-                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
-                }
-
-                ws.Cell(rowIndex + 2, colIndex).Value = row.DaysSinceLastCallText ?? string.Empty;
+                ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
             }
-            else
-            {
-                var orderCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Order);
-                var transferCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.TransferToHuman);
-                var inquiryCount = GetScenarioCount(row.ScenarioCounts, DialogueScenarios.Inquiry);
-
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.TotalCalls;
-                ws.Cell(rowIndex + 2, colIndex++).Value = orderCount + transferCount + inquiryCount;
-                ws.Cell(rowIndex + 2, colIndex++).Value = row.AiOrderCount;
-
-                foreach (var scenario in scenarios)
-                {
-                    ws.Cell(rowIndex + 2, colIndex++).Value = GetScenarioCount(row.ScenarioCounts, scenario);
-                }
-            }
+            
+            ws.Cell(rowIndex + 2, colIndex).Value = row.DaysSinceLastCallText ?? string.Empty;
         }
 
         ws.Columns().AdjustToContents();
@@ -1112,25 +1153,25 @@ public partial class PhoneOrderService
         public string DaysSinceLastCallText { get; set; }
     }
     
-    public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardRequest request, CancellationToken cancellationToken)
+    public async Task<GetPhoneOrderDataDashboardResponse> GetPhoneOrderDataDashboardAsync(GetPhoneOrderDataDashboardCommand command, CancellationToken cancellationToken)
     {
-        var targetOffset = request.StartDate.Offset;
-        var utcStart = request.StartDate.ToUniversalTime();
-        var utcEnd = request.EndDate.ToUniversalTime();
+        var targetOffset = command.StartDate.Offset;
+        var utcStart = command.StartDate.ToUniversalTime();
+        var utcEnd = command.EndDate.ToUniversalTime();
 
-        Log.Information("[PhoneDashboard] Fetch phone order records: Agents={@AgentIds}, Range={@Start}-{@End} (UTC: {@UtcStart}-{@UtcEnd})", request.AgentIds, request.StartDate, request.EndDate, utcStart, utcEnd);
+        Log.Information("[PhoneDashboard] Fetch phone order records: Agents={@AgentIds}, Range={@Start}-{@End} (UTC: {@UtcStart}-{@UtcEnd})", command.AgentIds, command.StartDate, command.EndDate, utcStart, utcEnd);
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds: request.AgentIds, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds: command.AgentIds, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("[PhoneDashboard] Phone order records fetched: {@Count}", records?.Count ?? 0);
         
-        var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
-        var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, PosOrderModifiedStatus.Cancelled, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, null, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, PosOrderModifiedStatus.Cancelled, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
 
         Log.Information("[PhoneDashboard] POS orders loaded: Total={@Total}, Cancelled={@Cancelled}", posOrders.Count, cancelledOrders.Count);
               
-        var orderCountPerPeriod = GroupCountByRequestType(posOrders, x => x.CreatedDate.ToOffset(targetOffset), request.StartDate, request.EndDate, request.DataType);
-        var cancelledOrderCountPerPeriod = GroupCountByRequestType(cancelledOrders, x => x.CreatedDate.ToOffset(targetOffset), request.StartDate, request.EndDate, request.DataType);
+        var orderCountPerPeriod = GroupCountByRequestType(posOrders, x => x.CreatedDate.ToOffset(targetOffset), command.StartDate, command.EndDate, command.DataType);
+        var cancelledOrderCountPerPeriod = GroupCountByRequestType(cancelledOrders, x => x.CreatedDate.ToOffset(targetOffset), command.StartDate, command.EndDate, command.DataType);
         
         var restaurantData = new RestaurantDataDto
         {
@@ -1155,10 +1196,10 @@ public partial class PhoneOrderService
 
         Log.Information("[PhoneDashboard] Phone order records loaded: CallIn={@CallIn}, CallOut={@CallOut}", callInRecords.Count, callOutRecords.Count);
         
-        var callInData = BuildCallInData(callInRecords, callInFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
-        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, request.InvalidCallSeconds, request.StartDate, request.EndDate, request.DataType);
+        var callInData = BuildCallInData(callInRecords, callInFailedCount, command.InvalidCallSeconds, command.StartDate, command.EndDate, command.DataType);
+        var callOutData = BuildCallOutData(callOutRecords, callOutFailedCount, command.InvalidCallSeconds, command.StartDate, command.EndDate, command.DataType);
    
-        await ApplyPeriodComparisonAsync(request, callInRecords, callOutRecords, restaurantData, callInData, callOutData, cancellationToken).ConfigureAwait(false);
+        await ApplyPeriodComparisonAsync(command, callInRecords, callOutRecords, restaurantData, callInData, callOutData, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderDataDashboardResponse
         {
@@ -1298,26 +1339,26 @@ public partial class PhoneOrderService
                 g => g.Count());
     }
 
-    private async Task ApplyPeriodComparisonAsync(GetPhoneOrderDataDashboardRequest request,
+    private async Task ApplyPeriodComparisonAsync(GetPhoneOrderDataDashboardCommand command,
         List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecord> callOutRecords, RestaurantDataDto restaurantData,
         CallInDataDto callInData, CallOutDataDto callOutData, CancellationToken cancellationToken)
     {
-        var periodDays = (request.EndDate - request.StartDate).TotalDays;
+        var periodDays = (command.EndDate - command.StartDate).TotalDays;
         if (periodDays <= 0) return;
 
-        var prevStartDate = request.StartDate.AddDays(-periodDays);
-        var prevEndDate = request.EndDate.AddDays(-periodDays);
+        var prevStartDate = command.StartDate.AddDays(-periodDays);
+        var prevEndDate = command.EndDate.AddDays(-periodDays);
 
         var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
-            agentIds: request.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+            agentIds: command.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
         var prevCallOutRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
 
-        var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(request.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var prevCancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(
-            request.StoreIds, PosOrderModifiedStatus.Cancelled, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+            command.StoreIds, PosOrderModifiedStatus.Cancelled, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var prevCallInCount = prevCallInRecords.Count;
         var currCallInCount = callInRecords.Count;

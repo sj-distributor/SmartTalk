@@ -2,9 +2,9 @@ using Mediator.Net.Contracts;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Responses;
 
-namespace SmartTalk.Messages.Requests.PhoneOrder;
+namespace SmartTalk.Messages.Commands.PhoneOrder;
 
-public class GetPhoneOrderDataDashboardRequest : IRequest
+public class GetPhoneOrderDataDashboardCommand : ICommand
 {
     public DateTimeOffset StartDate { get; set; }
     

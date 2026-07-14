@@ -106,6 +106,15 @@ public class PhoneOrderController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("aixvolink/call-ended")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReceiveAixvolinkCallEndedAsync([FromBody] ReceiveAixvolinkPhoneOrderRecordCommand command)
+    {
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+
+        return Ok();
+    }
+
     [Route("manual/order"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddOrUpdateManualOrderResponse))]
     public async Task<IActionResult> AddOrUpdateManualOrderAsync([FromBody] AddOrUpdateManualOrderCommand command)
@@ -133,11 +142,11 @@ public class PhoneOrderController : ControllerBase
         return Ok(response);
     }
 
-    [Route("data/dashboard"), HttpGet]
+    [Route("data/dashboard"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderDataDashboardResponse))]
-    public async Task<IActionResult> GetPhoneOrderDataDashboardAsync([FromQuery] GetPhoneOrderDataDashboardRequest request)
+    public async Task<IActionResult> GetPhoneOrderDataDashboardAsync([FromBody] GetPhoneOrderDataDashboardCommand command)
     {
-        var response = await _mediator.RequestAsync<GetPhoneOrderDataDashboardRequest, GetPhoneOrderDataDashboardResponse>(request).ConfigureAwait(false);
+        var response = await _mediator.SendAsync<GetPhoneOrderDataDashboardCommand, GetPhoneOrderDataDashboardResponse>(command).ConfigureAwait(false);
         
         return Ok(response);
     }
