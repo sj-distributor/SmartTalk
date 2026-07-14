@@ -123,6 +123,8 @@ public class SalesPhoneOrderPushService : ISalesPhoneOrderPushService
     {
         var req = JsonSerializer.Deserialize<GenerateAiOrdersRequestDto>(task.RequestJson);
 
+        Log.Information("Calling GenerateAiOrdersAsync. TaskId={TaskId}, RecordId={RecordId}, Request={@Request}", task.Id, task.RecordId, req);
+
         var resp = await _salesClient.GenerateAiOrdersAsync(req, cancellationToken).ConfigureAwait(false);
 
         if (resp?.Data == null || resp.Data.OrderId == Guid.Empty)

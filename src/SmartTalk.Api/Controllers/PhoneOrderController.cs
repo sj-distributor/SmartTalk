@@ -109,6 +109,8 @@ public class PhoneOrderController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ReceiveAixvolinkCallEndedAsync([FromBody] ReceiveAixvolinkPhoneOrderRecordCommand command)
     {
+        Log.Information("Receive AIXVOLINK call-ended callback: {@Command}", command);
+
         await _mediator.SendAsync(command).ConfigureAwait(false);
 
         return Ok();
