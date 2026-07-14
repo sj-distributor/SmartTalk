@@ -2,6 +2,7 @@ using Mediator.Net;
 using Newtonsoft.Json.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Serilog;
 using SmartTalk.Messages.Commands.Linphone;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Dto.SpeechMatics;
