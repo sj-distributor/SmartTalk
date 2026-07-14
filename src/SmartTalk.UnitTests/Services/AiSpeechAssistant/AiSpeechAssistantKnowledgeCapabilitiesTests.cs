@@ -376,6 +376,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 posDataProvider,
                 Substitute.For<IPhoneOrderService>(),
                 harness.AgentDataProvider,
+                Substitute.For<IAgentTransferCallRoutingService>(),
                 Substitute.For<IAttachmentService>(),
                 harness.SalesDataProvider,
                 Substitute.For<ISpeechMaticsService>(),

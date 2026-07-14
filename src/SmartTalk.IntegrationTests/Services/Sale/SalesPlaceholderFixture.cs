@@ -5,6 +5,7 @@ using Shouldly;
 using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Sales;
+using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
@@ -22,6 +23,7 @@ public class SalesPlaceholderFixture
         var mapper = Substitute.For<IMapper>();
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
         var salesDataProvider = Substitute.For<ISalesDataProvider>();
+        var knowledgePromptService = Substitute.For<IAiSpeechAssistantKnowledgePromptService>();
         var assistantService = new AiSpeechAssistantService(
             clock: null!,
             mapper: mapper,
@@ -38,6 +40,7 @@ public class SalesPlaceholderFixture
             posDataProvider: null!,
             phoneOrderService: null!,
             agentDataProvider: null!,
+            agentTransferCallRoutingService: null!,
             attachmentService: null!,
             salesDataProvider: salesDataProvider,
             speechMaticsService: null!,
@@ -51,7 +54,7 @@ public class SalesPlaceholderFixture
             backgroundJobClient: null!,
             twilioService: null!,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
-            aiSpeechAssistantKnowledgePromptService: null,
+            aiSpeechAssistantKnowledgePromptService: knowledgePromptService,
             knowledgeScenarioDataProvider: null!,
             openaiWebSocket: null!
        );
@@ -78,6 +81,9 @@ public class SalesPlaceholderFixture
                     CallerNumber = "+15550001",
                     ProfileJson = string.Empty
                 }));
+        knowledgePromptService
+            .BuildFinalPrompt(Arg.Any<AiSpeechAssistantKnowledge>())
+            .Returns(x => ((AiSpeechAssistantKnowledge)x[0]).Prompt);
         salesDataProvider
             .GetDeliveryProgressCacheBySoldToIdsAsync(
                 Arg.Is<List<string>>(x => x.Count == 2 && x[0] == "1001" && x[1] == "1002"),
@@ -95,7 +101,7 @@ public class SalesPlaceholderFixture
 
         var task = (Task)buildMethod!.Invoke(
             assistantService,
-            ["+15550001", "+15550002", null, null, null, CancellationToken.None])!;
+            ["+15550001", "+15550002", null, null, null, null, CancellationToken.None])!;
         await task;
 
         var streamContextField = typeof(AiSpeechAssistantService).GetField(
