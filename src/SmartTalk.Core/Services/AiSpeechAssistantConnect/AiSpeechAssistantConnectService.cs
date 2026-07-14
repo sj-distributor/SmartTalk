@@ -170,8 +170,10 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _ctx.AgentId = agent.Id;
         _ctx.TimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
         _ctx.AgentTransferCallConfigs = transferCallConfigs;
-        _ctx.TransferCallNumber = _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(transferCallConfigs) ?? agent.TransferCallNumber;
-        _ctx.HumanContactPhone = agent.TransferCallNumber;
+        _ctx.TransferCallNumber = transferCallConfigs.Count > 0
+            ? _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(transferCallConfigs)
+            : agent.TransferCallNumber;
+        _ctx.HumanContactPhone = transferCallConfigs.Count > 0 ? null : agent.TransferCallNumber;
 
         return agent;
     }

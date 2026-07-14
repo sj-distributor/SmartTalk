@@ -10,8 +10,9 @@ public partial class AiSpeechAssistantConnectService
     {
         if (_ctx.IsTransfer) return null;
 
-        _ctx.HumanContactPhone = _agentTransferCallRoutingService.SelectTransferCallNumber(
-            _ctx.AgentTransferCallConfigs, _clock.Now, _ctx.TimeZone) ?? _ctx.HumanContactPhone;
+        if (_ctx.AgentTransferCallConfigs.Count > 0)
+            _ctx.HumanContactPhone = _agentTransferCallRoutingService.SelectTransferCallNumber(
+                _ctx.AgentTransferCallConfigs, _clock.Now, _ctx.TimeZone);
 
         if (string.IsNullOrEmpty(_ctx.HumanContactPhone))
         {

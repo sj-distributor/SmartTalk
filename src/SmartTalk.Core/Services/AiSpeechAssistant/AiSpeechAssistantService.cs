@@ -212,8 +212,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
         _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
-        _aiSpeechAssistantStreamContext.TransferCallNumber =
-            _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(_agentTransferCallConfigs) ?? agent.TransferCallNumber;
+        _aiSpeechAssistantStreamContext.TransferCallNumber = _agentTransferCallConfigs.Count > 0
+            ? _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(_agentTransferCallConfigs)
+            : agent.TransferCallNumber;
 
         (_aiSpeechAssistantStreamContext.IsInAiServiceHours, _aiSpeechAssistantStreamContext.IsEnableManualService) =
             _agentTransferCallRoutingService.CheckIfInServiceHours(
@@ -223,9 +224,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
             return new AiSpeechAssistantConnectCloseEvent();
         
-        _aiSpeechAssistantStreamContext.HumanContactPhone = _aiSpeechAssistantStreamContext.ShouldForward ? null 
-            : _agentTransferCallConfigs.Count > 0
-                ? agent.TransferCallNumber
+        _aiSpeechAssistantStreamContext.HumanContactPhone =
+            _aiSpeechAssistantStreamContext.ShouldForward || _agentTransferCallConfigs.Count > 0
+                ? null
                 : (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(
                     _aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
         
@@ -964,8 +965,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (_agentTransferCallConfigs.Count > 0)
             _aiSpeechAssistantStreamContext.HumanContactPhone =
-                _agentTransferCallRoutingService.SelectTransferCallNumber(_agentTransferCallConfigs, _clock.Now, _agentTimeZone) ??
-                _aiSpeechAssistantStreamContext.HumanContactPhone;
+                _agentTransferCallRoutingService.SelectTransferCallNumber(_agentTransferCallConfigs, _clock.Now, _agentTimeZone);
         
         if (string.IsNullOrEmpty(_aiSpeechAssistantStreamContext.HumanContactPhone))
         {
