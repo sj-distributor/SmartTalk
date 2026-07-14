@@ -55,12 +55,13 @@ public partial class AiSpeechAssistantService
 
         foreach (var item in command.Items)
         {
-            var record = context.Records.FirstOrDefault(x =>
-                x.Knowledge.Id == item.KnowledgeId &&
-                (!item.AssistantId.HasValue || x.Assistant.Id == item.AssistantId.Value));
+            if (item.AssistantId <= 0)
+                throw new ArgumentException("AssistantId is required", nameof(command.Items));
+
+            var record = context.Records.FirstOrDefault(x => x.Assistant.Id == item.AssistantId);
 
             if (record == null)
-                throw new InvalidOperationException($"Knowledge capability not found. KnowledgeId: {item.KnowledgeId}");
+                throw new InvalidOperationException($"Knowledge capability not found. AssistantId: {item.AssistantId}");
 
             await ApplyKnowledgeCapabilityAsync(record, item, cancellationToken).ConfigureAwait(false);
         }
@@ -126,16 +127,6 @@ public partial class AiSpeechAssistantService
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null) throw new InvalidOperationException($"Store not found. StoreId: {storeId}");
-
-        if (!store.IsLink)
-        {
-            return new KnowledgeCapabilityContext
-            {
-                Store = store,
-                CanConfigure = false,
-                Records = []
-            };
-        }
 
         var posAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: [storeId], cancellationToken: cancellationToken).ConfigureAwait(false);
         var agentIds = posAgents.Select(x => x.AgentId).Distinct().ToList();
@@ -317,7 +308,7 @@ public partial class AiSpeechAssistantService
         if (agent == null) return;
 
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
-        if (store?.IsLink != true) return;
+        if (store == null) return;
 
         var record = new KnowledgeCapabilityRecord
         {

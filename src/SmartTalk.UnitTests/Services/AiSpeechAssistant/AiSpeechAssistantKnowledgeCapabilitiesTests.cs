@@ -45,19 +45,35 @@ namespace SmartTalk.UnitTests.Services.AiSpeechAssistant;
 public class AiSpeechAssistantKnowledgeCapabilitiesTests
 {
     [Fact]
-    public async Task GetKnowledgeCapabilities_WhenStoreIsNotLinked_ReturnsCannotConfigure()
+    public async Task GetKnowledgeCapabilities_WhenStoreIsNotLinked_StillReturnsCapabilities()
     {
         var harness = CapabilityHarness.Create();
-        harness.SetupStore(new CompanyStore { Id = 10, IsLink = false });
+        var agent = new Agent { Id = 20, Name = "Sales", Type = AgentType.Sales, RelateId = 300 };
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 30,
+            AgentId = 20,
+            Name = "Alice",
+            IsDisplay = true
+        };
+        var knowledge = new AiSpeechAssistantKnowledge
+        {
+            Id = 40,
+            AssistantId = 30,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+
+        harness.SetupCapabilityGraph(agent, assistant, knowledge, isLink: false);
 
         var response = await harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
             new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10 },
             CancellationToken.None);
 
-        response.Data.CanConfigure.ShouldBeFalse();
-        response.Data.Capabilities.ShouldBeEmpty();
-        await harness.AiSpeechAssistantDataProvider.DidNotReceiveWithAnyArgs()
-            .GetAgentAssistantsAsync(cancellationToken: CancellationToken.None);
+        response.Data.CanConfigure.ShouldBeTrue();
+        var capability = response.Data.Capabilities.ShouldHaveSingleItem();
+        capability.KnowledgeId.ShouldBe(40);
+        capability.AssistantId.ShouldBe(30);
+        capability.AgentId.ShouldBe(20);
     }
 
     [Fact]
@@ -84,7 +100,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             CreatedDate = DateTimeOffset.UtcNow
         };
 
-        harness.SetupLinkedCapabilityGraph(agent, assistant, knowledge);
+        harness.SetupCapabilityGraph(agent, assistant, knowledge);
         harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
                 Arg.Any<List<int>>(),
                 Arg.Is<List<string>>(x => x.Contains(OpenAiToolConstants.RepeatOrder) && x.Contains(OpenAiToolConstants.SatisfyOrder)),
@@ -149,7 +165,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             CreatedDate = DateTimeOffset.UtcNow
         };
 
-        harness.SetupLinkedCapabilityGraph(agent, assistant, knowledge);
+        harness.SetupCapabilityGraph(agent, assistant, knowledge);
         harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
                 Arg.Any<List<int>>(),
                 Arg.Is<List<string>>(x => x.Contains(OpenAiToolConstants.RepeatOrder) && x.Contains(OpenAiToolConstants.SatisfyOrder)),
@@ -208,7 +224,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
         };
         var addedFunctionCalls = new List<AiSpeechAssistantFunctionCall>();
 
-        harness.SetupLinkedCapabilityGraph(agent, assistant, knowledge);
+        harness.SetupCapabilityGraph(agent, assistant, knowledge);
         harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
                 Arg.Any<List<int>>(),
                 Arg.Any<List<string>>(),
@@ -232,7 +248,6 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 [
                     new UpdateAiSpeechAssistantKnowledgeCapabilityDto
                     {
-                        KnowledgeId = 40,
                         AssistantId = 30,
                         RepeatOrderEnabled = true
                     }
@@ -279,7 +294,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             CreatedDate = DateTimeOffset.UtcNow
         };
 
-        harness.SetupLinkedCapabilityGraph(agent, assistant, knowledge);
+        harness.SetupCapabilityGraph(agent, assistant, knowledge);
         harness.SalesDataProvider.GetAllSalesAsync(Arg.Any<CancellationToken>())
             .Returns(new List<Sales> { new() { Id = 300, Name = "Alice", Type = SalesCallType.CallIn } });
 
@@ -291,7 +306,6 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 [
                     new UpdateAiSpeechAssistantKnowledgeCapabilityDto
                     {
-                        KnowledgeId = 40,
                         AssistantId = 30,
                         HifoodDataEnabled = false
                     }
@@ -411,12 +425,13 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 .Returns(store);
         }
 
-        public void SetupLinkedCapabilityGraph(
+        public void SetupCapabilityGraph(
             Agent agent,
             Core.Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-            AiSpeechAssistantKnowledge knowledge)
+            AiSpeechAssistantKnowledge knowledge,
+            bool isLink = true)
         {
-            SetupStore(new CompanyStore { Id = 10, IsLink = true });
+            SetupStore(new CompanyStore { Id = 10, IsLink = isLink });
             PosDataProvider.GetPosAgentsAsync(
                     Arg.Is<List<int>>(x => x.SequenceEqual(new[] { 10 })),
                     null,
