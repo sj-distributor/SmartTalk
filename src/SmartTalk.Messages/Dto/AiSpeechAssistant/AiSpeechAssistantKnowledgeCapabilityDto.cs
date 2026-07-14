@@ -21,9 +21,9 @@ public class AiSpeechAssistantKnowledgeCapabilityDto
 
 public class UpdateAiSpeechAssistantKnowledgeCapabilityDto
 {
-    public int KnowledgeId { get; set; }
+    public int? KnowledgeId { get; set; }
 
-    public int? AssistantId { get; set; }
+    public int AssistantId { get; set; }
 
     public bool? HifoodDataEnabled { get; set; }
 

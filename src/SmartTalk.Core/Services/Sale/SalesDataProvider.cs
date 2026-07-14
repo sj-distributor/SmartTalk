@@ -16,8 +16,8 @@ public interface ISalesDataProvider : IScopedDependency
 
     Task AddSalesAsync(Sales sales, bool forceSave = true, CancellationToken cancellationToken = default);
     
-
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken);
+
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetDeliveryProgressCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
