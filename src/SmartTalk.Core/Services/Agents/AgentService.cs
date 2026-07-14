@@ -111,8 +111,7 @@ public class AgentService : IAgentService
 
     public async Task<AddAgentResponse> AddAgentAsync(AddAgentCommand command, CancellationToken cancellationToken)
     {
-        ValidateAgentTransferCallConfigs(
-            command.IsTransferHuman, command.TransferCallNumber, command.AgentTransferCallConfigs);
+        ValidateAgentTransferCallConfigs(command.AgentTransferCallConfigs);
 
         var agent = new Agent
         {
@@ -127,8 +126,7 @@ public class AgentService : IAgentService
             IsSurface = command.IsSurface,
             Voice = command.Voice,
             WaitInterval = command.WaitInterval,
-            IsTransferHuman = command.IsTransferHuman,
-            TransferCallNumber = command.TransferCallNumber,
+            IsTransferHuman = HasTransferCallConfigs(command.AgentTransferCallConfigs),
             ServiceHours = command.ServiceHours
         };
         
@@ -146,37 +144,29 @@ public class AgentService : IAgentService
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        var transferCallConfigs = await SaveAgentTransferCallConfigsAsync(
-            agent.Id,
-            command.IsTransferHuman,
-            command.AgentTransferCallConfigs,
-            preserveExistingWhenNotProvided: false,
-            cancellationToken).ConfigureAwait(false);
+        var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
+            agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
 
         return new AddAgentResponse { Data = MapAgentDto(agent, transferCallConfigs) };
     }
 
     public async Task<UpdateAgentResponse> UpdateAgentAsync(UpdateAgentCommand command, CancellationToken cancellationToken)
     {
-        ValidateAgentTransferCallConfigs(
-            command.IsTransferHuman, command.TransferCallNumber, command.AgentTransferCallConfigs);
+        ValidateAgentTransferCallConfigs(command.AgentTransferCallConfigs);
 
         var agent = await _agentDataProvider.GetAgentByIdAsync(command.AgentId, cancellationToken).ConfigureAwait(false);
         
         await ChangeNumberIfRequiredAsync(agent.Id, agent.Channel, command.Channel, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, agent);
+        agent.IsTransferHuman = HasTransferCallConfigs(command.AgentTransferCallConfigs);
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await HandleAiSpeechAssistantsAsync(agent, cancellationToken).ConfigureAwait(false);
 
-        var transferCallConfigs = await SaveAgentTransferCallConfigsAsync(
-            agent.Id,
-            command.IsTransferHuman,
-            command.AgentTransferCallConfigs,
-            preserveExistingWhenNotProvided: true,
-            cancellationToken).ConfigureAwait(false);
+        var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
+            agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
 
         return new UpdateAgentResponse
         {
@@ -335,24 +325,20 @@ public class AgentService : IAgentService
         return result;
     }
 
-    internal static void ValidateAgentTransferCallConfigs(
-        bool isTransferHuman, string transferCallNumber, List<AgentTransferCallConfigDto> transferCallConfigs)
+    internal static void ValidateAgentTransferCallConfigs(List<AgentTransferCallConfigDto> transferCallConfigs)
     {
-        if (!isTransferHuman) return;
-
-        if (transferCallConfigs is not { Count: > 0 })
-        {
-            if (string.IsNullOrWhiteSpace(transferCallNumber))
-                throw new ValidationException("TransferCallNumber or AgentTransferCallConfigs must contain at least one transfer call number when IsTransferHuman is true.");
-
-            return;
-        }
+        if (!HasTransferCallConfigs(transferCallConfigs)) return;
 
         if (transferCallConfigs.All(x => x == null || string.IsNullOrWhiteSpace(x.TransferCallNumber)))
-            throw new ValidationException("AgentTransferCallConfigs must contain at least one transfer call number when provided.");
+            throw new ValidationException("AgentTransferCallConfigs must contain at least one transfer call number.");
 
         if (transferCallConfigs.Any(x => x == null || string.IsNullOrWhiteSpace(x.ServiceHours)))
             throw new ValidationException("ServiceHours is required for every AgentTransferCallConfig.");
+    }
+
+    internal static bool HasTransferCallConfigs(List<AgentTransferCallConfigDto> transferCallConfigs)
+    {
+        return transferCallConfigs is { Count: > 0 };
     }
 
     private async Task EnrichAgentTransferCallConfigsAsync(List<AgentDto> agents, CancellationToken cancellationToken)
@@ -384,24 +370,6 @@ public class AgentService : IAgentService
         await _agentDataProvider.ReplaceAgentTransferCallConfigsAsync(agentId, entities, cancellationToken).ConfigureAwait(false);
 
         return _mapper.Map<List<AgentTransferCallConfigDto>>(entities);
-    }
-
-    private async Task<List<AgentTransferCallConfigDto>> SaveAgentTransferCallConfigsAsync(
-        int agentId, bool isTransferHuman, List<AgentTransferCallConfigDto> configs,
-        bool preserveExistingWhenNotProvided, CancellationToken cancellationToken)
-    {
-        if (!isTransferHuman)
-            return await ReplaceAgentTransferCallConfigsAsync(agentId, [], cancellationToken).ConfigureAwait(false);
-
-        if (configs is { Count: > 0 })
-            return await ReplaceAgentTransferCallConfigsAsync(agentId, configs, cancellationToken).ConfigureAwait(false);
-
-        if (!preserveExistingWhenNotProvided) return [];
-
-        var existingConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync(
-            [agentId], cancellationToken).ConfigureAwait(false);
-
-        return _mapper.Map<List<AgentTransferCallConfigDto>>(existingConfigs);
     }
 
     private async Task ChangeNumberIfRequiredAsync(int agentId, AiSpeechAssistantChannel? originalChannel, AiSpeechAssistantChannel newChannel, CancellationToken cancellationToken)

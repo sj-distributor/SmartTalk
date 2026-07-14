@@ -1,6 +1,10 @@
+using AutoMapper;
 using FluentValidation;
 using Shouldly;
+using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Mappings;
 using SmartTalk.Core.Services.Agents;
+using SmartTalk.Messages.Commands.Agent;
 using SmartTalk.Messages.Dto.Agent;
 using Xunit;
 
@@ -12,7 +16,7 @@ public class AgentTransferCallConfigValidationTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public void TransferEnabled_RejectsMissingServiceHours(string serviceHours)
+    public void ConfigsProvided_RejectsMissingServiceHours(string serviceHours)
     {
         var configs = new List<AgentTransferCallConfigDto>
         {
@@ -24,13 +28,13 @@ public class AgentTransferCallConfigValidationTests
         };
 
         var exception = Should.Throw<ValidationException>(() =>
-            AgentService.ValidateAgentTransferCallConfigs(true, "+12065550100", configs));
+            AgentService.ValidateAgentTransferCallConfigs(configs));
 
         exception.Message.ShouldContain("ServiceHours is required");
     }
 
     [Fact]
-    public void TransferEnabled_AcceptsServiceHours()
+    public void ConfigsProvided_AcceptsValidConfig()
     {
         var configs = new List<AgentTransferCallConfigDto>
         {
@@ -41,34 +45,56 @@ public class AgentTransferCallConfigValidationTests
             }
         };
 
-        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(true, null, configs));
+        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(configs));
+        AgentService.HasTransferCallConfigs(configs).ShouldBeTrue();
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void TransferEnabled_AcceptsLegacyNumberWhenConfigsAreNotProvided(bool useEmptyConfigs)
+    public void ConfigsNotProvided_AreValidAndDisableTransfer(bool useEmptyConfigs)
     {
         List<AgentTransferCallConfigDto> configs = useEmptyConfigs ? [] : null!;
 
-        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(
-            true, "+12065550100", configs));
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TransferEnabled_RejectsRequestWhenNeitherLegacyNumberNorConfigsAreProvided(bool useEmptyConfigs)
-    {
-        List<AgentTransferCallConfigDto> configs = useEmptyConfigs ? [] : null!;
-
-        Should.Throw<ValidationException>(() => AgentService.ValidateAgentTransferCallConfigs(
-            true, null, configs));
+        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(configs));
+        AgentService.HasTransferCallConfigs(configs).ShouldBeFalse();
     }
 
     [Fact]
-    public void TransferDisabled_DoesNotRequireLegacyNumberOrConfigs()
+    public void ConfigsProvided_RejectsMissingTransferCallNumber()
     {
-        Should.NotThrow(() => AgentService.ValidateAgentTransferCallConfigs(false, null, null));
+        var configs = new List<AgentTransferCallConfigDto>
+        {
+            new()
+            {
+                TransferCallNumber = " ",
+                ServiceHours = "[]"
+            }
+        };
+
+        var exception = Should.Throw<ValidationException>(() =>
+            AgentService.ValidateAgentTransferCallConfigs(configs));
+
+        exception.Message.ShouldContain("transfer call number");
+    }
+
+    [Fact]
+    public void UpdateMapping_DoesNotOverwriteBackendManagedTransferFields()
+    {
+        var mapper = new MapperConfiguration(config => config.AddProfile<AgentMapping>()).CreateMapper();
+        var agent = new Agent
+        {
+            IsTransferHuman = true,
+            TransferCallNumber = "+12065550100"
+        };
+
+        mapper.Map(new UpdateAgentCommand
+        {
+            IsTransferHuman = false,
+            TransferCallNumber = "+12065550200"
+        }, agent);
+
+        agent.IsTransferHuman.ShouldBeTrue();
+        agent.TransferCallNumber.ShouldBe("+12065550100");
     }
 }
