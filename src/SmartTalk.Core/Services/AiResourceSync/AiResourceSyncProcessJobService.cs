@@ -2,7 +2,6 @@ using Hangfire.Throttling;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
-using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Constants;
 
@@ -16,18 +15,17 @@ public partial interface IAiResourceSyncProcessJobService: IScopedDependency
     
     Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
 
-    Task RefreshCrmCustomerContactPhoneMapsAsync(CancellationToken cancellationToken);
+    [Semaphore(HangfireConstants.SemaphoreRefreshCrmCustomerContactPhoneMap)]
+    Task RefreshCrmCustomerContactPhoneMapsAsync(SchedulingRefreshCrmCustomerContactPhoneMapCommand command, CancellationToken cancellationToken);
 }
 
 public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
 {
     private readonly IAiResourceSyncService _aiResourceSyncService;
-    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
 
-    public AiResourceSyncProcessJobService(IAiResourceSyncService aiResourceSyncService, ISmartTalkBackgroundJobClient backgroundJobClient)
+    public AiResourceSyncProcessJobService(IAiResourceSyncService aiResourceSyncService)
     {
         _aiResourceSyncService = aiResourceSyncService;
-        _backgroundJobClient = backgroundJobClient;
     }
 
     private const int MaxSyncAttempts = 3;
@@ -57,9 +55,6 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
                 if (!command.IsManual)
                     await _aiResourceSyncService.SendNotifyAsync(true, cancellationToken).ConfigureAwait(false);
 
-                _backgroundJobClient.Enqueue<IAiResourceSyncProcessJobService>(
-                    x => x.RefreshCrmCustomerContactPhoneMapsAsync(CancellationToken.None));
-
                 return;
             }
             catch (Exception ex)
@@ -84,7 +79,7 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
         throw lastException!;
     }
 
-    public async Task RefreshCrmCustomerContactPhoneMapsAsync(CancellationToken cancellationToken)
+    public async Task RefreshCrmCustomerContactPhoneMapsAsync(SchedulingRefreshCrmCustomerContactPhoneMapCommand command, CancellationToken cancellationToken)
     {
         await _aiResourceSyncService.RefreshCrmCustomerContactPhoneMapsAsync(cancellationToken).ConfigureAwait(false);
     }

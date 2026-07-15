@@ -57,25 +57,18 @@ public class AiResourceSyncServiceTests
     }
 
     [Fact]
-    public async Task ExecuteSyncCrmSalesAutoCreateAsync_EnqueuesContactPhoneMapRefreshAfterSuccessfulSync()
+    public async Task SchedulingRefreshCrmCustomerContactPhoneMapCommandHandler_RefreshesContactPhoneMaps()
     {
-        var aiResourceSyncService = Substitute.For<IAiResourceSyncService>();
-        aiResourceSyncService.SyncInternalAsync(Arg.Any<AiResourceSyncCommand>(), Arg.Any<CancellationToken>())
-            .Returns(new AiResourceSyncExecutionResult(1, 0, [], new AiResourceSyncExecutionStatsDto(), false));
+        var processJobService = Substitute.For<IAiResourceSyncProcessJobService>();
+        var handler = new SchedulingRefreshCrmCustomerContactPhoneMapCommandHandler(processJobService);
+        var context = Substitute.For<IReceiveContext<SchedulingRefreshCrmCustomerContactPhoneMapCommand>>();
+        context.Message.Returns(new SchedulingRefreshCrmCustomerContactPhoneMapCommand());
 
-        var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
-        var sut = new AiResourceSyncProcessJobService(aiResourceSyncService, backgroundJobClient);
+        await handler.Handle(context, CancellationToken.None);
 
-        await sut.ExecuteSyncCrmSalesAutoCreateAsync(new AiResourceSyncCommand
-        {
-            IsManual = true,
-            ServiceProviderId = 123,
-            InitiatedByUserId = 888
-        }, CancellationToken.None);
-
-        backgroundJobClient.Received(1).Enqueue<IAiResourceSyncProcessJobService>(
-            Arg.Any<System.Linq.Expressions.Expression<Func<IAiResourceSyncProcessJobService, Task>>>(),
-            Arg.Any<string>());
+        await processJobService.Received(1).RefreshCrmCustomerContactPhoneMapsAsync(
+            Arg.Any<SchedulingRefreshCrmCustomerContactPhoneMapCommand>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

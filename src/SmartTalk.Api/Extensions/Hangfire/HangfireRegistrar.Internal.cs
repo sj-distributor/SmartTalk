@@ -103,6 +103,7 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
         
         manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 10));
         manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreSyncCrmSalesAutoCreate, new SemaphoreOptions(maxCount: 1));
+        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreRefreshCrmCustomerContactPhoneMap, new SemaphoreOptions(maxCount: 1));
     }
 
     private static void ScanHangfireRecurringJobs(IApplicationBuilder app)
