@@ -484,6 +484,8 @@ public partial class AiSpeechAssistantService
         
         var enrichAssistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         enrichAssistant.TransferCallNumber = humanContact?.HumanPhone ?? string.Empty;
+        enrichAssistant.PhoneNoiseReductionEnabled = await GetPhoneNoiseReductionEnabledAsync(
+            assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
         
         return new GetAiSpeechAssistantByIdResponse
         {
@@ -535,6 +537,12 @@ public partial class AiSpeechAssistantService
         var sceneItemMap = await BuildKnowledgeSceneItemMapAsync(sceneRelationMap, cancellationToken).ConfigureAwait(false);
         
         var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
+        var noiseReductionFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+            assistantIds,
+            [InputAudioNoiseReductionName],
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+            isActive: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         knowledges.ForEach(x =>
         {
@@ -547,6 +555,9 @@ public partial class AiSpeechAssistantService
             assistant.Knowledge = knowledges.Where(k => k.AssistantId == assistant.Id).FirstOrDefault();
             
             assistant.TransferCallNumber = humanContacts.Where(h => h.AssistantId == assistant.Id).FirstOrDefault()?.HumanPhone ?? string.Empty;
+            assistant.PhoneNoiseReductionEnabled = noiseReductionFunctionCalls.Any(x =>
+                x.AssistantId == assistant.Id &&
+                x.ModelProvider == assistant.ModelProvider);
         }
     }
 }
