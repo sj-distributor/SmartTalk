@@ -25,7 +25,7 @@ public interface ICrmClient : IScopedDependency
 
     Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default);
 
-    Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken = default);
+    Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(CancellationToken cancellationToken = default);
 
     Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default);
 }
@@ -174,13 +174,11 @@ public class CrmClient : ICrmClient
         return (result, result.Count > 0 ? null : 0);
     }
 
-    public async Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(DateTimeOffset startTime, DateTimeOffset endTime, CancellationToken cancellationToken = default)
+    public async Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(CancellationToken cancellationToken = default)
     {
-        Log.Information("GetChangedSalesAutoSyncCustomersAsync startTime={StartTime}, endTime={EndTime}", startTime, endTime);
+        Log.Information("GetChangedSalesAutoSyncCustomersAsync");
 
-        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-yesterday-customers-sales-follow-info" +
-                  $"?start_time={Uri.EscapeDataString(startTime.ToString("O"))}" +
-                  $"&end_time={Uri.EscapeDataString(endTime.ToString("O"))}";
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info-by-start-date";
         var headers = new Dictionary<string, string>
         {
             { "X-API-KEY", _crmSetting.ApiKey },

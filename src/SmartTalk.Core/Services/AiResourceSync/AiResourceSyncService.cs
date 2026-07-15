@@ -244,36 +244,8 @@ public class AiResourceSyncService : IAiResourceSyncService
             return new AiResourceSyncCustomerLoadResult(company, customers, totalCount ?? customers.Count, true, true);
         }
 
-        var (startTime, endTime) = ResolveIncrementalSyncWindow(command);
-        command.SyncStartTime = startTime;
-        command.SyncEndTime = endTime;
-
-        var customersChanged = await _crmClient.GetChangedSalesAutoSyncCustomersAsync(startTime, endTime, cancellationToken).ConfigureAwait(false);
+        var customersChanged = await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
         return new AiResourceSyncCustomerLoadResult(company, customersChanged, customersChanged.Count, false, false);
-    }
-
-    private static (DateTimeOffset StartTime, DateTimeOffset EndTime) ResolveIncrementalSyncWindow(AiResourceSyncCommand command)
-    {
-        if (command.SyncStartTime.HasValue && command.SyncEndTime.HasValue)
-            return (command.SyncStartTime.Value, command.SyncEndTime.Value);
-
-        var pstZone = PstTimeZone.Get();
-        var nowPst = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, pstZone);
-
-        if (command.IsManual)
-        {
-            var startLocal = nowPst.Date;
-            return (ToPstOffset(startLocal, pstZone), nowPst);
-        }
-
-        var endLocal = nowPst.Date;
-        var startOfYesterdayLocal = endLocal.AddDays(-1);
-        return (ToPstOffset(startOfYesterdayLocal, pstZone), ToPstOffset(endLocal, pstZone));
-    }
-
-    private static DateTimeOffset ToPstOffset(DateTime localDateTime, TimeZoneInfo pstZone)
-    {
-        return new DateTimeOffset(localDateTime, pstZone.GetUtcOffset(localDateTime));
     }
 
     private async Task<AiResourceSyncShardExecutionResult> ExecuteSalesShardAsync(

@@ -76,8 +76,6 @@ public class AiResourceSyncServiceTests
                 1
             ));
         crmClient.GetChangedSalesAutoSyncCustomersAsync(
-                Arg.Any<DateTimeOffset>(),
-                Arg.Any<DateTimeOffset>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<CrmSalesAutoSyncCustomerDto>
             {
@@ -265,8 +263,6 @@ public class AiResourceSyncServiceTests
                 1
             ));
         crmClient.GetChangedSalesAutoSyncCustomersAsync(
-                Arg.Any<DateTimeOffset>(),
-                Arg.Any<DateTimeOffset>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<CrmSalesAutoSyncCustomerDto>
             {
@@ -364,8 +360,6 @@ public class AiResourceSyncServiceTests
                 1
             ));
         crmClient.GetChangedSalesAutoSyncCustomersAsync(
-                Arg.Any<DateTimeOffset>(),
-                Arg.Any<DateTimeOffset>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<CrmSalesAutoSyncCustomerDto>
             {
@@ -516,8 +510,6 @@ public class AiResourceSyncServiceTests
     {
         var crmClient = Substitute.For<ICrmClient>();
         crmClient.GetChangedSalesAutoSyncCustomersAsync(
-                Arg.Any<DateTimeOffset>(),
-                Arg.Any<DateTimeOffset>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<CrmSalesAutoSyncCustomerDto>());
 
@@ -541,8 +533,6 @@ public class AiResourceSyncServiceTests
         }, CancellationToken.None);
 
         await crmClient.Received(1).GetChangedSalesAutoSyncCustomersAsync(
-            Arg.Any<DateTimeOffset>(),
-            Arg.Any<DateTimeOffset>(),
             Arg.Any<CancellationToken>());
         await crmClient.DidNotReceive().GetSalesAutoSyncCustomersAsync(
             Arg.Any<int>(),
@@ -554,8 +544,6 @@ public class AiResourceSyncServiceTests
     {
         var crmClient = Substitute.For<ICrmClient>();
         crmClient.GetChangedSalesAutoSyncCustomersAsync(
-                Arg.Any<DateTimeOffset>(),
-                Arg.Any<DateTimeOffset>(),
                 Arg.Any<CancellationToken>())
             .Returns(new List<CrmSalesAutoSyncCustomerDto>
             {
