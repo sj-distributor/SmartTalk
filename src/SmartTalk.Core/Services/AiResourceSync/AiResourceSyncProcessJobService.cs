@@ -3,9 +3,7 @@ using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.AiResourceSync;
-using SmartTalk.Messages.Commands.Sales;
 using SmartTalk.Messages.Constants;
-using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.Core.Services.AiResourceSync;
 
@@ -15,7 +13,7 @@ public partial interface IAiResourceSyncProcessJobService: IScopedDependency
     
     Task AiResourceSyncAsync (SchedulingAiResourceSyncCommand command, CancellationToken cancellationToken);
     
-    Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken);
+    Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
 }
 
 public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
@@ -36,10 +34,10 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
        {
            ServiceProviderId = 1,
            InitiatedByUserId = CurrentUsers.InternalUser.Id
-       }, new List<CrmSalesAutoSyncCustomerDto>(), cancellationToken).ConfigureAwait(false);
+       }, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken)
+    public async Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
         Exception lastException = null;
 
@@ -47,7 +45,7 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
         {
             try
             {
-                var executionResult = await _aiResourceSyncService.SyncInternalAsync(command, syncCustomers, cancellationToken).ConfigureAwait(false);
+                var executionResult = await _aiResourceSyncService.SyncInternalAsync(command, cancellationToken).ConfigureAwait(false);
 
                 await _aiResourceSyncService.RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, true, null, cancellationToken).ConfigureAwait(false);
 
