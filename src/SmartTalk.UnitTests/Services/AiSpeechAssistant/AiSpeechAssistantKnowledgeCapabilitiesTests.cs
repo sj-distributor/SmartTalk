@@ -70,7 +70,6 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10 },
             CancellationToken.None);
 
-        response.Data.CanConfigure.ShouldBeTrue();
         var capability = response.Data.Capabilities.ShouldHaveSingleItem();
         capability.KnowledgeId.ShouldBe(40);
         capability.AssistantId.ShouldBe(30);
@@ -134,7 +133,6 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             CancellationToken.None);
 
         var capability = response.Data.Capabilities.ShouldHaveSingleItem();
-        response.Data.CanConfigure.ShouldBeTrue();
         capability.KnowledgeId.ShouldBe(40);
         capability.AssistantId.ShouldBe(30);
         capability.AgentId.ShouldBe(20);

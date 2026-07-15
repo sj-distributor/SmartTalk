@@ -83,7 +83,6 @@ public partial class AiSpeechAssistantService
         {
             return new GetAiSpeechAssistantKnowledgeCapabilitiesResponseData
             {
-                CanConfigure = false,
                 Capabilities = []
             };
         }
@@ -110,7 +109,6 @@ public partial class AiSpeechAssistantService
 
         return new GetAiSpeechAssistantKnowledgeCapabilitiesResponseData
         {
-            CanConfigure = true,
             Capabilities = capabilities
                 .OrderBy(x => x.AssistantName)
                 .ThenBy(x => x.KnowledgeId)

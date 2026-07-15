@@ -184,7 +184,7 @@ public class AiSpeechAssistantController : ControllerBase
         var response = await _mediator
             .RequestAsync<GetAiSpeechAssistantKnowledgeCapabilitiesRequest, GetAiSpeechAssistantKnowledgeCapabilitiesResponse>(request)
             .ConfigureAwait(false);
-        
+
         return Ok(response);
     }
 
@@ -195,7 +195,7 @@ public class AiSpeechAssistantController : ControllerBase
         var response = await _mediator
             .SendAsync<UpdateAiSpeechAssistantKnowledgeCapabilitiesCommand, UpdateAiSpeechAssistantKnowledgeCapabilitiesResponse>(command)
             .ConfigureAwait(false);
-        
+
         return Ok(response);
     }
     

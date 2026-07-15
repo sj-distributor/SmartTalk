@@ -18,7 +18,5 @@ public class GetAiSpeechAssistantKnowledgeCapabilitiesResponse
 
 public class GetAiSpeechAssistantKnowledgeCapabilitiesResponseData
 {
-    public bool CanConfigure { get; set; }
-
     public List<AiSpeechAssistantKnowledgeCapabilityDto> Capabilities { get; set; } = [];
 }

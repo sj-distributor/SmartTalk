@@ -552,7 +552,7 @@ public partial class AiSpeechAssistantService
 
             await SetPhoneNoiseReductionAsync(assistant, command.PhoneNoiseReductionEnabled.Value, cancellationToken).ConfigureAwait(false);
         }
-        
+
         var assistantDto = _mapper.Map<AiSpeechAssistantDto>(assistant);
         assistantDto.PhoneNoiseReductionEnabled = await GetPhoneNoiseReductionEnabledAsync(
             assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
