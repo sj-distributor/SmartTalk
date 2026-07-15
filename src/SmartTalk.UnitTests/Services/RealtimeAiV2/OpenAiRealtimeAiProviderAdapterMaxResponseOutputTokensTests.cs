@@ -42,7 +42,7 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                MaxResponseOutputTokens = cap
+                VendorOptions = new OpenAiRealtimeModelOptions { MaxResponseOutputTokens = cap }
             }
         };
 
@@ -59,7 +59,7 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
         // is null. The serialised session object MUST contain no
         // `max_response_output_tokens` property — NullValueHandling.Ignore
         // strips it at serialisation time. OpenAI server-side default applies.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["max_response_output_tokens"].ShouldBeNull();
     }
@@ -70,7 +70,7 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
         // Sanity check: the null-cap path must not perturb any adjacent
         // session-level field. Regression here would mean Phase 5.5 silently
         // shifted instructions / output_modalities / tools semantics.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["type"]!.Value<string>().ShouldBe("realtime");
@@ -93,7 +93,7 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
         // The adapter forwards whatever the operator set. No clamping — operators
         // get exact control, and OpenAI rejects values beyond its server-side
         // limits with a clear error rather than the adapter silently clipping.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(cap), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(cap), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["max_response_output_tokens"]!.Value<int>().ShouldBe(cap);
     }
@@ -103,7 +103,7 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
     {
         // Activating the cap must not silently shift transcription, turn_detection,
         // noise_reduction, voice, or output format.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(1200), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithCap(1200), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["audio"]!["input"]!["transcription"]!["model"]!.Value<string>()
@@ -129,13 +129,16 @@ public class OpenAiRealtimeAiProviderAdapterMaxResponseOutputTokensTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionLanguage = "yue",
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                MaxResponseOutputTokens = 1200
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionLanguage = "yue",
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    MaxResponseOutputTokens = 1200
+                }
             }
         };
 
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["audio"]!["input"]!["transcription"]!["model"]!.Value<string>().ShouldBe("gpt-4o-mini-transcribe");

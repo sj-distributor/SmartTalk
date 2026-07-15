@@ -51,7 +51,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionModel = model
+                VendorOptions = new OpenAiRealtimeModelOptions { TranscriptionModel = model }
             }
         };
 
@@ -80,7 +80,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
         // The realistic prod state: no TranscriptionModel row → ModelConfig.TranscriptionModel
         // is null → adapter falls back to DefaultTranscriptionModel. This is the deploy-day
         // behaviour for every existing assistant.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["input"]!["transcription"]!["model"]!.Value<string>()
             .ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
@@ -95,7 +95,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
         // Defence: even if the service-side parser ever lets through an empty / whitespace
         // value (current parser strips it), the adapter falls back to default instead of
         // sending `"model": ""` and getting rejected by OpenAI.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel(model), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel(model), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["input"]!["transcription"]!["model"]!.Value<string>()
             .ShouldBe(OpenAiRealtimeAiProviderAdapter.DefaultTranscriptionModel);
@@ -109,7 +109,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
     [InlineData("gpt-4o-transcribe")]          // explicit re-affirm of the default
     public void BuildSessionConfig_TranscriptionModelSet_EmitsOperatorValue(string model)
     {
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel(model), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel(model), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["input"]!["transcription"]!["model"]!.Value<string>().ShouldBe(model);
     }
@@ -121,7 +121,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
         // (e.g. `gpt-5-transcribe`) without a code change. The adapter does not
         // validate the string — OpenAI rejects unknown values server-side rather
         // than the adapter silently falling back to default.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel("gpt-5-transcribe"), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel("gpt-5-transcribe"), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["input"]!["transcription"]!["model"]!.Value<string>().ShouldBe("gpt-5-transcribe");
     }
@@ -141,12 +141,15 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                TranscriptionLanguage = "yue"
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    TranscriptionLanguage = "yue"
+                }
             }
         };
 
-        var json = SerializeAsProduction(adapter.BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(adapter.BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var transcription = json["session"]!["audio"]!["input"]!["transcription"]!;
         transcription["model"]!.Value<string>().ShouldBe("gpt-4o-mini-transcribe");
@@ -158,7 +161,7 @@ public class OpenAiRealtimeAiProviderAdapterTranscriptionModelTests
     {
         // Activating the model override must not silently shift turn_detection,
         // noise_reduction, voice, or output format.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel("whisper-1"), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithModel("whisper-1"), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["audio"]!["input"]!["turn_detection"]!["type"]!.Value<string>().ShouldBe("server_vad");

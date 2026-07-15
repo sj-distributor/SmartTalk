@@ -1,4 +1,3 @@
-using Twilio;
 using Serilog;
 using OpenAI;
 using OpenAI.Chat;
@@ -8,8 +7,6 @@ using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.STT;
-using Twilio.Rest.Api.V2010.Account;
-using SmartTalk.Messages.Dto.Sales;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.RegularExpressions;
 using Smarties.Messages.DTO.OpenAi;
@@ -24,8 +21,14 @@ using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.PhoneOrder;
 using JsonDocument = System.Text.Json.JsonDocument;
+using SmartTalk.Messages.Dto.Sales;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using System.ClientModel;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using SmartTalk.Core.Domain.Sales;
+using SmartTalk.Core.Services.Sale;
+using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -38,6 +41,11 @@ public partial interface IPhoneOrderProcessJobService
 
 public partial class PhoneOrderProcessJobService
 {
+    private static readonly JsonSerializerOptions ReadableJsonSerializerOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public async Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken)
     {
         if (jobId == null) return;
@@ -78,6 +86,7 @@ public partial class PhoneOrderProcessJobService
 
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken)
                 .ConfigureAwait(false);
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(record.Id, cancellationToken).ConfigureAwait(false);
 
             Log.Warning("Handle transcription callback failed: {@Exception}", e);
         }
@@ -89,22 +98,25 @@ public partial class PhoneOrderProcessJobService
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
         
-        var callFrom = string.Empty;
-        var callTo = string.Empty;
-      
-        try
+        var callFrom = record.PhoneNumber ?? string.Empty;
+        var callTo = record.IncomingCallNumber ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(callFrom) && !string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
         {
-            await RetryHelper.RetryAsync(async () =>
+            try
             {
-                var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
-                callFrom = callInfo?.From;
-                callTo = callInfo?.To;
-                Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
-            }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
-        }
-        catch (Exception e)
-        {
-            Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
+                await RetryHelper.RetryAsync(async () =>
+                {
+                    var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
+                    callFrom = callInfo?.From;
+                    callTo = callInfo?.To;
+                    Log.Information("Fetched incoming phone number from Twilio: {callFrom}", callFrom);
+                }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
+            }
+            catch (Exception e)
+            {
+                Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
+            }
         }
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
@@ -119,7 +131,7 @@ public partial class PhoneOrderProcessJobService
         var networkTimeout = (audioContent?.Length ?? 0) > largeAudioBytesThreshold ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(5);
 
         var client = new ChatClient(
-            "gpt-audio-2025-08-28",
+            _openAiSettings.RecordAnalyzeModel,
             new ApiKeyCredential(_openAiSettings.ApiKey),
             new OpenAIClientOptions
             {
@@ -130,14 +142,14 @@ public partial class PhoneOrderProcessJobService
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         Log.Information("sales record analyze report:" + completion.Content.FirstOrDefault()?.Text);
-      
+
         if (completion.Content.Count>0)
         {
             var contentTexts = completion.Content
                 .Select(content => content.Text)
                 .Where(text => !string.IsNullOrWhiteSpace(text))
                 .ToList();
-            
+
             Log.Information(
                 "Generated sales record analyze report. RecordId: {RecordId}, CallSid: {CallSid}, AgentId: {AgentId}, AssistantId: {AssistantId}, AssistantName: {AssistantName}, ContentTexts: {ContentTexts}",
                 record.Id,
@@ -147,7 +159,7 @@ public partial class PhoneOrderProcessJobService
                 aiSpeechAssistant?.Name,
                 contentTexts);
         }
-        
+
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
 
@@ -197,6 +209,19 @@ public partial class PhoneOrderProcessJobService
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
+        var hasPendingTasks = await _salesDataProvider.HasPendingTasksByRecordIdAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        
+        if (!hasPendingTasks)
+        {
+            Log.Information("No PhoneOrderPushTask created, mark record completed. RecordId={RecordId}", record.Id);
+
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            _backgroundJobClient.Enqueue<ISalesPhoneOrderPushService>(service => service.ExecutePhoneOrderPushTasksAsync(record.Id, CancellationToken.None));
+        }
         
         await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
 
@@ -388,9 +413,7 @@ public partial class PhoneOrderProcessJobService
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
 
         var audioData = BinaryData.FromBytes(audioContent);
-        List<ChatMessage> messages =
-        [
-            new SystemChatMessage( (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
+        var recordAnalyzePrompt = (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
                   "分析報告的格式如下：" +
                   "交談主題：xxx\n\n " +
@@ -400,15 +423,27 @@ public partial class PhoneOrderProcessJobService
                   "待辦事件: \n1.xxx\n2.xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
-                .Replace("#{call_from}", callFrom ?? "")
-                .Replace("#{current_time}", currentTime ?? "")
-                .Replace("#{call_to}", callTo ?? "")
-                .Replace("#{customer_items}", customerItemsString ?? "")
-                .Replace("#{call_subject_cn}", callSubjectCn)
-                .Replace("#{call_subject_us}", callSubjectEn)
-                .Replace("#{menu_items}", menuItems ?? "")),
+            .Replace("#{call_from}", callFrom ?? "")
+            .Replace("#{current_time}", currentTime ?? "")
+            .Replace("#{call_to}", callTo ?? "")
+            .Replace("#{customer_items}", customerItemsString ?? "")
+            .Replace("#{call_subject_cn}", callSubjectCn)
+            .Replace("#{call_subject_us}", callSubjectEn)
+            .Replace("#{menu_items}", menuItems ?? "");
+
+        recordAnalyzePrompt +=
+            "\n\n輸出要求：\n" +
+            "1. 直接輸出最終分析報告正文，不要輸出任何確認、等待或寒暄語。\n" +
+            "2. 禁止輸出「好的」、「請稍等」、「我會」、「我將」、「以下是」、「正在生成」等過渡語。\n" +
+            "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
+            "4. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。\n" +
+            "5. 「客人下單內容」不是必填項。只有在錄音中明確聽到客戶下單且包含可識別的物料，才可以輸出具體下單內容。\n";
+
+        List<ChatMessage> messages =
+        [
+            new SystemChatMessage(recordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("幫我根據錄音生成分析報告：")
+            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。沒有明確下單時，請寫「客人下單內容：無明確下單」")
         ];
 
         return messages;
@@ -436,77 +471,124 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task HandleSalesScenarioAsync(Agent agent,
-        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record,
-        CancellationToken cancellationToken)
+    private async Task HandleSalesScenarioAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
-        var soldToIds = new List<string>();
+        var soldToIds = new List<string>(); 
         if (!string.IsNullOrEmpty(aiSpeechAssistant.Name))
-            soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+             soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
 
-        var historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken)
-            .ConfigureAwait(false);
+        var historyItems = soldToIds.Count > 0
+            ? await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken).ConfigureAwait(false)
+            : [];
 
-        var extractedOrders =
-            await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken)
-                .ConfigureAwait(false);
+        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
 
         var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
 
         foreach (var storeOrder in extractedOrders)
-        {
-            var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+        { 
+            var customerMatch = await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            var soldToId = customerMatch.SoldToId;
+            var matchedSoldToIds = customerMatch.SoldToIds.Count > 0
+                ? customerMatch.SoldToIds
+                : string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase)
+                    ? []
+                    : soldToIds;
+
+            if (matchedSoldToIds.Count > 0 && storeOrder.Orders.Any(x => string.IsNullOrWhiteSpace(x.MaterialNumber)))
+            {
+                var matchedHistoryItems = await GetCustomerHistoryItemsBySoldToIdAsync(matchedSoldToIds, cancellationToken).ConfigureAwait(false);
+                BackfillMaterialNumbers(storeOrder, matchedHistoryItems);
+            }
+
+            if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
+            {
+                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, matchedSoldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
             
-            if (string.IsNullOrEmpty(soldToId))
-            {
-                Log.Warning("未能获取店铺 SoldToId, StoreName={StoreName}, StoreNumber={StoreNumber}", storeOrder.StoreName,
-                    storeOrder.StoreNumber);
-            }
+            if (!string.IsNullOrWhiteSpace(soldToId))
+                await RefineOrderByAiAsync(storeOrder, soldToId, cancellationToken).ConfigureAwait(false);
 
-            foreach (var item in storeOrder.Orders)
-            {
-                item.MaterialNumber = MatchMaterialNumber(item.Name, item.MaterialNumber, item.Unit, historyItems);
-            }
+            var draftOrder = CreateDraftOrder(record, storeOrder, soldToId, matchedSoldToIds, customerMatch.SalesGroup, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
 
-            var draftOrder = CreateDraftOrder(storeOrder, soldToId, aiSpeechAssistant, pacificZone, pacificNow);
-            Log.Information("DraftOrder for Store {StoreName}/{StoreNumber}: {@DraftOrder}", storeOrder.StoreName,
-                storeOrder.StoreNumber, draftOrder);
-
-            var response = await _salesClient.GenerateAiOrdersAsync(draftOrder, cancellationToken).ConfigureAwait(false);
-            Log.Information("Generate Ai Order response for Store {StoreName}/{StoreNumber}: {@response}",
-                storeOrder.StoreName, storeOrder.StoreNumber, response);
-
-            if (response?.Data != null && response.Data.OrderId != Guid.Empty)
-            {
-                await UpdateRecordOrderIdAsync(record, response.Data.OrderId, cancellationToken).ConfigureAwait(false);
-            }
+            await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, cancellationToken).ConfigureAwait(false);
         }
+
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText,
-        List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems,
-        CancellationToken cancellationToken)
-    {
+    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken) 
+    { 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
-        var materialListText = string.Join("\n",
-            historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
+        var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
 
         var systemPrompt =
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。「優先準確匹配物料列表中靠前的物料，如果有多個同類一樣物料，選用歷史列表中排在前的。」" +
             "如果報告中提到了預約送貨時間，請提取送貨時間（格式yyyy-MM-dd）。" +
             "如果客戶提到了分店名，請提取 StoreName；如果提到第幾家店，請提取 StoreNumber。\n" +
-            "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
+            
+            "【訂單意圖判斷規則（非常重要）】\n" +
+            "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
+            "2. 如果客戶先說取消整單，後面又表示還是要、算了繼續下單、剛剛的取消不算，請標記 IsUndoCancel=true。\n" +
+            "3. 如果客戶只取消單個物料（例如：某某不要了、某某取消、某某 cut 掉，并没有提到数量），請保留該物料，並在該物料上標記 markForDelete=true，\n" +
+            "4. 如果客戶只是减少單個物料的數量，但是说了「取消」的字眼（例如：某某取消1箱，必须提到数量），quantity（負數表示，如-1），markForDelete=false。\n" +
+            "5. 如果客戶說某某物料剛下了4箱，現在幫我改成1箱（或改成只要1箱/变成1箱/剩1箱），請保留該物料：quantity=1，並標記 IsTargetQuantity=true（不要在這裡做 4-1 的計算）。\n\n" +
+            "6. 如果客戶只是增加物料数量（例如：再加2箱/多要2箱），quantity=2，IsTargetQuantity=false。\n" +
+            "7. 如果客戶只是减少物料数量（例如：某某减掉一箱），quantity=-1（必須為負數），IsTargetQuantity=false。\n" +
+            "8. 單個物料取消不等於取消整單，IsDeleteWholeOrder = false。\n" +
+            "9. 如果得到的字段restored是true，就為true，是false或者沒有得到這個字段，則為false\n" +
+            "10. 如果订单中包含明确的数量描述，即使同时出现“需要确认数量 / 数量不确定”等提示，也应先按当前报告中的数量提取。\n" +
+            "11. 如果是減少某個物料的數量，請在該物料的 quantity 使用負數表示。\n" +
+            "12. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 IsTargetQuantity = true。\n\n" +
+            
+            "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
+            "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
+            "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
+            "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete, restored, IsTargetQuantity）。\n" +
+            
             "範例：\n" +
-            "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2025-08-20\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
+            "{\n" +
+            "  \"stores\": [\n" +
+            "    {\n" +
+            "      \"StoreName\": \"HaiDiLao\",\n" +
+            "      \"StoreNumber\": \"1\",\n" +
+            "      \"DeliveryDate\": \"2025-08-20\",\n" +
+            "      \"IsDeleteWholeOrder\": false,\n" +
+            "      \"IsUndoCancel\": false,\n" +
+            "      \"orders\": [\n" +
+            "        {\n" +
+            "          \"name\": \"雞胸肉\",\n" +
+            "          \"quantity\": 1,\n" +
+            "          \"unit\": \"箱\",\n" +
+            "          \"materialNumber\": \"000000000010010253\",\n" +
+            "          \"markForDelete\": false,\n" +
+            "          \"IsTargetQuantity\": false,\n" +
+            "          \"restored\": false\n" +
+            "        }\n" +
+            "      ]\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}\n" +
             "歷史物料列表：\n" + materialListText + "\n\n" +
-            "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期\n 當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：1. **優先選擇名稱一樣的物料。**\n 2. **次優選擇沒有日期的物料。**\n 3. 如果所有相似物料都有日期，請選擇日期**最新** 的那個物料。\n\n  " +
-            "注意：\n1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n2. 提取的物料名稱需要為繁體中文。\n3. 如果没有提到店铺信息，但是有下单内容，则StoreName和StoreNumber可为空值，orders要正常提取。\n4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。** \n" +
-            "請務必完整提取報告中每一個提到的物料";
+            "每個物料的格式為「物料名稱（物料號碼）」，部分物料會包含日期。\n" +
+            "當有多個相似的物料名稱時，請根據以下規則選擇匹配的物料號碼：\n" +
+            "1. **優先選擇沒有日期的物料。**\n" +
+            "2. 如果所有相似物料都有日期，請選擇日期 **最新** 的那個物料。\n\n" +
+            
+            "注意：\n" +
+            "1. 必須嚴格輸出 JSON，物件頂層字段必須是 \"stores\"，不要有其他字段或額外說明。\n" +
+            "2. 提取的物料名稱需要為繁體中文。\n" +
+            "3. 如果沒有提到店鋪信息，但有下單內容，StoreName 和 StoreNumber 可為空值，orders 要正常提取。\n" +
+            "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
+            "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
+            "6. 生成的json請不要重複物料名\n" +
+            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 IsTargetQuantity=true。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -515,18 +597,13 @@ public partial class PhoneOrderProcessJobService
             new UserChatMessage("客戶分析報告文本：\n" + reportText + "\n\n")
         };
 
-        var completion = await client.CompleteChatAsync(messages,
-            new ChatCompletionOptions
-            {
-                ResponseModalities = ChatResponseModalities.Text,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            }, cancellationToken).ConfigureAwait(false);
+        var completion = await client.CompleteChatAsync(messages, new ChatCompletionOptions { ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() }, cancellationToken).ConfigureAwait(false);
         var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
-
+        
         Log.Information("AI JSON Response: {JsonResponse}", jsonResponse);
 
-        try
-        {
+        try 
+        { 
             using var jsonDoc = JsonDocument.Parse(jsonResponse);
 
             var storesArray = jsonDoc.RootElement.GetProperty("stores");
@@ -537,185 +614,196 @@ public partial class PhoneOrderProcessJobService
                 var storeDto = new ExtractedOrderDto
                 {
                     StoreName = storeElement.TryGetProperty("StoreName", out var sn) ? sn.GetString() ?? "" : "",
-                    StoreNumber =
-                        storeElement.TryGetProperty("StoreNumber", out var snum) ? snum.GetString() ?? "" : "",
-                    DeliveryDate =
-                        storeElement.TryGetProperty("DeliveryDate", out var dd) &&
-                        DateTime.TryParse(dd.GetString(), out var dt)
-                            ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
-                            : DateTime.UtcNow.AddDays(1)
-                };
+                    StoreNumber = storeElement.TryGetProperty("StoreNumber", out var snum) ? snum.GetString() ?? "" : "",
+                    DeliveryDate = storeElement.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt) ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : DateTime.UtcNow.AddDays(1),
+                    IsDeleteWholeOrder = storeElement.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean(),
+                    IsUndoCancel = storeElement.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean()
+                }; 
 
-                if (storeElement.TryGetProperty("orders", out var ordersArray))
-                {
-                    foreach (var orderItem in ordersArray.EnumerateArray())
-                    {
-                        var name = orderItem.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                        var qty = orderItem.TryGetProperty("quantity", out var q) && q.TryGetDecimal(out var dec)
-                            ? dec
-                            : 0;
-                        var unit = orderItem.TryGetProperty("unit", out var u) ? u.GetString() ?? "" : "";
-                        var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn)
-                            ? mn.GetString() ?? ""
-                            : "";
+                if (storeElement.TryGetProperty("orders", out var ordersArray)) 
+                { 
+                    foreach (var orderItem in ordersArray.EnumerateArray()) 
+                    { 
+                        var name = orderItem.TryGetProperty("name", out var n) ? n.GetString() ?? "" : ""; 
+                        var qty = orderItem.TryGetProperty("quantity", out var q) && q.TryGetDecimal(out var dec) ? dec : 0; 
+                        var unit = orderItem.TryGetProperty("unit", out var u) ? u.GetString() ?? "" : ""; 
+                        var materialNumber = orderItem.TryGetProperty("materialNumber", out var mn) ? mn.GetString() ?? "" : ""; 
+                        var markForDelete = orderItem.TryGetProperty("markForDelete", out var md) && md.GetBoolean();
+                        var restored = orderItem.TryGetProperty("restored", out var rd) && rd.GetBoolean();
+                        var isTargetQuantity = orderItem.TryGetProperty("IsTargetQuantity", out var itq) && itq.GetBoolean();
 
-                        materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
-
+                        if (string.IsNullOrWhiteSpace(materialNumber))
+                            materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
+                        
                         storeDto.Orders.Add(new ExtractedOrderItemDto
                         {
-                            Name = name,
+                            Unit = unit,
+                            AiMaterialDesc = name,
                             Quantity = (int)qty,
+                            MarkForDelete = markForDelete,
                             MaterialNumber = materialNumber,
-                            Unit = unit
+                            Restored = restored,
+                            IsTargetQuantity = isTargetQuantity
                         });
-                    }
+                    } 
                 }
 
-                results.Add(storeDto);
+                results.Add(storeDto); 
             }
 
             return results;
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) 
+        { 
             Log.Warning("解析GPT返回JSON失败: {Message}", ex.Message);
             return new List<ExtractedOrderDto>();
-        }
+        } 
     }
-
-    private async Task<List<(string Material, string MaterialDesc, DateTime? InvoiceDate)>>
-        GetCustomerHistoryItemsBySoldToIdAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    
+    private async Task<List<(string Material, string MaterialDesc, DateTime? InvoiceDate)>> GetCustomerHistoryItemsBySoldToIdAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
-        List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems =
-            new List<(string, string, DateTime?)>();
+        List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems = new List<(string, string, DateTime?)>();
 
-        var askInfoResponse = await _salesClient
-            .GetAskInfoDetailListByCustomerAsync(
-                new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken)
-            .ConfigureAwait(false);
-        var orderHistoryResponse = await _salesClient
-            .GetOrderHistoryByCustomerAsync(
-                new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() },
-                cancellationToken).ConfigureAwait(false);
+        var askInfoResponse = await _salesClient.GetAskInfoDetailListByCustomerAsync(new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken).ConfigureAwait(false);
+        var orderHistoryResponse = await _salesClient.GetOrderHistoryByCustomerAsync(new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() }, cancellationToken).ConfigureAwait(false);
 
         if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material))
-                .Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
+            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material)).Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
 
         if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            historyItems.AddRange(
-                orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
-                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ??
-                new List<(string, string, DateTime?)>());
+            historyItems.AddRange(orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)).Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ?? new List<(string, string, DateTime?)>());
 
         return historyItems;
     }
 
-    private string MatchMaterialNumber(string itemName, string baseNumber, string unit,
-        List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems)
+    private string MatchMaterialNumber(string itemName, string baseNumber, string unit, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems)
     {
-        var candidates = historyItems
-            .Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.Material).ToList();
+        var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
         if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
-        
+
         if (!string.IsNullOrWhiteSpace(baseNumber) &&
             candidates.Contains(baseNumber, StringComparer.OrdinalIgnoreCase))
             return baseNumber;
 
         if (candidates.Count == 1) return candidates.First();
 
-        if (!string.IsNullOrWhiteSpace(unit))
+        var isCase = !string.IsNullOrWhiteSpace(unit) && (unit.Contains("case", StringComparison.OrdinalIgnoreCase) || unit.Contains("箱"));
+        if (isCase)
         {
-            var u = unit.ToLower();
-            if (u.Contains("case") || u.Contains("箱"))
-            {
-                var csItem = candidates.FirstOrDefault(x => x.EndsWith("CS", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(csItem)) return csItem;
-            }
-            else
-            {
-                var pcItem = candidates.FirstOrDefault(x => x.EndsWith("PC", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(pcItem)) return pcItem;
-            }
-        }
+            var noPcList = candidates.Where(x => !x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        var pureNumber = candidates.FirstOrDefault(x => Regex.IsMatch(x, @"^\d+$"));
-        return pureNumber ?? candidates.First();
+            if (noPcList.Any())
+                return noPcList.First(); 
+            
+            return candidates.First();
+        }
+        
+        var pcList = candidates.Where(x => x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (pcList.Any())
+            return pcList.First();
+        
+        return candidates.First();
     }
 
-    private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken)
-    {
-        if (soldToIds.Count == 1) return aiSpeechAssistant.Name;
+    private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken) 
+    { 
+        if (soldToIds.Count == 1)
+            return soldToIds[0];
         
-        if (!string.IsNullOrEmpty(storeOrder.StoreName))
-        {
-            var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName };
+        if (!string.IsNullOrEmpty(storeOrder.StoreName)) 
+        { 
+            var requestDto = new GetCustomerNumbersByNameRequestDto { CustomerName = storeOrder.StoreName }; 
             var response = await _salesClient.GetCustomerNumbersByNameAsync(requestDto, cancellationToken).ConfigureAwait(false);
-            
-            var matchedCustomers = response?.Data?.Where(x => soldToIds.Contains(x.CustomerNumber.TrimStart('0'))).Select(x => x.CustomerNumber).ToList();
+            var matchedCustomers = response?.Data?
+                .Where(x => !string.IsNullOrWhiteSpace(x.CustomerNumber) && soldToIds.Contains(x.CustomerNumber.TrimStart('0')))
+                .Select(x => x.CustomerNumber)
+                .ToList();
 
             if (matchedCustomers?.Count == 1) return matchedCustomers.First();
 
             if (matchedCustomers?.Count > 1 &&
-                int.TryParse(storeOrder.StoreNumber, out var storeIndex) &&
-                storeIndex > 0 && storeIndex <= matchedCustomers.Count)
+                int.TryParse(storeOrder.StoreNumber, out var matchedStoreIndex) &&
+                matchedStoreIndex > 0 && matchedStoreIndex <= matchedCustomers.Count)
             {
-                return matchedCustomers[storeIndex - 1];
+                return matchedCustomers[matchedStoreIndex - 1];
             }
         }
 
-        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && int.TryParse(storeOrder.StoreNumber, out var index) && index > 0 && index <= soldToIds.Count)
-            return soldToIds[index - 1];
+        if (!string.IsNullOrEmpty(storeOrder.StoreNumber) && soldToIds.Any() && int.TryParse(storeOrder.StoreNumber, out var storeIndex) && storeIndex > 0 && storeIndex <= soldToIds.Count)
+        {
+            return soldToIds[storeIndex - 1];
+        }
         
         return string.Empty;
     }
 
-    private GenerateAiOrdersRequestDto CreateDraftOrder(ExtractedOrderDto storeOrder, string soldToId,
-        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, TimeZoneInfo pacificZone, DateTime pacificNow)
-    {
-        var pacificDeliveryDate = storeOrder.DeliveryDate != default
-            ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone)
-            : pacificNow.AddDays(1);
-
-        var assistantNameWithComma = aiSpeechAssistant.Name?.Replace('/', ',') ?? string.Empty;
+    private GenerateAiOrdersRequestDto CreateDraftOrder(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, string salesGroup, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, TimeZoneInfo pacificZone, DateTime pacificNow, bool useCanceledOrder)
+    { 
+        var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
+        var soldToIdsText = soldToIds.Count > 0 ? string.Join(",", soldToIds) : string.Empty;
 
         return new GenerateAiOrdersRequestDto
         {
             AiModel = "Smartalk",
+            UseCanceledOrder = useCanceledOrder,
             AiOrderInfoDto = new AiOrderInfoDto
             {
                 SoldToId = soldToId,
-                SoldToIds = string.IsNullOrEmpty(soldToId) ? assistantNameWithComma : soldToId,
+                AiAssistantId = aiSpeechAssistant.Id,
+                SoldToIds = string.IsNullOrEmpty(soldToId) ? soldToIdsText : soldToId,
+                SalesGroup = salesGroup,
                 DocumentDate = pacificNow.Date,
                 DeliveryDate = pacificDeliveryDate.Date,
                 AiOrderItemDtoList = storeOrder.Orders.Select(i => new AiOrderItemDto
                 {
                     MaterialNumber = i.MaterialNumber,
-                    AiMaterialDesc = i.Name,
+                    AiMaterialDesc = i.AiMaterialDesc,
                     MaterialQuantity = i.Quantity,
-                    AiUnit = i.Unit
+                    AiUnit = i.Unit,
+                    MarkForDelete = i.MarkForDelete,
+                    Restored = i.Restored,
+                    IsTargetQuantity = i.IsTargetQuantity
                 }).ToList()
             }
         };
     }
 
-    private async Task UpdateRecordOrderIdAsync(PhoneOrderRecord record, Guid orderId, CancellationToken cancellationToken)
+    private async Task<SalesCustomerMatchResult> ResolveSalesCustomerMatchAsync(
+        PhoneOrderRecord record,
+        ExtractedOrderDto storeOrder,
+        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,
+        List<string> soldToIds,
+        CancellationToken cancellationToken)
     {
-        var orderIds = string.IsNullOrEmpty(record.OrderId)
-            ? new List<Guid>()
-            : JsonSerializer.Deserialize<List<Guid>>(record.OrderId)!;
+        if (!string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
+        {
+            var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            return new SalesCustomerMatchResult
+            {
+                SoldToId = soldToId,
+                SoldToIds = string.IsNullOrWhiteSpace(soldToId) ? soldToIds : [soldToId]
+            };
+        }
 
-        orderIds.Add(orderId);
-        record.OrderId = JsonSerializer.Serialize(orderIds);
-
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken)
+        var matched = await _salesCustomerMatchService
+            .MatchCustomerAsync(record.PhoneNumber, record.IncomingCallNumber, storeOrder.StoreName, [record.PhoneNumber, record.IncomingCallNumber], cancellationToken)
             .ConfigureAwait(false);
+
+        return matched;
+    }
+
+    private void BackfillMaterialNumbers(ExtractedOrderDto storeOrder, List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems)
+    {
+        if (historyItems.Count == 0) return;
+
+        foreach (var order in storeOrder.Orders.Where(x => string.IsNullOrWhiteSpace(x.MaterialNumber)))
+            order.MaterialNumber = MatchMaterialNumber(order.AiMaterialDesc, order.MaterialNumber, order.Unit, historyItems);
     }
     
-     private async Task<(bool IsHumanAnswered, bool IsCustomerFriendly)> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)
+    private async Task<(bool IsHumanAnswered, bool IsCustomerFriendly)> CheckCustomerFriendlyAsync(string transcriptionText, CancellationToken cancellationToken)
     {
         var completionResult = await _smartiesClient.PerformQueryAsync(new AskGptRequest
         {
@@ -757,7 +845,7 @@ public partial class PhoneOrderProcessJobService
 
         if (result == null) throw new Exception($"无法反序列化模型返回结果: {response}");
 
-        return (result.IsHumanAnswered, result.IsCustomerFriendly); 
+        return (result.IsHumanAnswered, result.IsCustomerFriendly);
     }
     
     public async Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken)
@@ -831,5 +919,295 @@ public partial class PhoneOrderProcessJobService
             throw new Exception($"IdentifyDialogueScenariosAsync 无法反序列化模型返回结果: {response}");
 
         return result;
+    }
+    
+    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, TimeZoneInfo pacificZone, DateTime pacificNow, CancellationToken cancellationToken)
+    {
+        var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
+        var req = new DeleteAiOrderRequestDto
+        {
+            CustomerNumber = soldToId,
+            SoldToIds = string.Join(",", soldToIds),
+            DeliveryDate = pacificDeliveryDate.Date,
+            AiAssistantId = record.AssistantId ?? 0
+        };
+        
+        var task = new PhoneOrderPushTask
+        {
+            RecordId = record.Id,
+            ParentRecordId = record.ParentRecordId,
+            AssistantId = record.AssistantId ?? 0,
+            TaskType = PhoneOrderPushTaskType.DeleteOrder,
+            BusinessKey = $"DELETE_{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            RequestJson = JsonSerializer.Serialize(req, ReadableJsonSerializerOptions),
+            Status = PhoneOrderPushTaskStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+    }
+    
+    private async Task CreateGenerateOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
+    {
+        var task = new PhoneOrderPushTask
+        {
+            RecordId = record.Id,
+            ParentRecordId = record.ParentRecordId,
+            AssistantId = record.AssistantId ?? 0,
+            TaskType = PhoneOrderPushTaskType.GenerateOrder,
+            BusinessKey = $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            RequestJson = JsonSerializer.Serialize(request, ReadableJsonSerializerOptions),
+            Status = PhoneOrderPushTaskStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RefineOrderByAiAsync(ExtractedOrderDto storeOrder, string soldToId, CancellationToken cancellationToken)
+    {
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var deliveryDateInPst = TimeZoneInfo.ConvertTime(storeOrder.DeliveryDate, pacificZone); 
+        
+        var draftOrder = await _salesClient.GetAiOrderItemsByDeliveryDateAsync(new GetAiOrderItemsByDeliveryDateRequestDto { CustomerNumber = soldToId, DeliveryDate = deliveryDateInPst, IncludePrintedQuantity = true}, cancellationToken).ConfigureAwait(false);
+        
+        var hasDraftOrder = draftOrder?.Data != null && draftOrder.Data.Any();
+
+        if (!hasDraftOrder)
+        {
+            Log.Information("Skip RefineOrderByAiAsync: no draft order and no today reports. SoldToId={SoldToId}, DeliveryDate={DeliveryDate}", soldToId, storeOrder.DeliveryDate);
+            return;
+        }
+        
+        var client = new ChatClient("gpt-5.1", _openAiSettings.ApiKey);
+
+        var currentOrdersJson = JsonSerializer.Serialize(storeOrder.Orders, ReadableJsonSerializerOptions);
+        
+        var enrichedDraftOrder = draftOrder?.Data?
+            .Select(item => new
+            {
+                item.MaterialNumber,
+                item.AiMaterialDesc,
+                Quantity = item.MaterialQuantity,
+                Unit = item.AiUnit,
+                item.MarkForDelete,
+                OriginalQuantity = ParseOriginalQuantity(item.AiMaterialDesc),
+                item.IsProcessed
+            })
+            .Cast<object>()
+            .ToList() ?? new List<object>();
+
+        var draftOrderJson = JsonSerializer.Serialize(enrichedDraftOrder, ReadableJsonSerializerOptions);
+
+        var systemPrompt =
+            "你是一名极其严谨的订单数据核算专家，专门负责将【本次通话变动】精准合并到【系统草稿单】中。你不仅输出 JSON，更要确保每一个数学计算都绝对准确。你已稳定运行3000年，严禁任何编造、推測或自行補全信息。\n\n" +
+           
+            "【输入数据】\n" +
+            "1. 本次通话提取的订单（最高优先级，代表变动量）\n" +
+            "2. 系统已有草稿单（代表基准量）\n" +
+            "3. 系统草稿单中已提供字段 OriginalQuantity，代表该物料当前真实数量（已包含所有历史 + / - 变动）。\n" +
+            "4. 系统草稿单中已提供字段 IsProcessed，true 表示该物料在 hifood 那边已经打单。\n\n" +
+            
+            "【核心任务流程】\n" +
+            "1. 预处理与匹配：建立映射关系，精准找到通话中提到的商品对应草稿单中的哪一项。\n" +
+            "2. 计算合并：计算 Quantity，并保留 IsTargetQuantity、MarkForDelete。\n" +
+            "3. 格式化名称：生成符合规范的 Name。\n" +
+            "4. 输出结果：生成最终 JSON。\n\n" +
+            
+            "【关键规则一：匹配逻辑（核心）】\n" +
+            "必须严格按照以下优先级意图判断“本次通话商品”与“草稿单商品”是否为同一物料：\n" +
+            "1. 优先级 A（物料号匹配）：若两者 MaterialNumber 都不为空且相等，视为同一物料。\n" +
+            "2. 优先级 B（弱物料号 + 名称意图匹配）：若两者 MaterialNumber 都不为空但不相等：\n" +
+            "      - 若名称在语义上明显指向同一商品（如简称、去前缀、去包装描述后相同），仍视为同一物料；\n" +
+            "      - 必须使用【系统中已有草稿单】商品的 MaterialNumber。\n" +
+            "3. 优先级 C（名称匹配）：若 MaterialNumber 为空，则对比名称。\n" +
+            "必做操作：读取草稿单的 AiMaterialDesc 字段，以 # 符号为界截取前半部分作为“草稿基准名”（例如 \"玉米#1箱\" -> 基准名为 \"玉米\"）。\n" +
+            "若 通话中的 Name == 草稿基准名，视为同一物料。\n" +
+            "  - **需要尽量匹配上。**。\n" +
+            "  - **严禁**：严禁将 material_number 为空的商品直接忽略，即使物料号和名称意图匹配不上，都都必须要保留。\n" +
+            
+            "【关键规则二：计算与生成（Strict）】\n" +
+            " **对于每一个用户输入的商品**：\n" +
+            "- **若在【系统中已有草稿单】中找到匹配项**：\n" +
+            "  - **情况A：普通加减（IsTargetQuantity 为 false，且 MarkForDelete 为 false）**：\n" +
+            "      - Quantity = OriginalQuantity + 本次变动数量。\n" +
+            "      - 例如：若 OriginalQuantity = 2，本次 +1，则要计算 2+1，Quantity = 3；" +
+            "      - 例如：若 OriginalQuantity = 2，本次 -1，则要计算 2-1，Quantity = 1；" +
+            "      - Name 保持现有逻辑不变：继续使用草稿单完整原串，并追加本次变动轨迹（例如 +1、-1）。\n" +
+            "   - 重点：计算完成后，必须要将 IsTargetQuantity 改成 true 后直接输出，然后不要再做更改；\n\n" +
+            "  - **情况B：直接指定目标数量（IsTargetQuantity 为 true）**：\n" +
+            "      - Quantity 必须直接等于本次识别到的指定数量本身。\n" +
+            "      - 但 Name 保持现有逻辑不变：仍然基于草稿单完整原串记录本次变动轨迹。若原有 4 改成 1，则 Name 需要体现 -3（指定数量 - OriginalQuantity）的轨迹，但 Quantity 仍然回传 1。\n" +
+            "      - 输出结果必须保留 IsTargetQuantity = true。\n" +
+            "  - **情况C：取消单个物料（MarkForDelete 为 true）**：\n" +
+            "      - Quantity = 0。\n" +
+            "      - Name 仍需按照现有逻辑记录轨迹，例如原 4 箱取消，则 Name 应体现 -4 的轨迹。\n" +
+            "      - IsTargetQuantity = true。\n" +
+            "  - **生成结果**：\n" +
+            "    - Name 的生成逻辑不要改，保持当前原有逻辑：若匹配到草稿单，就沿用草稿单完整原串，并追加本次变动轨迹。\n" +
+            "    - Unit = 优先取草稿单 Unit。\n" +
+            "    - 即使草稿单 IsProcessed = true，只要该物料在本次通话中被匹配到并发生变动，仍然必须输出。\n\n" +
+            "- **若在草稿单中未找到匹配项（新增）**：\n" +
+            "    - 若 IsTargetQuantity = true，则 Quantity = 本次指定数量，Name = 本次变动 name + \"#\" + 指定数量 + 单位。\n" +
+            "    - 若 IsTargetQuantity = false，则 Quantity = 本次变动数量，Name = 本次变动 name + \"#\" + 本次变动数量 + 单位。\n" +
+            "    - 注意：新增项不需要额外 + 号后缀，而是直接生成标准格式（如 玉米#1箱）。\n" +
+            "    - Unit = 本次变动 Unit。\n\n" +
+            
+            "【关键规则三：整单与删除】\n" +
+            "1. IsDeleteWholeOrder：仅当输入明确标记为 true 时才为 true，且 Orders 必须为空。\n" +
+            "2. IsUndoCancel：同上。\n" +
+            "3. 单个删除：\n" +
+            "- 若本次通话 MarkForDelete 为 true，或明确表达整项取消/不要该物料：\n" +
+            "  - 设置 MarkForDelete = true。\n" +
+            "  - Name 仍需按照规则二生成（例如：\"鸡胸肉#2箱-2\"）。\n" +
+            "  - Quantity 设为 0（除非是部分减少，非清零）。\n\n\n" +
+            
+            "【关键规则四：未变动的保留与去除】\n" +
+            "   - 遍历完所有变动后，检查草稿单中未被匹配的剩余物料：\n" +
+            "       - 若剩余物料 IsProcessed = true，表示 hifood 已打单且当前这次通话未变动，该物料不要输出，该物料的全部数据删除！。\n" +
+            "       - 只要该剩余的物料 IsProcessed = false，就必须要保留！\n" +
+            "   - Name = 原始 AiMaterialDesc（不加任何后缀）。\n" +
+            "   - Quantity = 原始 MaterialQuantity。\n" +
+            "   - IsTargetQuantity = true。\n\n" +
+            "   - MarkForDelete = 原始 MarkForDelete（系统中已有草稿单里该物料的 MarkForDelete=true 就是 true，为 false 则为 false，严禁自行更改）。\n\n" +
+            
+            " 【严禁行为】：\n"+
+            "  - 严禁在 #, +, - 前后加空格。\n" +
+            "  - 严禁保留【本次通话提取的订单】中没有的物料、且该物料在【系统中已有草稿单】的 IsProcessed = true 。\n\n" +
+            "  - 严禁随意输出 DeliveryDate。只有在客人明确说明日期（几月几日）时才需要输出 DeliveryDate。如果只是说明天，不需要输出 DeliveryDate。\n\n" +
+            
+            "【输出格式】\n" +
+            "{\n" +
+            "  \"StoreName\": \"\",\n" +
+            "  \"StoreNumber\": \"\",\n" +
+            "  \"DeliveryDate\": \"yyyy-MM-dd\",\n" +
+            "  \"IsDeleteWholeOrder\": false,\n" +
+            "  \"IsUndoCancel\": false,\n" +
+            "  \"Orders\": [\n" +
+            "    {\n" +
+            "      \"Name\": \"string\",\n" +
+            "      \"Quantity\": 0,\n" +
+            "      \"MaterialNumber\": \"string\",\n" +
+            "      \"Unit\": \"string\",\n" +
+            "      \"MarkForDelete\": false,\n" +
+            "      \"Restored\": false,\n" +
+            "      \"IsTargetQuantity\": false\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}\n\n" +
+            
+            "请注意：系统物料未被变动、且草稿单 IsProcessed = true 的，不要输出；只要 IsProcessed = false 的物料，就必须要保留！！\n"+
+            "生成结果前，请在内存中执行一次规则的自我检查。\n";
+        
+        var userPrompt = "【本次通话提取的订单】\n" + currentOrdersJson + "\n\n" + "【系统中已有草稿单】\n" + draftOrderJson + "\n\n";
+        Log.Information("Sending refine prompt to GPT: {Prompt}", userPrompt);
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage(userPrompt)
+        };
+        
+        var completion = await client.CompleteChatAsync(messages,
+            new ChatCompletionOptions
+            {
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            }, cancellationToken).ConfigureAwait(false);
+        
+        var jsonResponse = completion.Value.Content.FirstOrDefault()?.Text ?? "";
+        Log.Information("Second AI refine response: {Json}", jsonResponse);
+        
+        try
+        {
+            using var jsonDoc = JsonDocument.Parse(jsonResponse);
+            var root = jsonDoc.RootElement;
+
+            if (root.TryGetProperty("StoreName", out var sn))
+                storeOrder.StoreName = sn.GetString() ?? storeOrder.StoreName;
+
+            if (root.TryGetProperty("StoreNumber", out var storeNum))
+                storeOrder.StoreNumber = storeNum.GetString() ?? storeOrder.StoreNumber;
+
+            if (root.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt))
+                storeOrder.DeliveryDate = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+
+            storeOrder.IsDeleteWholeOrder = root.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean();
+
+            storeOrder.IsUndoCancel = root.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean();
+
+            if (root.TryGetProperty("Orders", out var ordersArray) && ordersArray.ValueKind == JsonValueKind.Array)
+            {
+                storeOrder.Orders.Clear();
+
+                foreach (var orderItem in ordersArray.EnumerateArray())
+                {
+                    var name = orderItem.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+                    var unit = orderItem.TryGetProperty("Unit", out var u) ? u.GetString() ?? "" : "";
+                    var materialNumber = orderItem.TryGetProperty("MaterialNumber", out var m)
+                        ? m.GetString() ?? ""
+                        : "";
+
+                    var quantity = 0;
+                    if (orderItem.TryGetProperty("Quantity", out var q))
+                    {
+                        if (q.ValueKind == JsonValueKind.Number)
+                            quantity = q.GetInt32();
+                        else if (q.ValueKind == JsonValueKind.String &&
+                                 int.TryParse(q.GetString(), out var parsed))
+                            quantity = parsed;
+                    }
+
+                    var markForDelete =
+                        orderItem.TryGetProperty("MarkForDelete", out var d) && d.GetBoolean();
+
+                    var restored =
+                        orderItem.TryGetProperty("Restored", out var r) && r.GetBoolean();
+                    var isTargetQuantity = orderItem.TryGetProperty("IsTargetQuantity", out var itq) && itq.GetBoolean();
+
+                    storeOrder.Orders.Add(new ExtractedOrderItemDto
+                    {
+                        AiMaterialDesc = name,
+                        Quantity = quantity,
+                        Unit = unit,
+                        MaterialNumber = materialNumber,
+                        MarkForDelete = markForDelete,
+                        Restored = restored,
+                        IsTargetQuantity = isTargetQuantity
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("第二次模型解析失败，保留第一次模型结果: {Message}", ex.Message);
+        }
+    }
+    
+    private int ParseOriginalQuantity(string aiMaterialDesc)
+    {
+        if (string.IsNullOrWhiteSpace(aiMaterialDesc))
+            return 0;
+
+        try
+        {
+            var baseMatch = Regex.Match(aiMaterialDesc, @"#(\d+)");
+            if (!baseMatch.Success)
+                return 0;
+
+            int baseQty = int.Parse(baseMatch.Groups[1].Value);
+
+            var changes = Regex.Matches(aiMaterialDesc, @"([+-]\d+)");
+            int delta = 0;
+
+            foreach (Match match in changes)
+            {
+                delta += int.Parse(match.Value);
+            }
+
+            return baseQty + delta;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 }
