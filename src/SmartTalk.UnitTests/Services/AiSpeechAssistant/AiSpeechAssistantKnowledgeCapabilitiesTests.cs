@@ -66,7 +66,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
         harness.SetupCapabilityGraph(agent, assistant, knowledge, isLink: false);
 
         var response = await harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
-            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10 },
+            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10, AgentId = 20 },
             CancellationToken.None);
 
         var capability = response.Data.Capabilities.ShouldHaveSingleItem();
@@ -128,7 +128,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             .Returns(new List<Sales> { new() { Id = 300, Name = "Alice", Type = SalesCallType.CallIn } });
 
         var response = await harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
-            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10 },
+            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10, AgentId = 20 },
             CancellationToken.None);
 
         var capability = response.Data.Capabilities.ShouldHaveSingleItem();
@@ -140,6 +140,64 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
         capability.HifoodDataEnabled.ShouldBeTrue();
         capability.RepeatOrderEnabled.ShouldBeTrue();
         capability.OrderPushHifoodEnabled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task GetKnowledgeCapabilities_WhenAgentIdIsMissing_Throws()
+    {
+        var harness = CapabilityHarness.Create();
+
+        var exception = await Should.ThrowAsync<ArgumentException>(() =>
+            harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
+                new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10 },
+                CancellationToken.None));
+
+        exception.ParamName.ShouldBe("AgentId");
+    }
+
+    [Fact]
+    public async Task GetKnowledgeCapabilities_FiltersByAgentId()
+    {
+        var harness = CapabilityHarness.Create();
+        var firstAgent = new Agent { Id = 20, Name = "First" };
+        var firstAssistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 30,
+            AgentId = 20,
+            Name = "Alice",
+            IsDisplay = true
+        };
+        var firstKnowledge = new AiSpeechAssistantKnowledge
+        {
+            Id = 40,
+            AssistantId = 30,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+        var secondAgent = new Agent { Id = 21, Name = "Second" };
+        var secondAssistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 31,
+            AgentId = 21,
+            Name = "Bob",
+            IsDisplay = true
+        };
+        var secondKnowledge = new AiSpeechAssistantKnowledge
+        {
+            Id = 41,
+            AssistantId = 31,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+
+        harness.SetupCapabilityGraphs(true, (firstAgent, firstAssistant, firstKnowledge), (secondAgent, secondAssistant, secondKnowledge));
+
+        var response = await harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
+            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10, AgentId = 21 },
+            CancellationToken.None);
+
+        var capability = response.Data.Capabilities.ShouldHaveSingleItem();
+        capability.AgentId.ShouldBe(21);
+        capability.AssistantId.ShouldBe(31);
+        capability.KnowledgeId.ShouldBe(41);
     }
 
     [Fact]
@@ -192,7 +250,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             });
 
         var response = await harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
-            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10 },
+            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10, AgentId = 20 },
             CancellationToken.None);
 
         response.Data.Capabilities.ShouldHaveSingleItem().RepeatOrderEnabled.ShouldBeFalse();
@@ -429,32 +487,49 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             AiSpeechAssistantKnowledge knowledge,
             bool isLink = true)
         {
+            SetupCapabilityGraphs(isLink, (agent, assistant, knowledge));
+        }
+
+        public void SetupCapabilityGraphs(
+            bool isLink,
+            params (Agent Agent, Core.Domain.AISpeechAssistant.AiSpeechAssistant Assistant, AiSpeechAssistantKnowledge Knowledge)[] records)
+        {
             SetupStore(new CompanyStore { Id = 10, IsLink = isLink });
+            var agentIds = records.Select(x => x.Agent.Id).Distinct().ToList();
+            var assistantIds = records.Select(x => x.Assistant.Id).Distinct().ToList();
+
             PosDataProvider.GetPosAgentsAsync(
                     Arg.Is<List<int>>(x => x.SequenceEqual(new[] { 10 })),
                     null,
                     Arg.Any<CancellationToken>())
-                .Returns(new List<PosAgent> { new() { StoreId = 10, AgentId = agent.Id } });
+                .Returns(agentIds.Select(agentId => new PosAgent { StoreId = 10, AgentId = agentId }).ToList());
             AgentDataProvider.GetAgentsByIdsAsync(
-                    Arg.Is<List<int>>(x => x.SequenceEqual(new[] { agent.Id })),
+                    Arg.Is<List<int>>(x => x.SequenceEqual(agentIds)),
                     Arg.Any<CancellationToken>())
-                .Returns(new List<Agent> { agent });
+                .Returns(records
+                    .Select(x => x.Agent)
+                    .GroupBy(x => x.Id)
+                    .Select(x => x.First())
+                    .ToList());
             AiSpeechAssistantDataProvider.GetAgentAssistantsAsync(
-                    Arg.Is<List<int>>(x => x.SequenceEqual(new[] { agent.Id })),
+                    Arg.Is<List<int>>(x => x.SequenceEqual(agentIds)),
                     null,
                     Arg.Any<CancellationToken>())
-                .Returns(new List<AgentAssistant>
-                {
-                    new() { AgentId = agent.Id, AssistantId = assistant.Id }
-                });
+                .Returns(records
+                    .Select(x => new AgentAssistant { AgentId = x.Agent.Id, AssistantId = x.Assistant.Id })
+                    .ToList());
             AiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdsAsync(
-                    Arg.Is<List<int>>(x => x.SequenceEqual(new[] { assistant.Id })),
+                    Arg.Is<List<int>>(x => x.SequenceEqual(assistantIds)),
                     Arg.Any<CancellationToken>())
-                .Returns(new List<Core.Domain.AISpeechAssistant.AiSpeechAssistant> { assistant });
+                .Returns(records
+                    .Select(x => x.Assistant)
+                    .GroupBy(x => x.Id)
+                    .Select(x => x.First())
+                    .ToList());
             AiSpeechAssistantDataProvider.GetAiSpeechAssistantActiveKnowledgesAsync(
-                    Arg.Is<List<int>>(x => x.SequenceEqual(new[] { assistant.Id })),
+                    Arg.Is<List<int>>(x => x.SequenceEqual(assistantIds)),
                     Arg.Any<CancellationToken>())
-                .Returns(new List<AiSpeechAssistantKnowledge> { knowledge });
+                .Returns(records.Select(x => x.Knowledge).ToList());
         }
     }
 }

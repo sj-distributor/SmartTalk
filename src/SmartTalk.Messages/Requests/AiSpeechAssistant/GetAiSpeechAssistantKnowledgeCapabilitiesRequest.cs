@@ -8,6 +8,8 @@ public class GetAiSpeechAssistantKnowledgeCapabilitiesRequest : IRequest
 {
     public int StoreId { get; set; }
 
+    public int AgentId { get; set; }
+
     public string Keyword { get; set; }
 }
 
