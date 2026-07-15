@@ -111,7 +111,7 @@ public class AgentService : IAgentService
 
     public async Task<AddAgentResponse> AddAgentAsync(AddAgentCommand command, CancellationToken cancellationToken)
     {
-        ValidateAgentTransferCallConfigs(command.AgentTransferCallConfigs);
+        ValidateAgentTransferCallConfigs(command.IsTransferHuman, command.AgentTransferCallConfigs);
 
         var agent = new Agent
         {
@@ -126,7 +126,7 @@ public class AgentService : IAgentService
             IsSurface = command.IsSurface,
             Voice = command.Voice,
             WaitInterval = command.WaitInterval,
-            IsTransferHuman = HasTransferCallConfigs(command.AgentTransferCallConfigs),
+            IsTransferHuman = command.IsTransferHuman,
             ServiceHours = command.ServiceHours
         };
         
@@ -152,14 +152,13 @@ public class AgentService : IAgentService
 
     public async Task<UpdateAgentResponse> UpdateAgentAsync(UpdateAgentCommand command, CancellationToken cancellationToken)
     {
-        ValidateAgentTransferCallConfigs(command.AgentTransferCallConfigs);
+        ValidateAgentTransferCallConfigs(command.IsTransferHuman, command.AgentTransferCallConfigs);
 
         var agent = await _agentDataProvider.GetAgentByIdAsync(command.AgentId, cancellationToken).ConfigureAwait(false);
         
         await ChangeNumberIfRequiredAsync(agent.Id, agent.Channel, command.Channel, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, agent);
-        agent.IsTransferHuman = HasTransferCallConfigs(command.AgentTransferCallConfigs);
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -325,20 +324,25 @@ public class AgentService : IAgentService
         return result;
     }
 
-    internal static void ValidateAgentTransferCallConfigs(List<AgentTransferCallConfigDto> transferCallConfigs)
+    internal static void ValidateAgentTransferCallConfigs(
+        bool isTransferHuman, List<AgentTransferCallConfigDto> transferCallConfigs)
     {
-        if (!HasTransferCallConfigs(transferCallConfigs)) return;
+        if (transferCallConfigs is not { Count: > 0 })
+        {
+            if (isTransferHuman)
+                throw new ValidationException("AgentTransferCallConfigs is required when IsTransferHuman is true.");
 
-        if (transferCallConfigs.All(x => x == null || string.IsNullOrWhiteSpace(x.TransferCallNumber)))
-            throw new ValidationException("AgentTransferCallConfigs must contain at least one transfer call number.");
+            return;
+        }
+
+        if (transferCallConfigs.Any(x => x == null || string.IsNullOrWhiteSpace(x.TransferCallNumber)))
+            throw new ValidationException("TransferCallNumber is required for every AgentTransferCallConfig.");
 
         if (transferCallConfigs.Any(x => x == null || string.IsNullOrWhiteSpace(x.ServiceHours)))
             throw new ValidationException("ServiceHours is required for every AgentTransferCallConfig.");
-    }
 
-    internal static bool HasTransferCallConfigs(List<AgentTransferCallConfigDto> transferCallConfigs)
-    {
-        return transferCallConfigs is { Count: > 0 };
+        if (isTransferHuman && transferCallConfigs.All(x => x.Priority != AgentTransferCallPriority.Default))
+            throw new ValidationException("AgentTransferCallConfigs must contain a default config when IsTransferHuman is true.");
     }
 
     private async Task EnrichAgentTransferCallConfigsAsync(List<AgentDto> agents, CancellationToken cancellationToken)
@@ -358,7 +362,6 @@ public class AgentService : IAgentService
         int agentId, List<AgentTransferCallConfigDto> configs, CancellationToken cancellationToken)
     {
         var entities = (configs ?? [])
-            .Where(x => !string.IsNullOrWhiteSpace(x.TransferCallNumber))
             .Select(x => new AgentTransferCallConfig
             {
                 AgentId = agentId,
