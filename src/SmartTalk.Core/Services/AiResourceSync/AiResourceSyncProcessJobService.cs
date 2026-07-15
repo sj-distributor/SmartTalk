@@ -3,8 +3,7 @@ using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Commands.AiResourceSync;
-using SmartTalk.Messages.Commands.Sales;
-using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Constants;
 
 namespace SmartTalk.Core.Services.AiResourceSync;
 
@@ -14,7 +13,7 @@ public partial interface IAiResourceSyncProcessJobService: IScopedDependency
     
     Task AiResourceSyncAsync (SchedulingAiResourceSyncCommand command, CancellationToken cancellationToken);
     
-    Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken);
+    Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
 }
 
 public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
@@ -33,11 +32,12 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
     { 
        await ExecuteSyncCrmSalesAutoCreateAsync(new AiResourceSyncCommand
        {
-           ServiceProviderId = 1
-       }, new List<CrmSalesAutoSyncCustomerDto>(), cancellationToken).ConfigureAwait(false);
+           ServiceProviderId = 1,
+           InitiatedByUserId = CurrentUsers.InternalUser.Id
+       }, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> syncCustomers, CancellationToken cancellationToken)
+    public async Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
         Exception lastException = null;
 
@@ -45,11 +45,11 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
         {
             try
             {
-                var executionResult = await _aiResourceSyncService.SyncInternalAsync(command, syncCustomers, cancellationToken).ConfigureAwait(false);
+                var executionResult = await _aiResourceSyncService.SyncInternalAsync(command, cancellationToken).ConfigureAwait(false);
 
                 await _aiResourceSyncService.RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, true, null, cancellationToken).ConfigureAwait(false);
 
-                if (!command.IsManual && attempt > 1)
+                if (!command.IsManual)
                     await _aiResourceSyncService.SendNotifyAsync(true, cancellationToken).ConfigureAwait(false);
 
                 return;

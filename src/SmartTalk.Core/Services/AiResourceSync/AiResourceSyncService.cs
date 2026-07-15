@@ -16,6 +16,7 @@ using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.AiResourceSync;
 using SmartTalk.Core.Settings.Sales;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.Agent;
 using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -30,7 +31,6 @@ using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
-using SmartTalk.Messages.Events.AiResourceSync;
 
 namespace SmartTalk.Core.Services.AiResourceSync;
 
@@ -38,11 +38,11 @@ public record AiResourceSyncShardExecutionResult(string SalesKey, int CustomerGr
 
 public record AiResourceSyncExecutionResult(int TotalCount, int ShardCount, IReadOnlyList<AiResourceSyncShardExecutionResult> Shards, AiResourceSyncExecutionStatsDto Stats, bool IsInitialRelease);
 
+internal record AiResourceSyncCustomerLoadResult(Company Company, List<CrmSalesAutoSyncCustomerDto> Customers, int TotalCount, bool IsFullSync, bool IsInitialRelease);
+
 public partial interface IAiResourceSyncService : IScopedDependency
 {
-    Task<AiResourceSyncEvent> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
-    
-    Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> customers, CancellationToken cancellationToken);
+    Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
     
     Task RecordSyncRunAsync(AiResourceSyncCommand command, AiResourceSyncExecutionStatsDto stats, bool isInitialRelease, bool isSuccess, string errorMessage, CancellationToken cancellationToken);
 
@@ -55,6 +55,20 @@ public class AiResourceSyncService : IAiResourceSyncService
     private const int MaxDetailEntriesPerCategoryToPersist = 50;
 
     private record SalesKnowledgeSyncTask(string StoreName, CrmSalesAutoSyncCustomerDto SeedCustomer, CrmSalesAutoSyncCustomerGroup MergedGroup);
+   
+    private record AiResourceSyncStoreContext(Dictionary<string, CompanyStore> StoreMap, IReadOnlyDictionary<int, string> ExistingStoreNamesById);
+   
+    private record AiResourceSyncAssistantContext(
+        List<CrmAutoSyncAssistantLocationDto> ExistingCrmAssistants,
+        IReadOnlyDictionary<int, CrmAutoSyncAssistantLocationDto> ExistingCrmAssistantsById,
+        Dictionary<string, CrmAutoSyncAssistantLocationDto> ExistingCrmAssistantsByName,
+        Dictionary<int, HashSet<string>> AssistantCustomerIdsByAssistantId,
+        Dictionary<string, HashSet<int>> AssistantIdsByCustomerId,
+        HashSet<int> ClaimedAssistantIds,
+        Dictionary<string, Agent> SalesAgentCache,
+        Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> CustomerKnowledgeAssistantCache);
+    
+    public sealed record StoreLockResult(CompanyStore Store, bool IsCreated);
   
     private record SourceSceneLookup(Dictionary<AutoAddLanguage, KnowledgeScene> MappingScenes, Dictionary<int, List<KnowledgeSceneItem>> SceneItems);
  
@@ -97,61 +111,54 @@ public class AiResourceSyncService : IAiResourceSyncService
         _aiResourceSyncSetting = aiResourceSyncSetting;
     }
 
-    public async Task<AiResourceSyncEvent> SyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
+    public async Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
-        command.ServiceProviderId ??= 1;
+        var customerLoadResult = await LoadSyncCustomersAsync(command,cancellationToken).ConfigureAwait(false);
+        var company = customerLoadResult.Company;
+        var customers = customerLoadResult.Customers;
+        var isFullSync = customerLoadResult.IsFullSync;
+        var isInitialRelease = customerLoadResult.IsInitialRelease;
 
-        var (customers, totalCount) =await _crmClient.GetSalesAutoSyncCustomersAsync(isGetTotalCount: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-       
-        Log.Information("CRM sync accepted. Total={TotalCount}, FirstPageCount={FirstPageCount}", totalCount, customers.Count);
+        Log.Information("CRM sync start. Customers={CustomerCount}, IsFullSync={IsFullSync}, IsInitialRelease={IsInitialRelease}",
+            customers.Count, isFullSync, isInitialRelease);
 
-        return new AiResourceSyncEvent
-        {
-            ServiceProviderId = command.ServiceProviderId.Value,
-            IsManual = command.IsManual,
-            InitiatedByUserId = command.InitiatedByUserId,
-            TotalCount = totalCount ?? 0
-        };
-    }
-
-    public async Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, List<CrmSalesAutoSyncCustomerDto> customers, CancellationToken cancellationToken)
-    {
         if (!customers.Any())
-        { 
-            (customers, _) = await _crmClient.GetSalesAutoSyncCustomersAsync(isGetTotalCount: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            Log.Information("auto CRM sync start. Customers={CustomerCount}", customers.Count); 
+        {
+            return new AiResourceSyncExecutionResult(0, 0, [], new AiResourceSyncExecutionStatsDto { TotalCount = 0 }, isInitialRelease);
         }
-        
+
         var activeCustomerIds = CrmSalesAutoSyncGrouping.BuildActiveCustomerIds(customers);
-
         var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
-
         var customerIdLookup = CrmSalesAutoSyncGrouping.BuildCustomerIdLookup(customerGroups);
         
         var stats = new AiResourceSyncExecutionStatsDto { TotalCount = customers.Count };
 
-        var company = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
-        if (company == null)
-            throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
-
-        var isInitialRelease = !command.IsManual
-            && !await _aiSpeechAssistantDataProvider.HasCrmAutoSyncAssistantsInCompanyAsync(company.Id, cancellationToken).ConfigureAwait(false);
-
         var existingCrmAssistants = await _aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantsInCompanyAsync(company.Id, cancellationToken).ConfigureAwait(false);
-        
         Log.Information("Assistants loaded. Count={AssistantCount}", existingCrmAssistants.Count);
-
+        
         var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
         Log.Information("Stores loaded. Count={StoreCount}", existingStores.Count);
+       
+        var sourceSceneLookup = await BuildSourceSceneLookupAsync(company.Id, cancellationToken).ConfigureAwait(false);
+        Log.Information("Scenes loaded. Count={SceneCount}", sourceSceneLookup.MappingScenes.Count);
+        
+        var existingStoreNamesById = existingStores
+            .Select(x => new { x.Id, StoreName = GetStoreName(x.Names) })
+            .GroupBy(x => x.Id)
+            .ToDictionary(x => x.Key, x => x.First().StoreName);
         
         var claimedAssistantIds = new HashSet<int>();
         var existingCrmAssistantsByName = existingCrmAssistants
             .Where(x => !string.IsNullOrWhiteSpace(x.Name))
-            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+            .GroupBy(x => x.Name)
+            .ToDictionary(x => x.Key, x => x.First());
+        
+        //查“assistant 本身是谁”
         var existingCrmAssistantsById = existingCrmAssistants
             .GroupBy(x => x.AssistantId)
             .ToDictionary(x => x.Key, x => x.First());
+        
+        //查“assistant 里面有哪些 customer”
         var assistantCustomerIdsByAssistantId = existingCrmAssistants
             .Where(x => x.AssistantId > 0)
             .ToDictionary(
@@ -159,10 +166,9 @@ public class AiResourceSyncService : IAiResourceSyncService
                 x => TryParseAssistantIds(x.Name, out var ids)
                     ? ids
                     : new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        
         var assistantIdsByCustomerId = BuildAssistantIdsByCustomerId(assistantCustomerIdsByAssistantId);
-
-        var sourceSceneLookup = await BuildSourceSceneLookupAsync(company.Id, cancellationToken).ConfigureAwait(false);
-        Log.Information("Scenes loaded. Count={SceneCount}", sourceSceneLookup.MappingScenes.Count);
+        
         if (company.Name.Equals(_salesSetting.CompanyName, StringComparison.OrdinalIgnoreCase) && sourceSceneLookup.MappingScenes.Count == 0)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] has no active knowledge scene mapping.");
         
@@ -175,10 +181,14 @@ public class AiResourceSyncService : IAiResourceSyncService
             .Select(x => new { Store = x, StoreName = GetStoreName(x.Names) })
             .Where(x => !string.IsNullOrWhiteSpace(x.StoreName) && storeNames.Contains(x.StoreName))
             .GroupBy(x => x.StoreName)
-            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store);
+            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store, StringComparer.OrdinalIgnoreCase);
+       
+        var storeContext = new AiResourceSyncStoreContext(storeMap, existingStoreNamesById);
         
-        var salesAgentCache = new Dictionary<string, Agent>(StringComparer.OrdinalIgnoreCase);
-        var customerKnowledgeAssistantCache = new Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant>(StringComparer.OrdinalIgnoreCase);
+        var assistantContext = new AiResourceSyncAssistantContext(
+            existingCrmAssistants, existingCrmAssistantsById, existingCrmAssistantsByName, assistantCustomerIdsByAssistantId, 
+            assistantIdsByCustomerId, claimedAssistantIds, new Dictionary<string, Agent>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant>(StringComparer.OrdinalIgnoreCase));
         
         var syncTasks = customerGroups
             .GroupBy(x => x.SalesKey)
@@ -192,26 +202,50 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         Log.Information("Sync shards start. ShardCount={ShardCount}", syncTasks.Select(x => x.StoreName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         foreach (var salesShard in syncTasks
-                     .OrderBy(x => x.StoreName, StringComparer.OrdinalIgnoreCase)
-                     .GroupBy(x => x.StoreName, StringComparer.OrdinalIgnoreCase))
+                     .OrderBy(x => x.StoreName, StringComparer.OrdinalIgnoreCase).GroupBy(x => x.StoreName, StringComparer.OrdinalIgnoreCase))
         {
             Log.Information("Sync shard start. StoreName={StoreName}, TaskCount={TaskCount}", salesShard.Key, salesShard.Count());
+            
             var shardResult = await ExecuteSalesShardAsync(
                 command, company.Id, salesShard.Key, salesShard.ToList(), customerIdLookup,
-                storeMap, salesAgentCache, customerKnowledgeAssistantCache,
-                sourceSceneLookup, existingCrmAssistants, existingCrmAssistantsById, existingCrmAssistantsByName, assistantCustomerIdsByAssistantId, assistantIdsByCustomerId, claimedAssistantIds, cancellationToken).ConfigureAwait(false);
+                storeContext, assistantContext, sourceSceneLookup, cancellationToken).ConfigureAwait(false);
 
             shardResults.Add(shardResult);
             MergeStats(stats, shardResult.Stats);
+            
             Log.Information("Sync shard done. StoreName={StoreName}, CreatedAssistantCount={CreatedAssistantCount}, TransferredAssistantCount={TransferredAssistantCount}, DeactivatedAssistantCount={DeactivatedAssistantCount}",
                 salesShard.Key, shardResult.Stats.CreatedAssistantCount, shardResult.Stats.TransferredAssistantCount, shardResult.Stats.DeactivatedAssistantCount);
         }
  
-        Log.Information("Reconcile inactive assistants start. AssistantCount={AssistantCount}, ClaimedCount={ClaimedCount}", existingCrmAssistants.Count, claimedAssistantIds.Count);
-        await ReconcileInactiveCustomerAssistantsAsync(activeCustomerIds, existingCrmAssistants, assistantCustomerIdsByAssistantId, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
-        Log.Information("Reconcile inactive assistants done. DeactivatedAssistantCount={DeactivatedAssistantCount}", stats.DeactivatedAssistantCount);
+        if (isFullSync)
+        {
+            Log.Information("Reconcile inactive assistants start. AssistantCount={AssistantCount}, ClaimedCount={ClaimedCount}", existingCrmAssistants.Count, claimedAssistantIds.Count);
+           
+            await ReconcileInactiveCustomerAssistantsAsync(activeCustomerIds, existingCrmAssistants, assistantCustomerIdsByAssistantId, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
+           
+            Log.Information("Reconcile inactive assistants done. DeactivatedAssistantCount={DeactivatedAssistantCount}", stats.DeactivatedAssistantCount);
+        }
 
         return new AiResourceSyncExecutionResult(customers.Count, shardResults.Count, shardResults, stats, isInitialRelease);
+    }
+
+    private async Task<AiResourceSyncCustomerLoadResult> LoadSyncCustomersAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
+    {
+        var company = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
+        if (company == null)
+            throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
+
+        var isInitialRelease = !command.IsManual
+            && !await _aiSpeechAssistantDataProvider.HasCrmAutoSyncAssistantsInCompanyAsync(company.Id, cancellationToken).ConfigureAwait(false);
+
+        if (isInitialRelease)
+        {
+            var (customers, totalCount) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            return new AiResourceSyncCustomerLoadResult(company, customers, totalCount ?? customers.Count, true, true);
+        }
+
+        var customersChanged = await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
+        return new AiResourceSyncCustomerLoadResult(company, customersChanged, customersChanged.Count, false, false);
     }
 
     private async Task<AiResourceSyncShardExecutionResult> ExecuteSalesShardAsync(
@@ -220,32 +254,25 @@ public class AiResourceSyncService : IAiResourceSyncService
         string salesKey,
         IReadOnlyList<SalesKnowledgeSyncTask> syncTasks,
         IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
-        Dictionary<string, CompanyStore> storeMap,
-        Dictionary<string, Agent> salesAgentCache,
-        Dictionary<string, Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache,
+        AiResourceSyncStoreContext storeContext,
+        AiResourceSyncAssistantContext assistantContext,
         SourceSceneLookup sourceSceneLookup,
-        List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
-        IReadOnlyDictionary<int, CrmAutoSyncAssistantLocationDto> existingCrmAssistantsById,
-        Dictionary<string, CrmAutoSyncAssistantLocationDto> existingCrmAssistantsByName,
-        Dictionary<int, HashSet<string>> assistantCustomerIdsByAssistantId,
-        Dictionary<string, HashSet<int>> assistantIdsByCustomerId,
-        HashSet<int> claimedAssistantIds,
         CancellationToken cancellationToken)
     {
         var stats = new AiResourceSyncExecutionStatsDto();
         var seedCustomer = syncTasks.First().SeedCustomer;
 
         var store = await EnsureSalesStoreAsync(
-            seedCustomer, companyId, storeMap, command.InitiatedByUserId, stats, cancellationToken).ConfigureAwait(false);
+            seedCustomer, companyId, storeContext.StoreMap, command.InitiatedByUserId, stats, cancellationToken).ConfigureAwait(false);
 
         var salesAgent = await EnsureSalesAgentAsync(
-            command.ServiceProviderId.Value, store.Id, salesKey, salesAgentCache, stats, cancellationToken).ConfigureAwait(false);
+            command.ServiceProviderId.Value, store.Id, salesKey, assistantContext.SalesAgentCache, stats, cancellationToken).ConfigureAwait(false);
 
         foreach (var syncTask in syncTasks)
         {
             await EnsureMergedCustomerKnowledgeAsync(
-                command.ServiceProviderId.Value, command.InitiatedByUserId, companyId, store.Id, salesAgent.Id, syncTask.MergedGroup, customerIdLookup, storeMap,
-                salesAgentCache, customerKnowledgeAssistantCache, sourceSceneLookup, existingCrmAssistants, existingCrmAssistantsById, existingCrmAssistantsByName, assistantCustomerIdsByAssistantId, assistantIdsByCustomerId, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
+                command.ServiceProviderId.Value, command.InitiatedByUserId, companyId, store.Id, salesAgent.Id, syncTask.MergedGroup, customerIdLookup,
+                storeContext, assistantContext, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
         }
 
         return new AiResourceSyncShardExecutionResult(salesKey, syncTasks.Count, stats);
@@ -263,26 +290,53 @@ public class AiResourceSyncService : IAiResourceSyncService
         }
 
         Log.Information("Store create. StoreName={StoreName}", storeName);
-        
-        var createResponse = await _mediator.SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(new CreateCompanyStoreCommand
-        {
-            CompanyId = companyId,
-            CreatedBy = initiatedByUserId,
-            Names = BuildStoreNamesJson(storeName),
-            Address = "625 VISTA WAY, MILPITAS, CA 95035",
-            Description = $"Auto created from CRM sync for {customer.SalesName}",
-            PhoneNumbers = new List<string> { "0123456789" },
-            Latitude = "37.4249177",
-            Longitude = "-121.8891812",
-        }, cancellationToken).ConfigureAwait(false);
-        
-        stats.CreatedStoreCount++;
-        store = await _posDataProvider.GetPosCompanyStoreAsync(id: createResponse.Data.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-        store.IsTaskEnabled = true;
-        store.Timezone = "America/Los_Angeles";
-        await _posDataProvider.UpdatePosCompanyStoresAsync([store], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var storeResult = await _redisSafeRunner.ExecuteWithLockAsync(
+            $"crm-auto-sync:store:{companyId}:{storeName}",
+            async () =>
+            {
+                var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [companyId], cancellationToken: cancellationToken).ConfigureAwait(false);
+                var existingStore = existingStores
+                    .Where(x => string.Equals(GetStoreName(x.Names), storeName, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(x => x.CreatedDate)
+                    .FirstOrDefault();
+
+                if (existingStore != null)
+                {
+                    Log.Information("Store reuse after lock. StoreId={StoreId}, StoreName={StoreName}", existingStore.Id, storeName);
+                    return new StoreLockResult(existingStore, false);
+                }
+
+                var createResponse = await _mediator.SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(new CreateCompanyStoreCommand
+                {
+                    CompanyId = companyId,
+                    CreatedBy = initiatedByUserId,
+                    Names = BuildStoreNamesJson(storeName),
+                    Address = "625 VISTA WAY, MILPITAS, CA 95035",
+                    Description = $"Auto created from CRM sync for {customer.SalesName}",
+                    PhoneNumbers = new List<string> { "0123456789" },
+                    Latitude = "37.4249177",
+                    Longitude = "-121.8891812",
+                }, cancellationToken).ConfigureAwait(false);
+
+                stats.CreatedStoreCount++;
+                var createdStore = await _posDataProvider.GetPosCompanyStoreAsync(id: createResponse.Data.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+                createdStore.IsTaskEnabled = true;
+                createdStore.Timezone = "America/Los_Angeles";
+                await _posDataProvider.UpdatePosCompanyStoresAsync([createdStore], cancellationToken: cancellationToken).ConfigureAwait(false);
+                return new StoreLockResult(createdStore, true);
+            },
+            expiry: TimeSpan.FromMinutes(2),
+            wait: TimeSpan.FromSeconds(5),
+            retry: TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+
+        store = storeResult.Store;
+        if (store == null)
+            throw new Exception($"Store create failed. CompanyId={companyId}, StoreName={storeName}");
+
         storeMap[storeName] = store;
-        RecordCreatedStore(stats, store.Id, storeName);
+        if (storeResult.IsCreated)
+            RecordCreatedStore(stats, store.Id, storeName);
         
         Log.Information("Store created. StoreId={StoreId}, StoreName={StoreName}", store.Id, storeName);
         return store;
@@ -309,11 +363,11 @@ public class AiResourceSyncService : IAiResourceSyncService
                 cancellationToken).ConfigureAwait(false);
 
             var existingSalesAgent = existingAgents
-                .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.CrmAutoSync)
+                .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.AiResource)
                 .OrderByDescending(x => x.CreatedDate)
                 .FirstOrDefault(x => string.Equals(x.Name, salesAgentName, StringComparison.OrdinalIgnoreCase))
                 ?? existingAgents
-                    .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.CrmAutoSync)
+                    .Where(x => x.Type == AgentType.Sales && x.SourceSystem == AgentSourceSystem.AiResource)
                     .OrderByDescending(x => x.CreatedDate)
                     .FirstOrDefault();
 
@@ -346,7 +400,7 @@ public class AiResourceSyncService : IAiResourceSyncService
                     WaitInterval = 2500,
                     Brief = $"Auto created from CRM sync for {salesAgentName}",
                     AgentType = AgentType.Sales,
-                    SourceSystem = AgentSourceSystem.CrmAutoSync,
+                    SourceSystem = AgentSourceSystem.AiResource,
                     IsDisplay = true,
                     IsSurface = true
                 }, cancellationToken).ConfigureAwait(false);
@@ -377,16 +431,9 @@ public class AiResourceSyncService : IAiResourceSyncService
         int salesAgentId,
         CrmSalesAutoSyncCustomerGroup mergedGroup,
         IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
-        Dictionary<string, CompanyStore> storeMap,
-        Dictionary<string, Agent> salesAgentCache,
-        Dictionary<string, Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache,
+        AiResourceSyncStoreContext storeContext,
+        AiResourceSyncAssistantContext assistantContext,
         SourceSceneLookup sourceSceneLookup,
-        List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
-        IReadOnlyDictionary<int, CrmAutoSyncAssistantLocationDto> existingCrmAssistantsById,
-        Dictionary<string, CrmAutoSyncAssistantLocationDto> existingCrmAssistantsByName,
-        Dictionary<int, HashSet<string>> assistantCustomerIdsByAssistantId,
-        Dictionary<string, HashSet<int>> assistantIdsByCustomerId,
-        HashSet<int> claimedAssistantIds,
         AiResourceSyncExecutionStatsDto stats,
         CancellationToken cancellationToken)
     {
@@ -398,8 +445,7 @@ public class AiResourceSyncService : IAiResourceSyncService
       
         await ResolveMergedCustomerAssistantAsync(
             serviceProviderId, initiatedByUserId, companyId, storeId, salesAgentId, customerAssistantName, mergedGroup, customerIdLookup,
-            storeMap, salesAgentCache, customerKnowledgeAssistantCache, sourceSceneLookup,
-            existingCrmAssistants, existingCrmAssistantsById, existingCrmAssistantsByName, assistantCustomerIdsByAssistantId, assistantIdsByCustomerId, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
+            storeContext, assistantContext, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
 
     }
 
@@ -470,7 +516,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             AssistantName = customerKnowledgeAssistantName,
             Greetings = _aiResourceSyncSetting.DefaultAssistantGreetings,
             AgentType = AgentType.Sales,
-            SourceSystem = AgentSourceSystem.CrmAutoSync,
+            SourceSystem = AgentSourceSystem.AiResource,
             IsDisplay = true,
             ModelLanguage = language,
             Channels = new List<AiSpeechAssistantChannel> { AiSpeechAssistantChannel.PhoneChat },
@@ -533,21 +579,14 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     private async Task ResolveMergedCustomerAssistantAsync(
         int serviceProviderId, int? initiatedByUserId, int companyId, int targetStoreId, int salesAgentId, string assistantName, CrmSalesAutoSyncCustomerGroup mergedGroup,
-        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup, Dictionary<string, CompanyStore> storeMap,
-        Dictionary<string, Agent> salesAgentCache,
-        Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache, SourceSceneLookup sourceSceneLookup,
-        List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
-        IReadOnlyDictionary<int, CrmAutoSyncAssistantLocationDto> existingCrmAssistantsById,
-        Dictionary<string, CrmAutoSyncAssistantLocationDto> existingCrmAssistantsByName,
-        Dictionary<int, HashSet<string>> assistantCustomerIdsByAssistantId,
-        Dictionary<string, HashSet<int>> assistantIdsByCustomerId,
-        HashSet<int> claimedAssistantIds, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup, AiResourceSyncStoreContext storeContext,
+        AiResourceSyncAssistantContext assistantContext, SourceSceneLookup sourceSceneLookup, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         Log.Information(
             "Assistant resolve. Name={AssistantName}, StoreId={TargetStoreId}, Customers={CustomerIds}, Lang={Language}",
             assistantName, targetStoreId, string.Join("/", mergedGroup.CustomerIds), mergedGroup.Language ?? "英文");
 
-        existingCrmAssistantsByName.TryGetValue(assistantName, out var exactMatch);
+        assistantContext.ExistingCrmAssistantsByName.TryGetValue(assistantName, out var exactMatch);
         
         if (exactMatch != null)
         {
@@ -555,7 +594,7 @@ public class AiResourceSyncService : IAiResourceSyncService
                 "Assistant match: exact. AssistantId={AssistantId}, StoreId={CurrentStoreId}, TargetStoreId={TargetStoreId}",
                 exactMatch.AssistantId, exactMatch.StoreId, targetStoreId);
             
-            claimedAssistantIds.Add(exactMatch.AssistantId);
+            assistantContext.ClaimedAssistantIds.Add(exactMatch.AssistantId);
             if (exactMatch.StoreId != targetStoreId)
             {
                 await TransferCustomerAssistantToStoreAsync(exactMatch, targetStoreId, stats, cancellationToken).ConfigureAwait(false);
@@ -567,14 +606,14 @@ public class AiResourceSyncService : IAiResourceSyncService
         }
         
         var desiredIds = mergedGroup.CustomerIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var sameStoreMatch = FindBestMatchingAssistant(existingCrmAssistantsById, assistantCustomerIdsByAssistantId, assistantIdsByCustomerId, desiredIds, targetStoreId, claimedAssistantIds);
+        var sameStoreMatch = FindBestMatchingAssistant(assistantContext.ExistingCrmAssistantsById, assistantContext.AssistantCustomerIdsByAssistantId, assistantContext.AssistantIdsByCustomerId, desiredIds, targetStoreId, assistantContext.ClaimedAssistantIds);
         if (sameStoreMatch != null)
         {
             Log.Information(
                 "Assistant match: same-store. AssistantId={AssistantId}, Matched={MatchedAssistantName}, Target={TargetAssistantName}",
                 sameStoreMatch.AssistantId, sameStoreMatch.Name, assistantName);
             
-            if (assistantCustomerIdsByAssistantId.TryGetValue(sameStoreMatch.AssistantId, out var existingIds) && existingIds.IsSupersetOf(desiredIds) && !existingIds.SetEquals(desiredIds))
+            if (assistantContext.AssistantCustomerIdsByAssistantId.TryGetValue(sameStoreMatch.AssistantId, out var existingIds) && existingIds.IsSupersetOf(desiredIds) && !existingIds.SetEquals(desiredIds))
             {
                 var removedCustomerIds = existingIds.Except(desiredIds, StringComparer.OrdinalIgnoreCase).ToList();
                 Log.Information(
@@ -583,30 +622,33 @@ public class AiResourceSyncService : IAiResourceSyncService
                 
                 await CopySplitCustomersBeforeShrinkAsync(
                     serviceProviderId, initiatedByUserId, removedCustomerIds,
-                    mergedGroup.SalesKey, customerIdLookup, storeMap, salesAgentCache, customerKnowledgeAssistantCache,
-                    sourceSceneLookup,
-                    existingCrmAssistants, claimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
+                    mergedGroup.SalesKey, customerIdLookup, storeContext.StoreMap, companyId, assistantContext.SalesAgentCache, assistantContext.CustomerKnowledgeAssistantCache,
+                    sourceSceneLookup, assistantContext.ExistingCrmAssistants, assistantContext.ExistingCrmAssistantsByName, assistantContext.AssistantCustomerIdsByAssistantId, assistantContext.AssistantIdsByCustomerId, assistantContext.ClaimedAssistantIds, stats, cancellationToken).ConfigureAwait(false);
             }
 
-            claimedAssistantIds.Add(sameStoreMatch.AssistantId);
+            assistantContext.ClaimedAssistantIds.Add(sameStoreMatch.AssistantId);
             if (!string.Equals(sameStoreMatch.Name, assistantName, StringComparison.OrdinalIgnoreCase))
             {
                 await RenameCustomerAssistantAsync(sameStoreMatch, assistantName, stats, cancellationToken).ConfigureAwait(false);
                 sameStoreMatch.Name = assistantName;
             }
+            
+            ReplaceAssistantCustomerMappings(assistantContext.AssistantCustomerIdsByAssistantId, assistantContext.AssistantIdsByCustomerId, sameStoreMatch.AssistantId, desiredIds);
+            assistantContext.ExistingCrmAssistantsByName[assistantName] = sameStoreMatch;
 
             return;
         }
 
-        var crossStoreMatch = FindBestMatchingAssistant(existingCrmAssistantsById, assistantCustomerIdsByAssistantId, assistantIdsByCustomerId, desiredIds, null, claimedAssistantIds);
+        var crossStoreMatch = FindBestMatchingAssistant(assistantContext.ExistingCrmAssistantsById, assistantContext.AssistantCustomerIdsByAssistantId, assistantContext.AssistantIdsByCustomerId, desiredIds, null, assistantContext.ClaimedAssistantIds);
         if (crossStoreMatch != null)
         {
-            if (assistantCustomerIdsByAssistantId.TryGetValue(crossStoreMatch.AssistantId, out var existingIds) && existingIds.SetEquals(desiredIds))
+            if (assistantContext.AssistantCustomerIdsByAssistantId.TryGetValue(crossStoreMatch.AssistantId, out var existingIds) && existingIds.SetEquals(desiredIds))
             {
                 Log.Information(
                     "Assistant match: cross-store transfer. AssistantId={AssistantId}, StoreId={CurrentStoreId}, TargetStoreId={TargetStoreId}",
                     crossStoreMatch.AssistantId, crossStoreMatch.StoreId, targetStoreId);
-                claimedAssistantIds.Add(crossStoreMatch.AssistantId);
+                assistantContext.ClaimedAssistantIds.Add(crossStoreMatch.AssistantId);
+                
                 await TransferCustomerAssistantToStoreAsync(crossStoreMatch, targetStoreId, stats, cancellationToken).ConfigureAwait(false);
                 crossStoreMatch.StoreId = targetStoreId;
                 stats.TransferredAssistantCount++;
@@ -614,27 +656,50 @@ public class AiResourceSyncService : IAiResourceSyncService
                 return;
             }
 
-            if (assistantCustomerIdsByAssistantId.TryGetValue(crossStoreMatch.AssistantId, out existingIds) && existingIds.IsSupersetOf(desiredIds) && !existingIds.SetEquals(desiredIds))
+            if (assistantContext.AssistantCustomerIdsByAssistantId.TryGetValue(crossStoreMatch.AssistantId, out existingIds) && existingIds.IsSupersetOf(desiredIds) && !existingIds.SetEquals(desiredIds))
             {
                 Log.Information(
                     "Assistant match: cross-store superset. SourceAssistantId={AssistantId}, Source={MatchedAssistantName}, Target={TargetAssistantName}",
                     crossStoreMatch.AssistantId, crossStoreMatch.Name, assistantName);
-               
+
+                var refreshedGroups = await LoadLatestCustomerGroupsAsync(existingIds, cancellationToken).ConfigureAwait(false);
                 var copiedAssistant = await EnsureCustomerKnowledgeAssistantAsync(
                     serviceProviderId, initiatedByUserId, salesAgentId, targetStoreId, assistantName, mergedGroup.Language,
                     mergedGroup.CustomerIds, sourceSceneLookup,
-                    customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
-               
-                claimedAssistantIds.Add(copiedAssistant.Id);
-                existingCrmAssistants.Add(new CrmAutoSyncAssistantLocationDto
+                    assistantContext.CustomerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
+
+                assistantContext.ClaimedAssistantIds.Add(copiedAssistant.Id);
+                var copiedAssistantLocation = new CrmAutoSyncAssistantLocationDto
                 {
                     AssistantId = copiedAssistant.Id,
                     StoreId = targetStoreId,
+                    AgentId = salesAgentId,
                     Name = assistantName
-                });
-                existingCrmAssistantsByName[assistantName] = existingCrmAssistants[^1];
-                assistantCustomerIdsByAssistantId[copiedAssistant.Id] = desiredIds;
-                AddAssistantIdsByCustomerId(assistantIdsByCustomerId, desiredIds, copiedAssistant.Id);
+                };
+                assistantContext.ExistingCrmAssistants.Add(copiedAssistantLocation);
+                assistantContext.ExistingCrmAssistantsByName[assistantName] = copiedAssistantLocation;
+                assistantContext.AssistantCustomerIdsByAssistantId[copiedAssistant.Id] = desiredIds;
+                AddAssistantIdsByCustomerId(assistantContext.AssistantIdsByCustomerId, desiredIds, copiedAssistant.Id);
+
+                var originalSalesKey = storeContext.ExistingStoreNamesById.TryGetValue(crossStoreMatch.StoreId, out var storeName) ? storeName : null;
+                var retainedGroup = SelectRetainedGroup(refreshedGroups, desiredIds, originalSalesKey);
+                if (retainedGroup != null)
+                {
+                    await ReassignExistingAssistantToGroupAsync(
+                        serviceProviderId, companyId, initiatedByUserId, crossStoreMatch, retainedGroup, storeContext.StoreMap, assistantContext.SalesAgentCache,
+                        sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
+                    ReplaceAssistantCustomerMappings(assistantContext.AssistantCustomerIdsByAssistantId, assistantContext.AssistantIdsByCustomerId, crossStoreMatch.AssistantId,
+                        retainedGroup.CustomerIds.ToHashSet(StringComparer.OrdinalIgnoreCase));
+                    assistantContext.ExistingCrmAssistantsByName.Remove(crossStoreMatch.Name);
+                    crossStoreMatch.Name = CrmSalesAutoSyncGrouping.BuildAssistantName(retainedGroup.CustomerIds, retainedGroup.Language);
+                    assistantContext.ExistingCrmAssistantsByName[crossStoreMatch.Name] = crossStoreMatch;
+                }
+                else
+                {
+                    Log.Warning("Assistant superset refresh found no retained group. AssistantId={AssistantId}, Existing={ExistingCustomerIds}, Desired={DesiredCustomerIds}",
+                        crossStoreMatch.AssistantId, string.Join("/", existingIds), string.Join("/", desiredIds));
+                }
+
                 Log.Information("Assistant split created. AssistantId={AssistantId}, Name={AssistantName}, StoreId={StoreId}",
                     copiedAssistant.Id, assistantName, targetStoreId);
                 return;
@@ -647,18 +712,18 @@ public class AiResourceSyncService : IAiResourceSyncService
         var createdAssistant = await EnsureCustomerKnowledgeAssistantAsync(
             serviceProviderId, initiatedByUserId, salesAgentId, targetStoreId, assistantName, mergedGroup.Language,
             mergedGroup.CustomerIds, sourceSceneLookup,
-            customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
+            assistantContext.CustomerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
         
-        claimedAssistantIds.Add(createdAssistant.Id);
-        existingCrmAssistants.Add(new CrmAutoSyncAssistantLocationDto
+        assistantContext.ClaimedAssistantIds.Add(createdAssistant.Id);
+        assistantContext.ExistingCrmAssistants.Add(new CrmAutoSyncAssistantLocationDto
         {
             AssistantId = createdAssistant.Id,
             StoreId = targetStoreId,
             Name = assistantName
         });
-        existingCrmAssistantsByName[assistantName] = existingCrmAssistants[^1];
-        assistantCustomerIdsByAssistantId[createdAssistant.Id] = desiredIds;
-        AddAssistantIdsByCustomerId(assistantIdsByCustomerId, desiredIds, createdAssistant.Id);
+        assistantContext.ExistingCrmAssistantsByName[assistantName] = assistantContext.ExistingCrmAssistants[^1];
+        assistantContext.AssistantCustomerIdsByAssistantId[createdAssistant.Id] = desiredIds;
+        AddAssistantIdsByCustomerId(assistantContext.AssistantIdsByCustomerId, desiredIds, createdAssistant.Id);
     }
 
     private static CrmAutoSyncAssistantLocationDto FindBestMatchingAssistant(
@@ -796,16 +861,24 @@ public class AiResourceSyncService : IAiResourceSyncService
         IEnumerable<string> removedCustomerIds,
         string currentSalesKey, IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
         Dictionary<string, CompanyStore> storeMap,
+        int companyId,
         Dictionary<string, Agent> salesAgentCache,
         Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache,
         SourceSceneLookup sourceSceneLookup,
         List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants,
+        Dictionary<string, CrmAutoSyncAssistantLocationDto> existingCrmAssistantsByName,
+        Dictionary<int, HashSet<string>> assistantCustomerIdsByAssistantId,
+        Dictionary<string, HashSet<int>> assistantIdsByCustomerId,
         HashSet<int> claimedAssistantIds,
         AiResourceSyncExecutionStatsDto stats,
         CancellationToken cancellationToken)
     {
         var processedTargetGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var removedCustomerIdList = removedCustomerIds.ToList();
+        var missingCustomerIds = removedCustomerIdList.Where(x => !customerIdLookup.ContainsKey(x)).ToList();
+        var refreshedCustomerLookup = missingCustomerIds.Count == 0
+            ? customerIdLookup
+            : await BuildLatestCustomerLookupAsync(removedCustomerIdList, customerIdLookup, cancellationToken).ConfigureAwait(false);
 
         Log.Information(
             "Split start. SalesKey={CurrentSalesKey}, Removed={RemovedCustomerIds}",
@@ -813,7 +886,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         foreach (var removedCustomerId in removedCustomerIdList)
         {
-            if (!customerIdLookup.TryGetValue(removedCustomerId, out var targetGroup))
+            if (!refreshedCustomerLookup.TryGetValue(removedCustomerId, out var targetGroup))
             {
                 Log.Warning(
                     "Split skip: group missing. CustomerId={CustomerId}, SalesKey={CurrentSalesKey}",
@@ -841,10 +914,8 @@ public class AiResourceSyncService : IAiResourceSyncService
 
             if (!storeMap.TryGetValue(targetGroup.SalesKey, out var targetStore))
             {
-                Log.Warning(
-                    "Split skip: store missing. CustomerId={CustomerId}, TargetSalesKey={TargetSalesKey}",
-                    removedCustomerId, targetGroup.SalesKey);
-                continue;
+                targetStore = await EnsureSalesStoreAsync(
+                    targetGroup.Customers.First(), companyId, storeMap, initiatedByUserId, stats, cancellationToken).ConfigureAwait(false);
             }
 
             var targetSalesAgent = await EnsureSalesAgentAsync(
@@ -857,17 +928,124 @@ public class AiResourceSyncService : IAiResourceSyncService
                 customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
 
             claimedAssistantIds.Add(copiedAssistant.Id);
-            existingCrmAssistants.Add(new CrmAutoSyncAssistantLocationDto
+            var copiedAssistantLocation = new CrmAutoSyncAssistantLocationDto
             {
                 AssistantId = copiedAssistant.Id,
                 StoreId = targetStore.Id,
+                AgentId = targetSalesAgent.Id,
                 Name = targetAssistantName
-            });
+            };
+            existingCrmAssistants.Add(copiedAssistantLocation);
+            existingCrmAssistantsByName[targetAssistantName] = copiedAssistantLocation;
+            assistantCustomerIdsByAssistantId[copiedAssistant.Id] = targetGroup.CustomerIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            AddAssistantIdsByCustomerId(assistantIdsByCustomerId, targetGroup.CustomerIds, copiedAssistant.Id);
 
             Log.Information(
                 "Split created. AssistantId={AssistantId}, Name={AssistantName}, StoreId={TargetStoreId}, SalesKey={TargetSalesKey}, Customers={CustomerIds}, Lang={Language}",
                 copiedAssistant.Id, targetAssistantName, targetStore.Id, targetGroup.SalesKey, string.Join("/", targetGroup.CustomerIds), targetGroup.Language ?? "英文");
         }
+    }
+
+    private async Task<IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup>> BuildLatestCustomerLookupAsync(
+        IEnumerable<string> customerIds,
+        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> existingLookup,
+        CancellationToken cancellationToken)
+    {
+        var customers = existingLookup.Values
+            .SelectMany(x => x.Customers)
+            .GroupBy(x => x.CustomerId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var customerId in customerIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+        {
+            if (customers.ContainsKey(customerId))
+                continue;
+
+            var customer = await _crmClient.GetSalesAutoSyncCustomerBySapIdAsync(customerId, cancellationToken).ConfigureAwait(false);
+            if (customer == null)
+                continue;
+
+            customers[customer.CustomerId] = customer;
+        }
+
+        return CrmSalesAutoSyncGrouping.BuildCustomerIdLookup(CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers.Values));
+    }
+
+    private async Task<IReadOnlyList<CrmSalesAutoSyncCustomerGroup>> LoadLatestCustomerGroupsAsync(IEnumerable<string> customerIds, CancellationToken cancellationToken)
+    {
+        var customers = new List<CrmSalesAutoSyncCustomerDto>();
+        foreach (var customerId in customerIds.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var customer = await _crmClient.GetSalesAutoSyncCustomerBySapIdAsync(customerId, cancellationToken).ConfigureAwait(false);
+            if (customer != null)
+                customers.Add(customer);
+        }
+
+        return CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
+    }
+
+    private static CrmSalesAutoSyncCustomerGroup SelectRetainedGroup(
+        IReadOnlyList<CrmSalesAutoSyncCustomerGroup> groups,
+        HashSet<string> desiredIds,
+        string originalSalesKey)
+    {
+        return groups
+            .Where(x => !x.CustomerIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(desiredIds))
+            .OrderByDescending(x => string.Equals(x.SalesKey, originalSalesKey, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(x => x.CustomerIds.Count)
+            .FirstOrDefault();
+    }
+
+    private async Task ReassignExistingAssistantToGroupAsync(
+        int serviceProviderId,
+        int companyId,
+        int? initiatedByUserId,
+        CrmAutoSyncAssistantLocationDto assistantLocation,
+        CrmSalesAutoSyncCustomerGroup targetGroup,
+        Dictionary<string, CompanyStore> storeMap,
+        Dictionary<string, Agent> salesAgentCache,
+        SourceSceneLookup sourceSceneLookup,
+        AiResourceSyncExecutionStatsDto stats,
+        CancellationToken cancellationToken)
+    {
+        if (!storeMap.TryGetValue(targetGroup.SalesKey, out var targetStore))
+        {
+            targetStore = await EnsureSalesStoreAsync(
+                targetGroup.Customers.First(), companyId, storeMap, initiatedByUserId, stats, cancellationToken).ConfigureAwait(false);
+        }
+
+        await EnsureSalesAgentAsync(serviceProviderId, targetStore.Id, targetGroup.SalesKey, salesAgentCache, stats, cancellationToken).ConfigureAwait(false);
+
+        var targetAssistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(targetGroup.CustomerIds, targetGroup.Language);
+        if (assistantLocation.StoreId != targetStore.Id)
+        {
+            await TransferCustomerAssistantToStoreAsync(assistantLocation, targetStore.Id, stats, cancellationToken).ConfigureAwait(false);
+            assistantLocation.StoreId = targetStore.Id;
+        }
+
+        await RenameCustomerAssistantAsync(assistantLocation, targetAssistantName, stats, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void ReplaceAssistantCustomerMappings(
+        Dictionary<int, HashSet<string>> assistantCustomerIdsByAssistantId,
+        Dictionary<string, HashSet<int>> assistantIdsByCustomerId,
+        int assistantId, HashSet<string> newCustomerIds)
+    {
+        if (assistantCustomerIdsByAssistantId.TryGetValue(assistantId, out var previousCustomerIds))
+        {
+            foreach (var previousCustomerId in previousCustomerIds)
+            {
+                if (!assistantIdsByCustomerId.TryGetValue(previousCustomerId, out var assistantIds))
+                    continue;
+
+                assistantIds.Remove(assistantId);
+                if (assistantIds.Count == 0)
+                    assistantIdsByCustomerId.Remove(previousCustomerId);
+            }
+        }
+
+        assistantCustomerIdsByAssistantId[assistantId] = newCustomerIds;
+        AddAssistantIdsByCustomerId(assistantIdsByCustomerId, newCustomerIds, assistantId);
     }
 
     private async Task ReconcileInactiveCustomerAssistantsAsync(
@@ -881,17 +1059,14 @@ public class AiResourceSyncService : IAiResourceSyncService
 
             _ = CrmSalesAutoSyncGrouping.TryParseAssistantName(assistant.Name, out _, out var language);
 
-            var remainingIds = existingIds
-                .Where(activeCustomerIds.Contains)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var remainingIds = existingIds.Where(activeCustomerIds.Contains).ToList();
 
             if (remainingIds.Count == 0)
             {
                 Log.Information("Assistant deactivate. AssistantId={AssistantId}, Name={AssistantName}", assistant.AssistantId, assistant.Name);
                 await DeactivateCustomerAssistantKnowledgeAsync(assistant.AssistantId, cancellationToken).ConfigureAwait(false);
                 stats.DeactivatedAssistantCount++;
+                
                 RecordDeactivatedAssistant(stats, assistant.AssistantId, assistant.StoreId, assistant.AgentId, assistant.Name);
                 stats.Warnings.Add($"Assistant [{assistant.Name}] has no active CRM customers remaining; knowledge deactivated.");
                 continue;
@@ -901,9 +1076,10 @@ public class AiResourceSyncService : IAiResourceSyncService
                 continue;
 
             var renamedAssistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(remainingIds, language);
-            Log.Information("Assistant shrink. AssistantId={AssistantId}, From={FromName}, To={ToName}",
-                assistant.AssistantId, assistant.Name, renamedAssistantName);
+            Log.Information("Assistant shrink. AssistantId={AssistantId}, From={FromName}, To={ToName}", assistant.AssistantId, assistant.Name, renamedAssistantName);
+           
             await RenameCustomerAssistantAsync(assistant, renamedAssistantName, stats, cancellationToken).ConfigureAwait(false);
+            
             assistant.Name = renamedAssistantName;
             assistantCustomerIdsByAssistantId[assistant.AssistantId] = remainingIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
@@ -911,8 +1087,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     private async Task DeactivateCustomerAssistantKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
     {
-        var activeKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
-            assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var activeKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (activeKnowledge == null)
         {
             Log.Information("Knowledge deactivate skip. AssistantId={AssistantId}", assistantId);
@@ -937,8 +1112,11 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         var previousStoreId = posAgent.StoreId;
         posAgent.StoreId = targetStoreId;
+       
         await _posDataProvider.UpdatePosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         RecordTransferredAssistant(stats, assistantLocation.AssistantId, targetStoreId, assistantLocation.AgentId, assistantLocation.Name, previousStoreId);
+       
         Log.Information("Assistant transferred. AssistantId={AssistantId}, FromStoreId={FromStoreId}, ToStoreId={ToStoreId}",
             assistantLocation.AssistantId, previousStoreId, targetStoreId);
     }
@@ -950,15 +1128,13 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         var mappingSceneIds = mappings
             .GroupBy(x => x.Language)
-            .ToDictionary(
-                x => x.Key,
-                x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
+            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
 
         if (mappingSceneIds.Count == 0)
             return new SourceSceneLookup(new Dictionary<AutoAddLanguage, KnowledgeScene>(), new Dictionary<int, List<KnowledgeSceneItem>>());
 
-        var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(
-            mappingSceneIds.Values.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
+        var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(mappingSceneIds.Values.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
+       
         var sceneMap = scenes.ToDictionary(x => x.Id);
         var mappingScenes = mappingSceneIds
             .Where(x => sceneMap.ContainsKey(x.Value))
@@ -977,13 +1153,9 @@ public class AiResourceSyncService : IAiResourceSyncService
     private KnowledgeScene ResolveSourceScene(SourceSceneLookup sourceSceneLookup, string language)
     {
         var rawLanguage = string.IsNullOrWhiteSpace(language) ? "英文" : language;
-        var normalizedLanguage = CrmToAutoAddLanguageConverter.TryResolve(rawLanguage, out var resolvedLanguage)
-            ? resolvedLanguage
-            : AutoAddLanguage.English;
+        var normalizedLanguage = CrmToAutoAddLanguageConverter.TryResolve(rawLanguage, out var resolvedLanguage) ? resolvedLanguage : AutoAddLanguage.English;
 
-        return sourceSceneLookup.MappingScenes.TryGetValue(normalizedLanguage, out var scene)
-            ? scene
-            : null;
+        return sourceSceneLookup.MappingScenes.TryGetValue(normalizedLanguage, out var scene) ? scene : null;
     }
 
     private static void RecordCreatedStore(AiResourceSyncExecutionStatsDto stats, int storeId, string storeName)
