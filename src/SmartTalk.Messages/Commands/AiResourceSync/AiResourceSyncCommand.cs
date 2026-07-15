@@ -9,13 +9,12 @@ public class AiResourceSyncCommand : HasServiceProviderId, ICommand
     public bool IsManual { get; set; }
 
     public int? InitiatedByUserId { get; set; }
+
+    public DateTimeOffset? SyncStartTime { get; set; }
+
+    public DateTimeOffset? SyncEndTime { get; set; }
 }
 
-public class AiResourceSyncResponse : SmartTalkResponse<AiResourceSyncResponseData>
+public class AiResourceSyncResponse : SmartTalkResponse
 {
-}
-
-public class AiResourceSyncResponseData
-{
-    public int TotalCount { get; set; }
 }
