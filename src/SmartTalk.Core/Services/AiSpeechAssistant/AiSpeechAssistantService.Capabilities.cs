@@ -35,9 +35,12 @@ public partial class AiSpeechAssistantService
         GetAiSpeechAssistantKnowledgeCapabilitiesRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.AgentId <= 0)
+            throw new ArgumentException("AgentId is required", nameof(request.AgentId));
+
         return new GetAiSpeechAssistantKnowledgeCapabilitiesResponse
         {
-            Data = await BuildKnowledgeCapabilitiesDataAsync(request.StoreId, request.Keyword, cancellationToken).ConfigureAwait(false)
+            Data = await BuildKnowledgeCapabilitiesDataAsync(request.StoreId, request.AgentId, request.Keyword, cancellationToken).ConfigureAwait(false)
         };
     }
 
@@ -68,12 +71,13 @@ public partial class AiSpeechAssistantService
 
         return new UpdateAiSpeechAssistantKnowledgeCapabilitiesResponse
         {
-            Data = await BuildKnowledgeCapabilitiesDataAsync(command.StoreId, null, cancellationToken).ConfigureAwait(false)
+            Data = await BuildKnowledgeCapabilitiesDataAsync(command.StoreId, null, null, cancellationToken).ConfigureAwait(false)
         };
     }
 
     private async Task<GetAiSpeechAssistantKnowledgeCapabilitiesResponseData> BuildKnowledgeCapabilitiesDataAsync(
         int storeId,
+        int? agentId,
         string keyword,
         CancellationToken cancellationToken)
     {
@@ -87,7 +91,19 @@ public partial class AiSpeechAssistantService
             };
         }
 
-        var assistantIds = context.Records.Select(x => x.Assistant.Id).Distinct().ToList();
+        var records = agentId.HasValue
+            ? context.Records.Where(x => x.Agent.Id == agentId.Value).ToList()
+            : context.Records;
+
+        if (records.Count == 0)
+        {
+            return new GetAiSpeechAssistantKnowledgeCapabilitiesResponseData
+            {
+                Capabilities = []
+            };
+        }
+
+        var assistantIds = records.Select(x => x.Assistant.Id).Distinct().ToList();
         var functionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
             assistantIds,
             [OpenAiToolConstants.RepeatOrder, OpenAiToolConstants.SatisfyOrder],
@@ -95,7 +111,7 @@ public partial class AiSpeechAssistantService
             cancellationToken: cancellationToken).ConfigureAwait(false);
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken).ConfigureAwait(false);
 
-        var capabilities = context.Records
+        var capabilities = records
             .Select(x => BuildKnowledgeCapabilityDto(x, functionCalls, allSales))
             .ToList();
 
