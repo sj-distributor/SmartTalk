@@ -25,7 +25,9 @@ public interface ICrmClient : IScopedDependency
 
     Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
 
-    Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, bool isGetTotalCount = true, CancellationToken cancellationToken = default);
+    Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default);
+
+    Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(CancellationToken cancellationToken = default);
 
     Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default);
 }
@@ -156,10 +158,8 @@ public class CrmClient : ICrmClient
         return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
     }
 
-    public async Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, bool isGetTotalCount = true, CancellationToken cancellationToken = default)
+    public async Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default)
     {
-        Log.Information("GetSalesAutoSyncCustomersAsync isGetTotalCount {@isGetTotalCount}", isGetTotalCount);
-        
         var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info";
         var headers = new Dictionary<string, string>
         {
@@ -179,11 +179,6 @@ public class CrmClient : ICrmClient
                 break;
 
             result.AddRange(response.Data);
-            
-            if (!isGetTotalCount)
-            {
-                return (result, response.Total);
-            }
 
             if (response.CurrentPage >= response.LastPage)
                 break;
@@ -192,6 +187,21 @@ public class CrmClient : ICrmClient
         }
 
         return (result, result.Count > 0 ? null : 0);
+    }
+
+    public async Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(CancellationToken cancellationToken = default)
+    {
+        Log.Information("GetChangedSalesAutoSyncCustomersAsync");
+
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info-by-start-date";
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        return await _httpClient.GetAsync<List<CrmSalesAutoSyncCustomerDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false)
+               ?? [];
     }
 
     public async Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default)

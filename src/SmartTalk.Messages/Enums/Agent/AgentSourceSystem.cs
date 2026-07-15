@@ -4,5 +4,5 @@ public enum AgentSourceSystem
 {
     Self,
     Smarties,
-    CrmAutoSync
+    AiResource
 }
