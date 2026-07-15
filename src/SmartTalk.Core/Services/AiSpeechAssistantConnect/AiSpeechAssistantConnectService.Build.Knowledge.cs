@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Smarties;
@@ -35,6 +36,16 @@ public partial class AiSpeechAssistantConnectService
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(_ctx.From, _ctx.To, _ctx.ForwardAssistantId ?? _ctx.AssistantId, cancellationToken).ConfigureAwait(false);
 
+        if (!_ctx.AssistantId.HasValue && !_ctx.ForwardAssistantId.HasValue && assistant != null)
+        {
+            var customerAssistantId = await ResolveCustomerSpecificAssistantIdAsync(assistant.AgentId, _ctx.From, cancellationToken).ConfigureAwait(false);
+            if (customerAssistantId.HasValue && customerAssistantId.Value != assistant.Id)
+            {
+                (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
+                    .GetAiSpeechAssistantInfoByNumbersAsync(_ctx.From, _ctx.To, customerAssistantId.Value, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         Log.Information("[AiAssistant] Assistant matched, AssistantId: {AssistantId}, HasProfile: {HasProfile}, From: {From}, To: {To}", assistant?.Id, userProfile != null, _ctx.From, _ctx.To);
 
         EnsureAssistantInfoComplete(assistant, knowledge);
@@ -50,6 +61,19 @@ public partial class AiSpeechAssistantConnectService
             .Where(x => !string.IsNullOrWhiteSpace(x)));
 
         _ctx.UserProfileJson = userProfile?.ProfileJson;
+    }
+
+    private async Task<int?> ResolveCustomerSpecificAssistantIdAsync(int agentId, string callerPhoneNumber, CancellationToken cancellationToken)
+    {
+        var normalizedPhoneNumber = CrmSalesAutoSyncGrouping.NormalizePhoneNumber(callerPhoneNumber);
+        if (string.IsNullOrWhiteSpace(normalizedPhoneNumber))
+            return null;
+
+        var mapping = await _aiSpeechAssistantDataProvider
+            .GetActiveCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(agentId, normalizedPhoneNumber, cancellationToken)
+            .ConfigureAwait(false);
+
+        return mapping?.AssistantId;
     }
 
     /// <summary>

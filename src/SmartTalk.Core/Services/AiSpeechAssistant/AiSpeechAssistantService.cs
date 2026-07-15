@@ -261,6 +261,16 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
+
+        if (!assistantId.HasValue && !forwardAssistantId.HasValue && assistant != null)
+        {
+            var customerAssistantId = await ResolveCustomerSpecificAssistantIdAsync(assistant.AgentId, from, cancellationToken).ConfigureAwait(false);
+            if (customerAssistantId.HasValue && customerAssistantId.Value != assistant.Id)
+            {
+                (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
+                    .GetAiSpeechAssistantInfoByNumbersAsync(from, to, customerAssistantId.Value, cancellationToken).ConfigureAwait(false);
+            }
+        }
         
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
         
@@ -320,6 +330,19 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information($"The final prompt: {_aiSpeechAssistantStreamContext.LastPrompt}");
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+    }
+
+    private async Task<int?> ResolveCustomerSpecificAssistantIdAsync(int agentId, string callerPhoneNumber, CancellationToken cancellationToken)
+    {
+        var normalizedPhoneNumber = CrmSalesAutoSyncGrouping.NormalizePhoneNumber(callerPhoneNumber);
+        if (string.IsNullOrWhiteSpace(normalizedPhoneNumber))
+            return null;
+
+        var mapping = await _aiSpeechAssistantDataProvider
+            .GetActiveCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(agentId, normalizedPhoneNumber, cancellationToken)
+            .ConfigureAwait(false);
+
+        return mapping?.AssistantId;
     }
     
     private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)
