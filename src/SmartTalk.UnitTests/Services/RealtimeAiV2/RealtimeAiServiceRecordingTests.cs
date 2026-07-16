@@ -51,6 +51,39 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
         GetWavDataChunkSize(recordedWav!).ShouldBe(expectedDataSize);
     }
 
+    [Fact]
+    public async Task Recording_ClientRecordingAudio_BufferedButNotForwardedToProvider()
+    {
+        var inputBytes = new byte[] { 1, 2, 3, 4 };
+
+        ClientAdapter.NativeAudioCodec.Returns(RealtimeAiAudioCodec.PCM16);
+        ClientAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedClientMessage
+            {
+                Type = RealtimeAiClientMessageType.RecordingAudio,
+                Payload = Convert.ToBase64String(inputBytes)
+            });
+
+        byte[]? recordedWav = null;
+        var options = CreateDefaultOptions(o =>
+        {
+            o.EnableRecording = true;
+            o.OnRecordingCompleteAsync = (_, wav) => { recordedWav = wav; return Task.CompletedTask; };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        FakeWs.EnqueueClientMessage("""{"type":"RealtimeHttpRecordingAudio","payload":"AQIDBA=="}""");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        recordedWav.ShouldNotBeNull();
+        GetWavDataChunkSize(recordedWav!).ShouldBe(inputBytes.Length);
+        ProviderAdapter.DidNotReceive().BuildAudioAppendMessage(Arg.Any<RealtimeAiWssAudioData>());
+    }
+
     // ── Provider audio → recording buffer (with codec conversion) ──
 
     [Theory]

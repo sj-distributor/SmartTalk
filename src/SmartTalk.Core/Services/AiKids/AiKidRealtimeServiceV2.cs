@@ -85,7 +85,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         {
             ClientConfig = new RealtimeAiClientConfig
             {
-                Client = RealtimeAiClient.Default
+                Client = NormalizeClient(command.Client)
             },
             ModelConfig = modelConfig,
             TtsConfig = BuildTtsConfig(assistant, ttsSampleRate),
@@ -161,6 +161,11 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         };
 
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static RealtimeAiClient NormalizeClient(RealtimeAiClient client)
+    {
+        return client == RealtimeAiClient.RealtimeHttpGateway ? client : RealtimeAiClient.Default;
     }
 
     private RealtimeAiTtsConfig BuildTtsConfig(Domain.AISpeechAssistant.AiSpeechAssistant assistant, int sampleRate)

@@ -18,4 +18,6 @@ public class AiKidRealtimeCommand : ICommand
     public RealtimeAiServerRegion Region { get; set; }
     
     public PhoneOrderRecordType OrderRecordType { get; set; }
+
+    public RealtimeAiClient Client { get; set; } = RealtimeAiClient.Default;
 }
