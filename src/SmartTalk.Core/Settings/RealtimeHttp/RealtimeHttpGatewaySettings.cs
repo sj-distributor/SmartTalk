@@ -17,6 +17,7 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
         IdleTimeoutMs = section.GetValue<int?>("IdleTimeoutMs") ?? 15000;
         UserSpeechTailSilenceMs = section.GetValue<int?>("UserSpeechTailSilenceMs") ?? 500;
         TurnCompletionTranscriptGraceMs = section.GetValue<int?>("TurnCompletionTranscriptGraceMs") ?? 250;
+        SendTextAsTextInput = section.GetValue<bool?>("SendTextAsTextInput") ?? true;
         RealTimeAudioPacingEnabled = section.GetValue<bool?>("RealTimeAudioPacingEnabled") ?? true;
         ClosedSessionRetentionMs = section.GetValue<int?>("ClosedSessionRetentionMs") ?? 3600000;
         ClosedSessionCapacity = section.GetValue<int?>("ClosedSessionCapacity") ?? 1000;
@@ -72,6 +73,8 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
     public int UserSpeechTailSilenceMs { get; set; } = 500;
 
     public int TurnCompletionTranscriptGraceMs { get; set; } = 250;
+
+    public bool SendTextAsTextInput { get; set; } = true;
 
     public bool RealTimeAudioPacingEnabled { get; set; } = true;
 
