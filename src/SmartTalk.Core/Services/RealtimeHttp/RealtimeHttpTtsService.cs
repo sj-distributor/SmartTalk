@@ -40,6 +40,9 @@ public class RealtimeHttpTtsService : IRealtimeHttpTtsService
 
         if (pcmBytes.Length == 0)
         {
+            if (!_settings.Tts.EnableToneFallback)
+                return [];
+
             Log.Warning("[RealtimeHttpGateway] OpenAI TTS unavailable, using local tone fallback.");
             pcmBytes = GenerateFallbackTonePcm(text);
         }
