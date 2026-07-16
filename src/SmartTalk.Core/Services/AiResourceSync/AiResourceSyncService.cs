@@ -172,9 +172,14 @@ public partial class AiResourceSyncService : IAiResourceSyncService
         if (company.Name.Equals(_salesSetting.CompanyName, StringComparison.OrdinalIgnoreCase) && sourceSceneLookup.MappingScenes.Count == 0)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] has no active knowledge scene mapping.");
         
+        var storeNames = customerGroups
+            .Select(x => x.SalesKey)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        
         var storeMap = existingStores
             .Select(x => new { Store = x, StoreName = GetStoreName(x.Names) })
-            .Where(x => !string.IsNullOrWhiteSpace(x.StoreName))
+            .Where(x => !string.IsNullOrWhiteSpace(x.StoreName) && storeNames.Contains(x.StoreName))
             .GroupBy(x => x.StoreName)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store, StringComparer.OrdinalIgnoreCase);
        
