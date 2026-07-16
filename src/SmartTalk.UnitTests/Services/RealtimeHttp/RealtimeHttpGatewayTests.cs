@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Services.RealtimeHttp;
+using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.RealtimeHttp;
 using SmartTalk.Messages.Dto.RealtimeHttp;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -377,6 +378,34 @@ public class RealtimeHttpGatewayTests
         response.Transcriptions.Count.ShouldBe(2);
     }
 
+    [Fact]
+    public async Task TtsService_AlwaysRequestsPcmEvenWhenConfiguredOtherwise()
+    {
+        var handler = new CapturingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent([1, 2, 3, 4])
+        });
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        httpClientFactory.CreateClient(nameof(RealtimeHttpTtsService)).Returns(new HttpClient(handler));
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["OpenAi:ApiKey"] = "test-key",
+            ["RealtimeHttpGateway:Tts:ResponseFormat"] = "wav",
+            ["RealtimeHttpGateway:Tts:AppendSilenceMs"] = "0"
+        }).Build();
+
+        var service = new RealtimeHttpTtsService(
+            httpClientFactory,
+            new OpenAiSettings(configuration),
+            new RealtimeHttpGatewaySettings(configuration));
+
+        var bytes = await service.SynthesizePcm16Async("hello", CancellationToken.None);
+
+        bytes.ShouldBe([1, 2, 3, 4]);
+        handler.RequestBody.ShouldContain("\"response_format\":\"pcm\"");
+    }
+
     private static RealtimeHttpSession CreateSession(
         FakeRealtimeHttpGatewayTransport transport,
         IRealtimeHttpTtsService ttsService,
@@ -534,6 +563,27 @@ public class RealtimeHttpGatewayTests
         public Task WaitStartedAsync()
         {
             return _started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    private sealed class CapturingHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly HttpResponseMessage _response;
+
+        public CapturingHttpMessageHandler(HttpResponseMessage response)
+        {
+            _response = response;
+        }
+
+        public string RequestBody { get; private set; } = string.Empty;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestBody = request.Content == null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            return _response;
         }
     }
 

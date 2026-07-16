@@ -9,7 +9,7 @@ namespace SmartTalk.Core.Services.RealtimeHttp;
 
 public sealed class RealtimeHttpSession : IAsyncDisposable
 {
-    public const string IdleCloseReason = "idle_no_user_text_15s";
+    public const string IdleCloseReason = "idle_no_user_text_timeout";
 
     private readonly string _sessionId;
     private readonly int _assistantId;
