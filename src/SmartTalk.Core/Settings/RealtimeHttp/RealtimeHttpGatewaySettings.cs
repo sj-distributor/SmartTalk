@@ -14,7 +14,7 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
         InternalWsBaseUrl = section.GetValue<string>("InternalWsBaseUrl") ?? string.Empty;
         DefaultResponseTimeoutMs = section.GetValue<int?>("DefaultResponseTimeoutMs") ?? 20000;
         RecentEventCapacity = section.GetValue<int?>("RecentEventCapacity") ?? 200;
-        IdleTimeoutMs = section.GetValue<int?>("IdleTimeoutMs") ?? 15000;
+        IdleTimeoutMs = section.GetValue<int?>("IdleTimeoutMs") ?? 60000;
         UserSpeechTailSilenceMs = section.GetValue<int?>("UserSpeechTailSilenceMs") ?? 500;
         TurnCompletionTranscriptGraceMs = section.GetValue<int?>("TurnCompletionTranscriptGraceMs") ?? 250;
         SendTextAsTextInput = section.GetValue<bool?>("SendTextAsTextInput") ?? true;
@@ -68,7 +68,7 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
 
     public int RecentEventCapacity { get; set; } = 200;
 
-    public int IdleTimeoutMs { get; set; } = 15000;
+    public int IdleTimeoutMs { get; set; } = 60000;
 
     public int UserSpeechTailSilenceMs { get; set; } = 500;
 

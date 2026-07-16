@@ -16,6 +16,7 @@ public interface IRealtimeHttpTtsService : ISingletonDependency
 public class RealtimeHttpTtsService : IRealtimeHttpTtsService
 {
     private const string OpenAiSpeechEndpoint = "https://api.openai.com/v1/audio/speech";
+    private const string PcmResponseFormat = "pcm";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly OpenAiSettings _openAiSettings;
@@ -57,12 +58,19 @@ public class RealtimeHttpTtsService : IRealtimeHttpTtsService
 
         try
         {
+            if (!string.Equals(_settings.Tts.ResponseFormat, PcmResponseFormat, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning(
+                    "[RealtimeHttpGateway] TTS response format must be pcm for recording. ConfiguredFormat: {ConfiguredFormat}",
+                    _settings.Tts.ResponseFormat);
+            }
+
             var requestPayload = new
             {
                 model = _settings.Tts.Model,
                 voice = _settings.Tts.Voice,
                 input = text,
-                response_format = _settings.Tts.ResponseFormat
+                response_format = PcmResponseFormat
             };
 
             using var request = new HttpRequestMessage(HttpMethod.Post, OpenAiSpeechEndpoint)
