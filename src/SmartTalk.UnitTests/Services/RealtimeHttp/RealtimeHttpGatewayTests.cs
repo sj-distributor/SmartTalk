@@ -38,7 +38,7 @@ public class RealtimeHttpGatewayTests
         session.StartReceiving();
 
         var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
-        await transport.WaitForSentCountAsync(1);
+        await transport.WaitForSentCountAsync(2);
 
         transport.EnqueueInbound(AssistantTranscript("provider-1", "hi there"));
         transport.EnqueueInbound(TurnCompleted("provider-1"));
@@ -49,10 +49,42 @@ public class RealtimeHttpGatewayTests
         response.OutputText.ShouldBe("hi there");
         response.ProviderSessionId.ShouldBe("provider-1");
         response.CompletionReason.ShouldBe("ai_turn_completed");
-        response.InputAudioDurationMs.ShouldBe(0);
+        response.InputAudioDurationMs.ShouldBe(100);
         response.TailSilenceMs.ShouldBe(0);
         response.LastEventType.ShouldBe("AiTurnCompleted");
-        GetTextPayload(transport.SentMessages[0]).ShouldBe("hello");
+        GetRecordingPayloadByteCount(transport.SentMessages[0]).ShouldBe(200);
+        GetTextPayload(transport.SentMessages[1]).ShouldBe("hello");
+    }
+
+    [Fact]
+    public async Task SendTextAsync_WhenAssistantTurnIsInProgress_WaitsBeforeInjectingUserAudioAndText()
+    {
+        var transport = new FakeRealtimeHttpGatewayTransport();
+        var session = CreateSession(transport, new FakeTtsService(PcmBytesForMilliseconds(100)));
+        session.StartReceiving();
+        transport.EnqueueInbound(ResponseAudioDelta("provider-1"));
+
+        await Task.Delay(20);
+        var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
+        await Task.Delay(80);
+
+        transport.SentMessages.ShouldBeEmpty();
+
+        transport.EnqueueInbound(AssistantTranscript("provider-1", "greeting"));
+        transport.EnqueueInbound(TurnCompleted("provider-1"));
+        await transport.WaitForSentCountAsync(2);
+
+        GetRecordingPayloadByteCount(transport.SentMessages[0]).ShouldBe(200);
+        GetTextPayload(transport.SentMessages[1]).ShouldBe("hello");
+
+        transport.EnqueueInbound(AssistantTranscript("provider-1", "reply"));
+        transport.EnqueueInbound(TurnCompleted("provider-1"));
+
+        var response = await sendTask;
+
+        response.Completed.ShouldBeTrue();
+        response.OutputText.ShouldBe("reply");
+        response.TurnNumber.ShouldBe(2);
     }
 
     [Fact]
@@ -84,6 +116,21 @@ public class RealtimeHttpGatewayTests
     {
         var session = CreateSession(
             new FakeRealtimeHttpGatewayTransport(),
+            new FakeTtsService([]));
+        session.StartReceiving();
+
+        var ex = await Should.ThrowAsync<RealtimeHttpGatewayException>(() =>
+            session.SendTextAsync("hello", 1000, CancellationToken.None));
+
+        ex.Code.ShouldBe("tts_unavailable");
+        ex.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+    }
+
+    [Fact]
+    public async Task SendTextAsync_WhenTextInputIsDisabledAndTtsReturnsNoAudio_ThrowsTtsUnavailable()
+    {
+        var session = CreateSession(
+            new FakeRealtimeHttpGatewayTransport(),
             new FakeTtsService([]),
             settings: CreateSettings(sendTextAsTextInput: false));
         session.StartReceiving();
@@ -103,7 +150,7 @@ public class RealtimeHttpGatewayTests
         session.StartReceiving();
 
         var firstSend = session.SendTextAsync("first", 1000, CancellationToken.None);
-        await transport.WaitForSentCountAsync(1);
+        await transport.WaitForSentCountAsync(2);
 
         var ex = await Should.ThrowAsync<RealtimeHttpGatewayException>(() =>
             session.SendTextAsync("second", 1000, CancellationToken.None));
@@ -138,7 +185,7 @@ public class RealtimeHttpGatewayTests
         session.StartReceiving();
 
         var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
-        await transport.WaitForSentCountAsync(1);
+        await transport.WaitForSentCountAsync(2);
         transport.EnqueueInbound(ClientError("provider-1", "provider said no"));
 
         var ex = await Should.ThrowAsync<RealtimeHttpGatewayException>(async () => await sendTask);
@@ -157,7 +204,7 @@ public class RealtimeHttpGatewayTests
         session.StartReceiving();
 
         var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
-        await transport.WaitForSentCountAsync(1);
+        await transport.WaitForSentCountAsync(2);
         await session.CloseAsync("manual_close", CancellationToken.None);
 
         var ex = await Should.ThrowAsync<RealtimeHttpGatewayException>(async () => await sendTask);
@@ -197,7 +244,7 @@ public class RealtimeHttpGatewayTests
         session.StartReceiving();
 
         var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
-        await transport.WaitForSentCountAsync(1);
+        await transport.WaitForSentCountAsync(2);
 
         transport.EnqueueInbound(TurnCompleted("provider-1"));
         await Task.Delay(20);
@@ -220,7 +267,7 @@ public class RealtimeHttpGatewayTests
         session.StartReceiving();
 
         var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
-        await transport.WaitForSentCountAsync(1);
+        await transport.WaitForSentCountAsync(2);
 
         transport.EnqueueInbound(AssistantTranscript("provider-1", "first part"));
         transport.EnqueueInbound(TurnCompleted("provider-1"));
@@ -265,7 +312,7 @@ public class RealtimeHttpGatewayTests
         session.StartReceiving();
 
         var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
-        await transport.WaitForSentCountAsync(1);
+        await transport.WaitForSentCountAsync(2);
         await Task.Delay(80);
 
         closedReasons.IsEmpty.ShouldBeTrue();
@@ -406,6 +453,12 @@ public class RealtimeHttpGatewayTests
         return "{\"type\":\"AiTurnCompleted\",\"session_id\":\"" + providerSessionId + "\"}";
     }
 
+    private static string ResponseAudioDelta(string providerSessionId)
+    {
+        return "{\"type\":\"ResponseAudioDelta\",\"session_id\":\"" + providerSessionId
+               + "\",\"Data\":{\"Base64Payload\":\"AQI=\"}}";
+    }
+
     private static string ClientError(string providerSessionId, string message)
     {
         return "{\"type\":\"ClientError\",\"session_id\":\"" + providerSessionId
@@ -431,9 +484,18 @@ public class RealtimeHttpGatewayTests
         return Convert.FromBase64String(payload!).Length;
     }
 
+    private static int GetRecordingPayloadByteCount(string rawMessage)
+    {
+        using var doc = JsonDocument.Parse(rawMessage);
+        doc.RootElement.GetProperty("type").GetString().ShouldBe("RealtimeHttpRecordingAudio");
+        var payload = doc.RootElement.GetProperty("payload").GetString();
+        return Convert.FromBase64String(payload!).Length;
+    }
+
     private static string GetTextPayload(string rawMessage)
     {
         using var doc = JsonDocument.Parse(rawMessage);
+        doc.RootElement.GetProperty("type").GetString().ShouldBe("RealtimeHttpTextInput");
         return doc.RootElement.GetProperty("text").GetString() ?? string.Empty;
     }
 
