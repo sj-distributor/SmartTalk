@@ -49,17 +49,43 @@ public class RealtimeHttpGatewayTests
         response.OutputText.ShouldBe("hi there");
         response.ProviderSessionId.ShouldBe("provider-1");
         response.CompletionReason.ShouldBe("ai_turn_completed");
+        response.InputAudioDurationMs.ShouldBe(0);
+        response.TailSilenceMs.ShouldBe(0);
+        response.LastEventType.ShouldBe("AiTurnCompleted");
+        GetTextPayload(transport.SentMessages[0]).ShouldBe("hello");
+    }
+
+    [Fact]
+    public async Task SendTextAsync_WhenTextInputIsDisabled_SendsSynthesizedAudioWithTailSilence()
+    {
+        var transport = new FakeRealtimeHttpGatewayTransport();
+        var session = CreateSession(
+            transport,
+            new FakeTtsService(PcmBytesForMilliseconds(100)),
+            settings: CreateSettings(sendTextAsTextInput: false));
+        session.StartReceiving();
+
+        var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
+        await transport.WaitForSentCountAsync(1);
+
+        transport.EnqueueInbound(AssistantTranscript("provider-1", "hi there"));
+        transport.EnqueueInbound(TurnCompleted("provider-1"));
+
+        var response = await sendTask;
+
+        response.Completed.ShouldBeTrue();
         response.InputAudioDurationMs.ShouldBe(100);
         response.TailSilenceMs.ShouldBe(40);
-        response.LastEventType.ShouldBe("AiTurnCompleted");
-        transport.SentMessages.Count.ShouldBeGreaterThanOrEqualTo(1);
         GetPayloadByteCount(transport.SentMessages[0]).ShouldBe(280);
     }
 
     [Fact]
     public async Task SendTextAsync_WhenTtsReturnsNoAudio_ThrowsTtsUnavailable()
     {
-        var session = CreateSession(new FakeRealtimeHttpGatewayTransport(), new FakeTtsService([]));
+        var session = CreateSession(
+            new FakeRealtimeHttpGatewayTransport(),
+            new FakeTtsService([]),
+            settings: CreateSettings(sendTextAsTextInput: false));
         session.StartReceiving();
 
         var ex = await Should.ThrowAsync<RealtimeHttpGatewayException>(() =>
@@ -146,7 +172,7 @@ public class RealtimeHttpGatewayTests
     {
         var transport = new FakeRealtimeHttpGatewayTransport();
         var ttsService = new BlockingTtsService(PcmBytesForMilliseconds(20));
-        var session = CreateSession(transport, ttsService);
+        var session = CreateSession(transport, ttsService, settings: CreateSettings(sendTextAsTextInput: false));
         session.StartReceiving();
 
         var sendTask = session.SendTextAsync("hello", 1000, CancellationToken.None);
@@ -344,13 +370,15 @@ public class RealtimeHttpGatewayTests
     private static RealtimeHttpGatewaySettings CreateSettings(
         int idleTimeoutMs = 1000,
         string recordingRoot = "",
-        int turnCompletionTranscriptGraceMs = 50)
+        int turnCompletionTranscriptGraceMs = 50,
+        bool sendTextAsTextInput = true)
     {
         var values = new Dictionary<string, string?>
         {
             ["RealtimeHttpGateway:IdleTimeoutMs"] = idleTimeoutMs.ToString(),
             ["RealtimeHttpGateway:UserSpeechTailSilenceMs"] = "40",
             ["RealtimeHttpGateway:TurnCompletionTranscriptGraceMs"] = turnCompletionTranscriptGraceMs.ToString(),
+            ["RealtimeHttpGateway:SendTextAsTextInput"] = sendTextAsTextInput.ToString(),
             ["RealtimeHttpGateway:RealTimeAudioPacingEnabled"] = "false",
             ["RealtimeHttpGateway:DefaultResponseTimeoutMs"] = "1000",
             ["RealtimeHttpGateway:RecordingStorageBasePath"] = recordingRoot,
@@ -401,6 +429,12 @@ public class RealtimeHttpGatewayTests
         using var doc = JsonDocument.Parse(rawMessage);
         var payload = doc.RootElement.GetProperty("media").GetProperty("payload").GetString();
         return Convert.FromBase64String(payload!).Length;
+    }
+
+    private static string GetTextPayload(string rawMessage)
+    {
+        using var doc = JsonDocument.Parse(rawMessage);
+        return doc.RootElement.GetProperty("text").GetString() ?? string.Empty;
     }
 
     private sealed class FakeTtsService : IRealtimeHttpTtsService

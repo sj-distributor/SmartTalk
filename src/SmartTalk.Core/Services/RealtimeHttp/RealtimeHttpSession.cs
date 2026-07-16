@@ -147,18 +147,28 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
 
             using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _sessionCts.Token);
             var sendToken = sendCts.Token;
-            var effectiveTimeoutMs = Math.Max(1000, timeoutMs ?? _settings.DefaultResponseTimeoutMs);
-            var audioBytes = await _ttsService.SynthesizePcm16Async(inputText, sendToken).ConfigureAwait(false);
-            if (audioBytes.Length == 0)
-                throw RealtimeHttpGatewayException.TtsUnavailable(_sessionId);
-
-            var inputAudioDurationMs = CalculatePcm16DurationMs(audioBytes.Length);
-            var tailSilenceMs = Math.Max(0, _settings.UserSpeechTailSilenceMs);
-            var outboundAudio = AppendSilence(audioBytes, tailSilenceMs);
             var waitTask = PrepareTurnAwaiter();
-
             AppendEvent("user_text_input", "user", inputText);
-            await SendAudioChunksAsync(outboundAudio, sendToken).ConfigureAwait(false);
+
+            var effectiveTimeoutMs = Math.Max(1000, timeoutMs ?? _settings.DefaultResponseTimeoutMs);
+            var inputAudioDurationMs = 0;
+            var tailSilenceMs = 0;
+
+            if (_settings.SendTextAsTextInput)
+            {
+                await SendTextInputAsync(inputText, sendToken).ConfigureAwait(false);
+            }
+            else
+            {
+                var audioBytes = await _ttsService.SynthesizePcm16Async(inputText, sendToken).ConfigureAwait(false);
+                if (audioBytes.Length == 0)
+                    throw RealtimeHttpGatewayException.TtsUnavailable(_sessionId);
+
+                inputAudioDurationMs = CalculatePcm16DurationMs(audioBytes.Length);
+                tailSilenceMs = Math.Max(0, _settings.UserSpeechTailSilenceMs);
+                var outboundAudio = AppendSilence(audioBytes, tailSilenceMs);
+                await SendAudioChunksAsync(outboundAudio, sendToken).ConfigureAwait(false);
+            }
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(sendToken);
             timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(effectiveTimeoutMs));
@@ -349,6 +359,17 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
                 await CloseAsync("transport_closed", CancellationToken.None).ConfigureAwait(false);
             CompleteAwaiterIfNeeded();
         }
+    }
+
+    private async Task SendTextInputAsync(string text, CancellationToken cancellationToken)
+    {
+        var message = JsonSerializer.Serialize(new
+        {
+            text
+        });
+
+        await _transport.SendTextAsync(message, cancellationToken).ConfigureAwait(false);
+        LastActivityAt = DateTimeOffset.UtcNow;
     }
 
     private async Task SendAudioChunksAsync(byte[] pcmBytes, CancellationToken cancellationToken)
