@@ -83,6 +83,9 @@ public partial class RealtimeAiService
                 case RealtimeAiClientMessageType.Audio:
                     await HandleClientAudioAsync(parsed.Payload).ConfigureAwait(false);
                     break;
+                case RealtimeAiClientMessageType.RecordingAudio:
+                    await HandleClientRecordingAudioAsync(parsed.Payload).ConfigureAwait(false);
+                    break;
                 case RealtimeAiClientMessageType.Image:
                     await HandleClientImageAsync(parsed.Payload).ConfigureAwait(false);
                     break;
@@ -107,6 +110,14 @@ public partial class RealtimeAiService
         if (_ctx.IsClientAudioToProviderSuspended) return;
 
         await SendAudioToProviderAsync(providerBase64).ConfigureAwait(false);
+    }
+
+    private async Task HandleClientRecordingAudioAsync(string base64Payload)
+    {
+        var clientCodec = _ctx.ClientAdapter.NativeAudioCodec;
+        var clientSampleRate = ResolveAudioSampleRate(clientCodec, AudioSource.Client);
+
+        await RecordAudioIfRequiredAsync(base64Payload, clientCodec, AudioSource.Client, clientSampleRate).ConfigureAwait(false);
     }
 
     private async Task HandleClientImageAsync(string base64Payload)

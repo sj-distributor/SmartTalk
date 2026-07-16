@@ -4,7 +4,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 
-public enum RealtimeAiClientMessageType { Audio, Image, Text, Start, Stop, Unknown }
+public enum RealtimeAiClientMessageType { Audio, RecordingAudio, Image, Text, Start, Stop, Unknown }
 
 public class ParsedClientMessage
 {

@@ -21,7 +21,9 @@ public class RealtimeAiController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("connect/{assistantId}")]
-    public async Task ConnectAiKidRealtimeAsync(int assistantId)
+    public async Task ConnectAiKidRealtimeAsync(
+        int assistantId,
+        [FromQuery] RealtimeAiClient client = RealtimeAiClient.Default)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
@@ -30,7 +32,8 @@ public class RealtimeAiController : ControllerBase
                 AssistantId = assistantId,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 Region = RealtimeAiServerRegion.US,
-                OrderRecordType = PhoneOrderRecordType.TestLink
+                OrderRecordType = PhoneOrderRecordType.TestLink,
+                Client = NormalizeClient(client)
             };
             
             await _mediator.SendAsync(command).ConfigureAwait(false);
@@ -43,7 +46,10 @@ public class RealtimeAiController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("connect/{assistantId}/{region}")]
-    public async Task HkConnectAiKidRealtimeAsync(int assistantId, RealtimeAiServerRegion region)
+    public async Task HkConnectAiKidRealtimeAsync(
+        int assistantId,
+        RealtimeAiServerRegion region,
+        [FromQuery] RealtimeAiClient client = RealtimeAiClient.Default)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
@@ -52,7 +58,8 @@ public class RealtimeAiController : ControllerBase
                 AssistantId = assistantId,
                 WebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 Region = region,
-                OrderRecordType = PhoneOrderRecordType.TestLink
+                OrderRecordType = PhoneOrderRecordType.TestLink,
+                Client = NormalizeClient(client)
             };
             
             await _mediator.SendAsync(command).ConfigureAwait(false);
@@ -61,5 +68,10 @@ public class RealtimeAiController : ControllerBase
         {
             HttpContext.Response.StatusCode = 400;
         }
+    }
+
+    private static RealtimeAiClient NormalizeClient(RealtimeAiClient client)
+    {
+        return client == RealtimeAiClient.RealtimeHttpGateway ? client : RealtimeAiClient.Default;
     }
 }

@@ -344,7 +344,7 @@ public sealed class RealtimeHttpGatewayService : IRealtimeHttpGatewayService
         }
 
         baseUrl = baseUrl.TrimEnd('/');
-        return new Uri($"{baseUrl}/api/RealtimeAi/connect/{assistantId}/{region}");
+        return new Uri($"{baseUrl}/api/RealtimeAi/connect/{assistantId}/{region}?client={RealtimeAiClient.RealtimeHttpGateway}");
     }
 
     private string BuildRecordingDownloadUrl(string providerSessionId)
