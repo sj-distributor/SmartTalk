@@ -170,57 +170,7 @@ public class RealtimeAiService : IRealtimeAiService
 
                 try
                 {
-                    using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(rawMessage);
-
-                    if (jsonDocument.RootElement.TryGetProperty("commit_audio", out _))
-                    {
-                        await _conversationEngine.CommitAudioAsync().ConfigureAwait(false);
-                        continue;
-                    }
-
-                    var payload = jsonDocument?.RootElement.GetProperty("media").GetProperty("payload").GetString();
-
-                    if (!string.IsNullOrWhiteSpace(payload))
-                    {
-                        if (!_isAiSpeaking)
-                            await WriteToAudioBufferAsync(Convert.FromBase64String(payload)).ConfigureAwait(false);
-
-                        var inputFormat = _options.InputFormat;
-                        
-                        if (jsonDocument.RootElement.TryGetProperty("media", out var mediaElement) && mediaElement.TryGetProperty("type", out var typeElement))
-                            inputFormat = typeElement.GetString() switch
-                            {
-                                "audio" => _options.InputFormat,
-                                "video" => RealtimeAiAudioCodec.IMAGE,
-                                _ => _options.InputFormat
-                            };
-
-                        if (inputFormat == RealtimeAiAudioCodec.IMAGE)
-                        {
-                            _imageMessage = payload;
-                        }
-
-                        var customProps = new Dictionary<string, object>
-                        {
-                            { nameof(RealtimeSessionOptions.InputFormat), _options.InputFormat }
-                        };
-                        
-                        if (!string.IsNullOrEmpty(_imageMessage))
-                            customProps["image"] = _imageMessage;
-
-                        await _conversationEngine.SendAudioChunkAsync(new RealtimeAiWssAudioData
-                        {
-                            Base64Payload = payload,
-                            CustomProperties = customProps
-                        }).ConfigureAwait(false);
-
-                        _imageMessage = null;
-                    }
-                    else
-                    {
-                        Log.Warning("[RealtimeAi] Received empty payload, SessionId: {SessionId}, AssistantId: {AssistantId}",
-                            _sessionId, _options.ConnectionProfile.ProfileId);
-                    }
+                    await HandleClientMessageAsync(rawMessage).ConfigureAwait(false);
                 }
                 catch (JsonException jsonEx)
                 {
@@ -289,6 +239,113 @@ public class RealtimeAiService : IRealtimeAiService
 
             ms.Dispose();
         }
+    }
+
+    private async Task HandleClientMessageAsync(string rawMessage)
+    {
+        using var jsonDocument = JsonSerializer.Deserialize<JsonDocument>(rawMessage);
+        if (jsonDocument == null) return;
+
+        var root = jsonDocument.RootElement;
+        var hasMessageType = TryGetString(root, "type", out var messageType);
+        if (hasMessageType && string.Equals(messageType, "RealtimeHttpRecordingAudio", StringComparison.Ordinal))
+        {
+            if (!TryGetString(root, "payload", out var recordingPayload))
+            {
+                Log.Warning("[RealtimeAi] Received recording-only message without payload, SessionId: {SessionId}, AssistantId: {AssistantId}",
+                    _sessionId, _options.ConnectionProfile.ProfileId);
+                return;
+            }
+
+            await WriteToAudioBufferAsync(Convert.FromBase64String(recordingPayload)).ConfigureAwait(false);
+            return;
+        }
+
+        if (hasMessageType && string.Equals(messageType, "RealtimeHttpTextInput", StringComparison.Ordinal))
+        {
+            if (!TryGetString(root, "text", out var text))
+            {
+                Log.Warning("[RealtimeAi] Received text-input message without text, SessionId: {SessionId}, AssistantId: {AssistantId}",
+                    _sessionId, _options.ConnectionProfile.ProfileId);
+                return;
+            }
+
+            await _conversationEngine.SendTextAsync(text).ConfigureAwait(false);
+            _conversationTranscription.Enqueue((AiSpeechAssistantSpeaker.User, text));
+            return;
+        }
+
+        if (root.TryGetProperty("commit_audio", out _))
+        {
+            await _conversationEngine.CommitAudioAsync().ConfigureAwait(false);
+            return;
+        }
+
+        if (TryGetNestedString(root, "media", "payload", out var payload))
+        {
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                Log.Warning("[RealtimeAi] Received empty payload, SessionId: {SessionId}, AssistantId: {AssistantId}",
+                    _sessionId, _options.ConnectionProfile.ProfileId);
+                return;
+            }
+
+            if (!_isAiSpeaking)
+                await WriteToAudioBufferAsync(Convert.FromBase64String(payload)).ConfigureAwait(false);
+
+            var inputFormat = _options.InputFormat;
+            if (root.TryGetProperty("media", out var mediaElement) && mediaElement.TryGetProperty("type", out var typeElement))
+            {
+                inputFormat = typeElement.GetString() switch
+                {
+                    "audio" => _options.InputFormat,
+                    "video" => RealtimeAiAudioCodec.IMAGE,
+                    _ => _options.InputFormat
+                };
+            }
+
+            if (inputFormat == RealtimeAiAudioCodec.IMAGE)
+                _imageMessage = payload;
+
+            var customProps = new Dictionary<string, object>
+            {
+                { nameof(RealtimeSessionOptions.InputFormat), _options.InputFormat }
+            };
+
+            if (!string.IsNullOrEmpty(_imageMessage))
+                customProps["image"] = _imageMessage;
+
+            await _conversationEngine.SendAudioChunkAsync(new RealtimeAiWssAudioData
+            {
+                Base64Payload = payload,
+                CustomProperties = customProps
+            }).ConfigureAwait(false);
+
+            _imageMessage = null;
+            return;
+        }
+
+        Log.Warning("[RealtimeAi] Received unsupported client message, SessionId: {SessionId}, AssistantId: {AssistantId}, RawMessage: {RawMessage}",
+            _sessionId, _options.ConnectionProfile.ProfileId, rawMessage);
+    }
+
+    private static bool TryGetString(JsonElement root, string propertyName, out string value)
+    {
+        value = string.Empty;
+        if (!root.TryGetProperty(propertyName, out var element) || element.ValueKind != JsonValueKind.String)
+            return false;
+
+        value = element.GetString() ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static bool TryGetNestedString(JsonElement root, string parentName, string propertyName, out string value)
+    {
+        value = string.Empty;
+        if (!root.TryGetProperty(parentName, out var parent) || parent.ValueKind != JsonValueKind.Object)
+            return false;
+
+        return TryGetString(parent, propertyName, out value);
     }
 
     private async Task OnAiAudioOutputReadyAsync(RealtimeAiWssAudioData aiAudioData)

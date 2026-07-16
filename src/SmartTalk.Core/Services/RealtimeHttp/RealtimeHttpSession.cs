@@ -36,7 +36,9 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
     private global::System.Threading.Timer _idleTimer;
     private Task _receiveLoopTask;
     private TaskCompletionSource<(int TurnNumber, string OutputText)> _pendingTurnAwaiter;
+    private TaskCompletionSource<bool> _assistantIdleAwaiter;
     private int _pendingAwaiterTargetTurn;
+    private bool _assistantTurnInProgress;
 
     public RealtimeHttpSession(
         string sessionId,
@@ -145,17 +147,26 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
                 _status = "processing_turn";
             }
 
-            using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _sessionCts.Token);
-            var sendToken = sendCts.Token;
-            var waitTask = PrepareTurnAwaiter();
-            AppendEvent("user_text_input", "user", inputText);
-
             var effectiveTimeoutMs = Math.Max(1000, timeoutMs ?? _settings.DefaultResponseTimeoutMs);
+            using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _sessionCts.Token);
+            sendCts.CancelAfter(TimeSpan.FromMilliseconds(effectiveTimeoutMs));
+            var sendToken = sendCts.Token;
+            await WaitForAssistantIdleAsync(sendToken).ConfigureAwait(false);
+
             var inputAudioDurationMs = 0;
             var tailSilenceMs = 0;
+            Task<(int TurnNumber, string OutputText)> waitTask;
 
             if (_settings.SendTextAsTextInput)
             {
+                var audioBytes = await _ttsService.SynthesizePcm16Async(inputText, sendToken).ConfigureAwait(false);
+                if (audioBytes.Length == 0)
+                    throw RealtimeHttpGatewayException.TtsUnavailable(_sessionId);
+
+                inputAudioDurationMs = CalculatePcm16DurationMs(audioBytes.Length);
+                waitTask = PrepareTurnAwaiter();
+                AppendEvent("user_text_input", "user", inputText);
+                await SendRecordingOnlyAudioChunksAsync(audioBytes, sendToken).ConfigureAwait(false);
                 await SendTextInputAsync(inputText, sendToken).ConfigureAwait(false);
             }
             else
@@ -167,15 +178,14 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
                 inputAudioDurationMs = CalculatePcm16DurationMs(audioBytes.Length);
                 tailSilenceMs = Math.Max(0, _settings.UserSpeechTailSilenceMs);
                 var outboundAudio = AppendSilence(audioBytes, tailSilenceMs);
+                waitTask = PrepareTurnAwaiter();
+                AppendEvent("user_text_input", "user", inputText);
                 await SendAudioChunksAsync(outboundAudio, sendToken).ConfigureAwait(false);
             }
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(sendToken);
-            timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(effectiveTimeoutMs));
-
             try
             {
-                var (turnNumber, outputText) = await waitTask.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+                var (turnNumber, outputText) = await waitTask.WaitAsync(sendToken).ConfigureAwait(false);
                 return new RealtimeHttpSendMessageResponse
                 {
                     SessionId = _sessionId,
@@ -208,6 +218,10 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
             {
                 throw CreateSessionClosedException();
             }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && !_sessionCts.IsCancellationRequested)
+        {
+            throw RealtimeHttpGatewayException.AiResponseTimeout(_sessionId, ProviderSessionId, LastEventType);
         }
         catch (OperationCanceledException) when (_sessionCts.IsCancellationRequested)
         {
@@ -365,11 +379,41 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
     {
         var message = JsonSerializer.Serialize(new
         {
+            type = "RealtimeHttpTextInput",
             text
         });
 
         await _transport.SendTextAsync(message, cancellationToken).ConfigureAwait(false);
         LastActivityAt = DateTimeOffset.UtcNow;
+    }
+
+    private async Task SendRecordingOnlyAudioChunksAsync(byte[] pcmBytes, CancellationToken cancellationToken)
+    {
+        if (pcmBytes.Length == 0) return;
+
+        var bytesPerChunk = Math.Max(
+            480,
+            _settings.Tts.SampleRate * Math.Max(10, _settings.Tts.ChunkDurationMs) / 1000 * 2);
+        var chunkIntervalMs = Math.Max(5, _settings.Tts.ChunkDurationMs);
+
+        for (var offset = 0; offset < pcmBytes.Length; offset += bytesPerChunk)
+        {
+            var count = Math.Min(bytesPerChunk, pcmBytes.Length - offset);
+            var slice = new byte[count];
+            Buffer.BlockCopy(pcmBytes, offset, slice, 0, count);
+
+            var message = JsonSerializer.Serialize(new
+            {
+                type = "RealtimeHttpRecordingAudio",
+                payload = Convert.ToBase64String(slice)
+            });
+
+            await _transport.SendTextAsync(message, cancellationToken).ConfigureAwait(false);
+            LastActivityAt = DateTimeOffset.UtcNow;
+
+            if (_settings.RealTimeAudioPacingEnabled)
+                await Task.Delay(chunkIntervalMs, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task SendAudioChunksAsync(byte[] pcmBytes, CancellationToken cancellationToken)
@@ -414,6 +458,21 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
         }
     }
 
+    private Task WaitForAssistantIdleAsync(CancellationToken cancellationToken)
+    {
+        Task waitTask = Task.CompletedTask;
+        lock (_stateLock)
+        {
+            if (_assistantTurnInProgress)
+            {
+                _assistantIdleAwaiter ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                waitTask = _assistantIdleAwaiter.Task;
+            }
+        }
+
+        return waitTask.WaitAsync(cancellationToken);
+    }
+
     private void ClearTurnAwaiter()
     {
         lock (_stateLock)
@@ -441,6 +500,7 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
         switch (type)
         {
             case "OutputAudioTranscriptionCompleted":
+                MarkAssistantTurnInProgress();
                 var outputTranscript = ExtractTranscript(root);
                 if (!string.IsNullOrWhiteSpace(outputTranscript))
                 {
@@ -450,6 +510,10 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
                     }
                     AppendEvent("assistant_transcript_completed", "assistant", outputTranscript);
                 }
+                break;
+
+            case "ResponseAudioDelta":
+                MarkAssistantTurnInProgress();
                 break;
 
             case "InputAudioTranscriptionCompleted":
@@ -499,6 +563,9 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
 
         lock (_stateLock)
         {
+            _assistantTurnInProgress = false;
+            _assistantIdleAwaiter?.TrySetResult(true);
+            _assistantIdleAwaiter = null;
             turnNumber = ++_completedTurns;
             outputText = string.Join(" ", _activeAssistantTranscripts.Where(x => !string.IsNullOrWhiteSpace(x))).Trim();
             _activeAssistantTranscripts.Clear();
@@ -520,6 +587,14 @@ public sealed class RealtimeHttpSession : IAsyncDisposable
         }
 
         pending?.TrySetCanceled();
+    }
+
+    private void MarkAssistantTurnInProgress()
+    {
+        lock (_stateLock)
+        {
+            _assistantTurnInProgress = true;
+        }
     }
 
     private void AppendEvent(string type, string role, string content)
