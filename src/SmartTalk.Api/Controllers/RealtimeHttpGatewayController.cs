@@ -2,6 +2,7 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using SmartTalk.Core.Services.RealtimeHttp;
 using SmartTalk.Messages.Commands.RealtimeHttp;
 using SmartTalk.Messages.Dto.RealtimeHttp;
 using SmartTalk.Messages.Requests.RealtimeHttp;
@@ -37,6 +38,10 @@ public class RealtimeHttpGatewayController : ControllerBase
                 .ConfigureAwait(false);
             return Ok(result);
         }
+        catch (RealtimeHttpGatewayException ex)
+        {
+            return StatusCode((int)ex.StatusCode, ToErrorResponse(ex));
+        }
         catch (Exception ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -63,6 +68,10 @@ public class RealtimeHttpGatewayController : ControllerBase
                 .SendAsync<RealtimeHttpRunDefaultConversationRequest, RealtimeHttpRunDefaultConversationResponse>(request, cancellationToken)
                 .ConfigureAwait(false);
             return Ok(result);
+        }
+        catch (RealtimeHttpGatewayException ex)
+        {
+            return StatusCode((int)ex.StatusCode, ToErrorResponse(ex));
         }
         catch (Exception ex)
         {
@@ -102,9 +111,9 @@ public class RealtimeHttpGatewayController : ControllerBase
                 .ConfigureAwait(false);
             return Ok(result);
         }
-        catch (KeyNotFoundException ex)
+        catch (RealtimeHttpGatewayException ex)
         {
-            return NotFound(new { message = ex.Message });
+            return StatusCode((int)ex.StatusCode, ToErrorResponse(ex));
         }
         catch (Exception ex)
         {
@@ -125,7 +134,13 @@ public class RealtimeHttpGatewayController : ControllerBase
         };
         var result = await _mediator.SendAsync<DisconnectRealtimeHttpSessionCommand, RealtimeHttpDisconnectResponse>(command, cancellationToken)
             .ConfigureAwait(false);
-        if (!result.Closed) return NotFound(result);
+        if (!result.Closed)
+        {
+            if (!string.Equals(result.Reason, "session_not_found", StringComparison.OrdinalIgnoreCase))
+                return StatusCode(StatusCodes.Status410Gone, result);
+
+            return NotFound(result);
+        }
 
         return Ok(result);
     }
@@ -145,6 +160,10 @@ public class RealtimeHttpGatewayController : ControllerBase
             var result = await _mediator.RequestAsync<GetRealtimeHttpRecordingInfoRequest, RealtimeHttpRecordingInfoResponse>(request, cancellationToken)
                 .ConfigureAwait(false);
             return Ok(result);
+        }
+        catch (RealtimeHttpGatewayException ex)
+        {
+            return StatusCode((int)ex.StatusCode, ToErrorResponse(ex));
         }
         catch (Exception ex)
         {
@@ -175,5 +194,17 @@ public class RealtimeHttpGatewayController : ControllerBase
             : info.RecordingFileName;
 
         return PhysicalFile(info.RecordingPath, contentType, downloadName, enableRangeProcessing: true);
+    }
+
+    private static RealtimeHttpErrorResponse ToErrorResponse(RealtimeHttpGatewayException ex)
+    {
+        return new RealtimeHttpErrorResponse
+        {
+            Code = ex.Code,
+            Message = ex.Message,
+            SessionId = ex.SessionId,
+            ProviderSessionId = ex.ProviderSessionId,
+            Reason = ex.Reason
+        };
     }
 }

@@ -36,6 +36,8 @@ public class RealtimeHttpSendMessageResponse : IResponse
 {
     public string SessionId { get; set; } = string.Empty;
 
+    public string ProviderSessionId { get; set; } = string.Empty;
+
     public string InputText { get; set; } = string.Empty;
 
     public string OutputText { get; set; } = string.Empty;
@@ -44,7 +46,32 @@ public class RealtimeHttpSendMessageResponse : IResponse
 
     public int TurnNumber { get; set; }
 
+    public int InputAudioDurationMs { get; set; }
+
+    public int TailSilenceMs { get; set; }
+
+    public int WaitTimeoutMs { get; set; }
+
+    public string CompletionReason { get; set; } = string.Empty;
+
+    public string LastEventType { get; set; } = string.Empty;
+
+    public string LastError { get; set; } = string.Empty;
+
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+public class RealtimeHttpErrorResponse
+{
+    public string Code { get; set; } = string.Empty;
+
+    public string Message { get; set; } = string.Empty;
+
+    public string SessionId { get; set; } = string.Empty;
+
+    public string ProviderSessionId { get; set; } = string.Empty;
+
+    public string Reason { get; set; } = string.Empty;
 }
 
 public class RealtimeHttpRunDefaultConversationRequest
@@ -125,6 +152,8 @@ public class RealtimeHttpSessionDetailResponse : IResponse
     public DateTimeOffset LastActivityAt { get; set; }
 
     public string LastError { get; set; } = string.Empty;
+
+    public string CloseReason { get; set; } = string.Empty;
 
     public int CompletedTurns { get; set; }
 

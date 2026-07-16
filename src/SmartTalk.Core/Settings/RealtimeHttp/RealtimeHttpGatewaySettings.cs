@@ -14,6 +14,12 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
         InternalWsBaseUrl = section.GetValue<string>("InternalWsBaseUrl") ?? string.Empty;
         DefaultResponseTimeoutMs = section.GetValue<int?>("DefaultResponseTimeoutMs") ?? 20000;
         RecentEventCapacity = section.GetValue<int?>("RecentEventCapacity") ?? 200;
+        IdleTimeoutMs = section.GetValue<int?>("IdleTimeoutMs") ?? 15000;
+        UserSpeechTailSilenceMs = section.GetValue<int?>("UserSpeechTailSilenceMs") ?? 500;
+        TurnCompletionTranscriptGraceMs = section.GetValue<int?>("TurnCompletionTranscriptGraceMs") ?? 250;
+        RealTimeAudioPacingEnabled = section.GetValue<bool?>("RealTimeAudioPacingEnabled") ?? true;
+        ClosedSessionRetentionMs = section.GetValue<int?>("ClosedSessionRetentionMs") ?? 3600000;
+        ClosedSessionCapacity = section.GetValue<int?>("ClosedSessionCapacity") ?? 1000;
         RecordingStorageBasePath = section.GetValue<string>("RecordingStorageBasePath") ?? string.Empty;
         RecordingProcessedFolder = section.GetValue<string>("RecordingProcessedFolder") ?? "processed";
         RecordingCallbackFolder = section.GetValue<string>("RecordingCallbackFolder") ?? "callbacks";
@@ -26,7 +32,8 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
             ResponseFormat = ttsSection.GetValue<string>("ResponseFormat") ?? "pcm",
             ChunkDurationMs = ttsSection.GetValue<int?>("ChunkDurationMs") ?? 20,
             AppendSilenceMs = ttsSection.GetValue<int?>("AppendSilenceMs") ?? 250,
-            SampleRate = ttsSection.GetValue<int?>("SampleRate") ?? 24000
+            SampleRate = ttsSection.GetValue<int?>("SampleRate") ?? 24000,
+            EnableToneFallback = ttsSection.GetValue<bool?>("EnableToneFallback") ?? false
         };
 
         var prompts = scriptedSection
@@ -60,6 +67,18 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
 
     public int RecentEventCapacity { get; set; } = 200;
 
+    public int IdleTimeoutMs { get; set; } = 15000;
+
+    public int UserSpeechTailSilenceMs { get; set; } = 500;
+
+    public int TurnCompletionTranscriptGraceMs { get; set; } = 250;
+
+    public bool RealTimeAudioPacingEnabled { get; set; } = true;
+
+    public int ClosedSessionRetentionMs { get; set; } = 3600000;
+
+    public int ClosedSessionCapacity { get; set; } = 1000;
+
     public string RecordingStorageBasePath { get; set; } = string.Empty;
 
     public string RecordingProcessedFolder { get; set; } = "processed";
@@ -86,6 +105,8 @@ public class RealtimeHttpTtsSettings
     public int AppendSilenceMs { get; set; } = 250;
 
     public int SampleRate { get; set; } = 24000;
+
+    public bool EnableToneFallback { get; set; }
 }
 
 public class RealtimeHttpScriptedConversationSettings
