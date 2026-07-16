@@ -17,9 +17,7 @@ public partial class AiSpeechAssistantDataProvider
     }
 
     public async Task<CrmCustomerContactPhoneMap> GetActiveCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(
-        int agentId,
-        string normalizedPhoneNumber,
-        CancellationToken cancellationToken = default)
+        int agentId, string normalizedPhoneNumber, CancellationToken cancellationToken = default)
     {
         if (agentId <= 0 || string.IsNullOrWhiteSpace(normalizedPhoneNumber))
             return null;
