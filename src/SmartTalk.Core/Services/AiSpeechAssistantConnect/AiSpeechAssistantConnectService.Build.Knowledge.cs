@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Utils;
@@ -17,6 +18,7 @@ public partial class AiSpeechAssistantConnectService
     private async Task BuildKnowledgeAsync(CancellationToken cancellationToken)
     {
         await LoadAssistantInfoAsync(cancellationToken).ConfigureAwait(false);
+        ResolveCandidateCustomerIds();
         
         ResolveStaticPromptVariables();
         
@@ -27,6 +29,7 @@ public partial class AiSpeechAssistantConnectService
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
+        ResolveStoreScopedCustomerItemsInstruction();
 
         Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
     }
@@ -185,6 +188,9 @@ public partial class AiSpeechAssistantConnectService
 
         if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return null;
 
+        if (_ctx.CandidateCustomerIds.Count > 1)
+            return $"Store-specific HiFood product data is not preloaded because this assistant has multiple CRM customer IDs. Ask for the store name and use {OpenAiToolConstants.QueryCustomerItemsByStoreName} before answering product stock, warehouse, or orderable goods questions.";
+
         var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(_ctx.Assistant.Name, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
@@ -200,6 +206,16 @@ public partial class AiSpeechAssistantConnectService
         _ctx.Prompt = _ctx.Prompt
             .Replace("#{customer_items}", value)
             .Replace("{HiFood_商品_商品数据}", value);
+    }
+
+    private void ResolveStoreScopedCustomerItemsInstruction()
+    {
+        if (_ctx.CandidateCustomerIds.Count <= 1) return;
+
+        _ctx.Prompt += "\n\nHiFood store-specific item rule:\n" +
+                       "- This call may belong to multiple CRM customer IDs under the same assistant. When the customer asks about product information, stock, warehouse availability, or orderable goods, first ask for the store name if it is not already clear.\n" +
+                       $"- Use the {OpenAiToolConstants.QueryCustomerItemsByStoreName} tool with the store name before answering store-specific product questions.\n" +
+                       "- The tool result is already limited to CRM IDs within this assistant and at most 150 item lines. Answer only from that tool result. If the tool says no scoped customer IDs matched, ask the customer for another store name, address, phone, or contact detail.";
     }
 
     // ── Menu items ────────────────────────────────────────────────────────

@@ -86,6 +86,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
     private readonly ISalesDataProvider _salesDataProvider;
+    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IFileTextExtractor _fileTextExtractor;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
@@ -124,6 +125,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         ISalesDataProvider salesDataProvider,
+        ISalesCustomerMatchService salesCustomerMatchService,
         ISpeechToTextService speechToTextService,
         IFileTextExtractor fileTextExtractor,
         WorkWeChatKeySetting workWeChatKeySetting,
@@ -157,6 +159,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
+        _salesCustomerMatchService = salesCustomerMatchService;
         _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
@@ -272,6 +275,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
+
+        var candidateCustomerIds = SplitAssistantCustomerIds(assistant.Name);
                 
         if (numberId.HasValue && finalPrompt.Contains("#{greeting}"))
         {
@@ -283,7 +288,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.IsNullOrWhiteSpace(assistant.Name))
+            if (candidateCustomerIds.Count > 1)
+            {
+                finalPrompt = finalPrompt.Replace("#{customer_items}", $"Store-specific HiFood product data is not preloaded because this assistant has multiple CRM customer IDs. Ask for the store name and use {OpenAiToolConstants.QueryCustomerItemsByStoreName} before answering product stock, warehouse, or orderable goods questions.");
+            }
+            else if (!string.IsNullOrWhiteSpace(assistant.Name))
             {
                 var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(assistant.Name, cancellationToken).ConfigureAwait(false);
 
@@ -314,12 +323,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
         }
         
+        if (candidateCustomerIds.Count > 1)
+        {
+            finalPrompt += "\n\nHiFood store-specific item rule:\n" +
+                           "- This call may belong to multiple CRM customer IDs under the same assistant. When the customer asks about product information, stock, warehouse availability, or orderable goods, first ask for the store name if it is not already clear.\n" +
+                           $"- Use the {OpenAiToolConstants.QueryCustomerItemsByStoreName} tool with the store name before answering store-specific product questions.\n" +
+                           "- The tool result is already limited to CRM IDs within this assistant and at most 150 item lines. Answer only from that tool result. If the tool says no scoped customer IDs matched, ask the customer for another store name, address, phone, or contact detail.";
+        }
+        
         // 代客致电等场景: connect URL 带了 ?instruction= 则用它作本通对话指令 (覆盖 DB prompt); 无则照旧 (non-breaking)。
         _aiSpeechAssistantStreamContext.LastPrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : finalPrompt;
 
         Log.Information($"The final prompt: {_aiSpeechAssistantStreamContext.LastPrompt}");
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+        _aiSpeechAssistantStreamContext.CandidateCustomerIds = candidateCustomerIds;
     }
     
     private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)
@@ -795,6 +813,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.ConfirmPickupTime:
                                             await ProcessRecordOrderPickupTimeAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
+
+                                        case OpenAiToolConstants.QueryCustomerItemsByStoreName:
+                                            await ProcessQueryCustomerItemsByStoreNameAsync(outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
                                         
                                         case OpenAiToolConstants.RepeatOrder:
                                         case OpenAiToolConstants.SatisfyOrder:
@@ -1268,6 +1290,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
+
+        EnsureCustomerItemsTool(functions, assistant);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
