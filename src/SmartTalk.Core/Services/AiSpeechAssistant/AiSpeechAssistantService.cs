@@ -290,7 +290,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         {
             if (candidateCustomerIds.Count > 1)
             {
-                finalPrompt = finalPrompt.Replace("#{customer_items}", $"Store-specific HiFood product data is not preloaded because this assistant has multiple CRM customer IDs. Ask for the store name and use {OpenAiToolConstants.QueryCustomerItemsByStoreName} before answering product stock, warehouse, or orderable goods questions.");
+                finalPrompt = finalPrompt.Replace("#{customer_items}", " ");
             }
             else if (!string.IsNullOrWhiteSpace(assistant.Name))
             {
@@ -321,14 +321,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             var deliveryInfoCache = await _salesDataProvider.GetDeliveryInfoCacheByPhoneNumberAsync(from, cancellationToken).ConfigureAwait(false);
             var deliveryInfo = deliveryInfoCache?.CacheValue?.Trim();
             finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
-        }
-        
-        if (candidateCustomerIds.Count > 1)
-        {
-            finalPrompt += "\n\nHiFood store-specific item rule:\n" +
-                           "- This call may belong to multiple CRM customer IDs under the same assistant. When the customer asks about product information, stock, warehouse availability, or orderable goods, first ask for the store name if it is not already clear.\n" +
-                           $"- Use the {OpenAiToolConstants.QueryCustomerItemsByStoreName} tool with the store name before answering store-specific product questions.\n" +
-                           "- The tool result is already limited to CRM IDs within this assistant and at most 150 item lines. Answer only from that tool result. If the tool says no scoped customer IDs matched, ask the customer for another store name, address, phone, or contact detail.";
         }
         
         // 代客致电等场景: connect URL 带了 ?instruction= 则用它作本通对话指令 (覆盖 DB prompt); 无则照旧 (non-breaking)。
