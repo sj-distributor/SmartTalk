@@ -563,7 +563,10 @@ public class AiResourceSyncService : IAiResourceSyncService
             KnowledgeName = x.Name,
             FormatType = MapKnowledgeSceneItemType(x.Type),
             Content = x.Content,
-            FileName = x.FileName
+            FileName = x.FileName,
+            SourceType = "scene",
+            SourceSceneId = x.SceneId,
+            SourceSceneItemId = x.Id
         }).ToList();
     }
 

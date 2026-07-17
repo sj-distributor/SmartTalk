@@ -234,6 +234,9 @@ public class AiResourceSyncServiceTests
         Assert.Equal(AiSpeechAssistantKonwledgeFormatType.FAQ, capturedAddAssistantCommand.Details[0].FormatType);
         Assert.Equal("scene item content", capturedAddAssistantCommand.Details[0].Content);
         Assert.Equal("scene-item.txt", capturedAddAssistantCommand.Details[0].FileName);
+        Assert.Equal("scene", capturedAddAssistantCommand.Details[0].SourceType);
+        Assert.Equal(10, capturedAddAssistantCommand.Details[0].SourceSceneId);
+        Assert.Equal(1001, capturedAddAssistantCommand.Details[0].SourceSceneItemId);
 
         await mediator.Received(1).SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(
             Arg.Is<CreateCompanyStoreCommand>(x =>
