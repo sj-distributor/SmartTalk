@@ -15,12 +15,6 @@ public class AiSpeechAssistantKnowledgeDetailDto
     public string Content { get; set; }
 
     public string FileName { get; set; }
-
-    public string SourceType { get; set; }
-
-    public int? SourceSceneId { get; set; }
-
-    public int? SourceSceneItemId { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now; 
     

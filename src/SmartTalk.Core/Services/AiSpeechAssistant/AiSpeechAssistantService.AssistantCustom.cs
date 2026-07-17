@@ -965,7 +965,7 @@ public partial class AiSpeechAssistantService
 
         var promptSegments = new List<string>();
 
-        if (command.Details is { Count: > 0 })
+        if (command.SourceSystem != AgentSourceSystem.AiResource && command.Details is { Count: > 0 })
         {
             var details = command.Details.Select(x => new AiSpeechAssistantKnowledgeDetail
             {
@@ -974,9 +974,6 @@ public partial class AiSpeechAssistantService
                 FormatType = x.FormatType,
                 Content = x.Content,
                 FileName = string.IsNullOrWhiteSpace(x.FileName) ? null : x.FileName,
-                SourceType = x.SourceType,
-                SourceSceneId = x.SourceSceneId,
-                SourceSceneItemId = x.SourceSceneItemId,
                 CreatedDate = DateTimeOffset.Now
             }).ToList();
 
@@ -985,6 +982,13 @@ public partial class AiSpeechAssistantService
             var detailPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(detailPrompt))
                 promptSegments.Add(detailPrompt);
+        }
+        else if (command.SourceSystem == AgentSourceSystem.AiResource && command.Details is { Count: > 0 })
+        {
+            Log.Warning(
+                "InitialAssistantKnowledgeAsync ignored details for AiResource assistant. AssistantId={AssistantId}, DetailCount={DetailCount}",
+                assistant.Id,
+                command.Details.Count);
         }
 
         if (!string.IsNullOrWhiteSpace(knowledge.Json))
