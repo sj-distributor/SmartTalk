@@ -791,11 +791,22 @@ public partial class PhoneOrderProcessJobService
             };
         }
 
+        var customerLookupPhoneNumbers = GetAixvolinkCustomerLookupNumbers(record);
         var matched = await _salesCustomerMatchService
-            .MatchCustomerAsync(record.PhoneNumber, record.IncomingCallNumber, storeOrder.StoreName, [record.PhoneNumber, record.IncomingCallNumber], cancellationToken)
+            .MatchCustomerAsync(customerLookupPhoneNumbers[0], customerLookupPhoneNumbers[1], storeOrder.StoreName, customerLookupPhoneNumbers, cancellationToken)
             .ConfigureAwait(false);
 
         return matched;
+    }
+
+    private static List<string> GetAixvolinkCustomerLookupNumbers(PhoneOrderRecord record)
+    {
+        var phoneNumbers = new List<string> { record.PhoneNumber, record.IncomingCallNumber };
+
+        if (record.OrderRecordType == PhoneOrderRecordType.OutBount)
+            phoneNumbers = [record.IncomingCallNumber, record.PhoneNumber];
+
+        return phoneNumbers;
     }
 
     private void BackfillMaterialNumbers(ExtractedOrderDto storeOrder, List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems)
