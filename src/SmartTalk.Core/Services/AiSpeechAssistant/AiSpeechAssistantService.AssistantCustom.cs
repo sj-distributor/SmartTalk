@@ -993,6 +993,9 @@ public partial class AiSpeechAssistantService
                 FormatType = x.FormatType,
                 Content = x.Content,
                 FileName = string.IsNullOrWhiteSpace(x.FileName) ? null : x.FileName,
+                SourceType = x.SourceType,
+                SourceSceneId = x.SourceSceneId,
+                SourceSceneItemId = x.SourceSceneItemId,
                 CreatedDate = DateTimeOffset.Now
             }).ToList();
 
