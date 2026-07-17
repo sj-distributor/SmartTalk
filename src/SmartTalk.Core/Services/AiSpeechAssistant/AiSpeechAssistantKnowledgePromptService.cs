@@ -147,6 +147,113 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         await RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
+    private static string GenerateKnowledgePromptForSceneItems(List<KnowledgeSceneItem> items)
+    {
+        if (items == null || items.Count == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        sb.AppendLine("场景知识点：");
+        foreach (var item in items)
+        {
+            var content = ResolveSceneKnowledgeContent(item);
+            if (!string.IsNullOrWhiteSpace(content))
+                sb.AppendLine(content);
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string GetOrBuildScenePrompt(int sceneId, List<KnowledgeSceneItem> items, Dictionary<int, string> promptBySceneId)
+    {
+        if (promptBySceneId.TryGetValue(sceneId, out var prompt))
+            return prompt;
+
+        prompt = GenerateKnowledgePromptForSceneItems(items);
+        promptBySceneId[sceneId] = prompt;
+        return prompt;
+    }
+    
+    private static string ResolveSceneKnowledgeContent(KnowledgeSceneItem sceneKnowledge)
+    {
+        if (sceneKnowledge.Type == KnowledgeSceneItemType.File)
+        {
+            if (!string.IsNullOrWhiteSpace(sceneKnowledge.FileName))
+                return $"文件：{sceneKnowledge.FileName.Trim()}";
+        }
+
+        return sceneKnowledge.Content?.Trim() ?? string.Empty;
+    }
+
+    private static bool TryResolveKnowledgeLanguage(string modelLanguage, out AutoAddLanguage? language)
+    {
+        language = null;
+
+        if (string.IsNullOrWhiteSpace(modelLanguage))
+            return false;
+
+        if (Enum.TryParse<AutoAddLanguage>(modelLanguage, true, out var parsedLanguage))
+        {
+            language = parsedLanguage;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static AiSpeechAssistantKnowledgeDetail BuildKnowledgeDetail(int knowledgeId, KnowledgeSceneItem item)
+    {
+        return new AiSpeechAssistantKnowledgeDetail
+        {
+            KnowledgeId = knowledgeId,
+            KnowledgeName = item.Name,
+            FormatType = MapKnowledgeSceneItemType(item.Type),
+            Content = item.Content,
+            FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName,
+            SourceType = SceneDetailSourceType,
+            SourceSceneId = item.SceneId,
+            SourceSceneItemId = item.Id,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static bool IsSceneGeneratedDetail(AiSpeechAssistantKnowledgeDetail detail)
+    {
+        return string.Equals(detail.SourceType, SceneDetailSourceType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool NeedsSceneDetailUpdate(AiSpeechAssistantKnowledgeDetail detail, KnowledgeSceneItem item)
+    {
+        return !string.Equals(detail.KnowledgeName ?? string.Empty, item.Name ?? string.Empty, StringComparison.Ordinal)
+               || detail.FormatType != MapKnowledgeSceneItemType(item.Type)
+               || !string.Equals(detail.Content ?? string.Empty, item.Content ?? string.Empty, StringComparison.Ordinal)
+               || !string.Equals(detail.FileName ?? string.Empty, item.FileName ?? string.Empty, StringComparison.Ordinal)
+               || detail.SourceSceneId != item.SceneId
+               || detail.SourceSceneItemId != item.Id
+               || !string.Equals(detail.SourceType ?? string.Empty, SceneDetailSourceType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ApplySceneDetail(AiSpeechAssistantKnowledgeDetail detail, KnowledgeSceneItem item)
+    {
+        detail.KnowledgeName = item.Name;
+        detail.FormatType = MapKnowledgeSceneItemType(item.Type);
+        detail.Content = item.Content;
+        detail.FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName;
+        detail.SourceType = SceneDetailSourceType;
+        detail.SourceSceneId = item.SceneId;
+        detail.SourceSceneItemId = item.Id;
+    }
+
+    private static AiSpeechAssistantKonwledgeFormatType MapKnowledgeSceneItemType(KnowledgeSceneItemType type)
+    {
+        return type == KnowledgeSceneItemType.File
+            ? AiSpeechAssistantKonwledgeFormatType.FIle
+            : type == KnowledgeSceneItemType.FAQ
+                ? AiSpeechAssistantKonwledgeFormatType.FAQ
+                : AiSpeechAssistantKonwledgeFormatType.Text;
+    }
+    
     public async Task RefreshKnowledgeDetailsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
     {
         if (companyId <= 0)
@@ -283,62 +390,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             Log.Information("[KnowledgeDetailSync] Updated prompts. CompanyId={CompanyId}, KnowledgeCount={KnowledgeCount}", companyId, knowledgeUpdates.Count);
         }
     }
-
-    private static string GenerateKnowledgePromptForSceneItems(List<KnowledgeSceneItem> items)
-    {
-        if (items == null || items.Count == 0)
-            return string.Empty;
-
-        var sb = new StringBuilder();
-
-        sb.AppendLine("场景知识点：");
-        foreach (var item in items)
-        {
-            var content = ResolveSceneKnowledgeContent(item);
-            if (!string.IsNullOrWhiteSpace(content))
-                sb.AppendLine(content);
-        }
-
-        return sb.ToString().TrimEnd();
-    }
-
-    private static string GetOrBuildScenePrompt(int sceneId, List<KnowledgeSceneItem> items, Dictionary<int, string> promptBySceneId)
-    {
-        if (promptBySceneId.TryGetValue(sceneId, out var prompt))
-            return prompt;
-
-        prompt = GenerateKnowledgePromptForSceneItems(items);
-        promptBySceneId[sceneId] = prompt;
-        return prompt;
-    }
     
-    private static string ResolveSceneKnowledgeContent(KnowledgeSceneItem sceneKnowledge)
-    {
-        if (sceneKnowledge.Type == KnowledgeSceneItemType.File)
-        {
-            if (!string.IsNullOrWhiteSpace(sceneKnowledge.FileName))
-                return $"文件：{sceneKnowledge.FileName.Trim()}";
-        }
-
-        return sceneKnowledge.Content?.Trim() ?? string.Empty;
-    }
-
-    private static bool TryResolveKnowledgeLanguage(string modelLanguage, out AutoAddLanguage? language)
-    {
-        language = null;
-
-        if (string.IsNullOrWhiteSpace(modelLanguage))
-            return false;
-
-        if (Enum.TryParse<AutoAddLanguage>(modelLanguage, true, out var parsedLanguage))
-        {
-            language = parsedLanguage;
-            return true;
-        }
-
-        return false;
-    }
-
     private async Task RepairInactiveSingleKnowledgeForCrmAssistantsAsync(int companyId, CancellationToken cancellationToken)
     {
         var crmAssistants = await _aiSpeechAssistantDataProvider
@@ -402,7 +454,21 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             "[KnowledgeDetailSync] Repaired inactive single CRM knowledges. CompanyId={CompanyId}, Count={Count}",
             companyId, repairs.Count);
     }
+    
+    private async Task<AiSpeechAssistantKnowledge> ResolveKnowledgeForRefreshAsync(
+        KnowledgeCopyRelatedInfoDto assistantKnowledge, IReadOnlyDictionary<int, AiSpeechAssistantKnowledge> knowledgeMap, CancellationToken cancellationToken)
+    {
+        if (knowledgeMap.TryGetValue(assistantKnowledge.KnowledgeId, out var knowledge))
+            return knowledge;
 
+        var (_, latestKnowledges) = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantKnowledgesAsync(assistantKnowledge.AssistantId, pageIndex: 1, pageSize: 1, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        knowledge = latestKnowledges.FirstOrDefault();
+
+        return knowledge;
+    }
+    
     private void SyncSceneGeneratedDetails(
         int companyId, int assistantId, int knowledgeId, int sceneId, List<KnowledgeSceneItem> items,
         List<AiSpeechAssistantKnowledgeDetail> existingDetails,
@@ -448,71 +514,5 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
 
         var desiredSceneItemIds = items.Select(x => x.Id).ToHashSet();
         detailsToDelete.AddRange(existingSceneDetails.Where(x => !x.SourceSceneItemId.HasValue || !desiredSceneItemIds.Contains(x.SourceSceneItemId.Value)));
-    }
-
-    private static AiSpeechAssistantKnowledgeDetail BuildKnowledgeDetail(int knowledgeId, KnowledgeSceneItem item)
-    {
-        return new AiSpeechAssistantKnowledgeDetail
-        {
-            KnowledgeId = knowledgeId,
-            KnowledgeName = item.Name,
-            FormatType = MapKnowledgeSceneItemType(item.Type),
-            Content = item.Content,
-            FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName,
-            SourceType = SceneDetailSourceType,
-            SourceSceneId = item.SceneId,
-            SourceSceneItemId = item.Id,
-            CreatedDate = DateTimeOffset.UtcNow
-        };
-    }
-
-    private static bool IsSceneGeneratedDetail(AiSpeechAssistantKnowledgeDetail detail)
-    {
-        return string.Equals(detail.SourceType, SceneDetailSourceType, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool NeedsSceneDetailUpdate(AiSpeechAssistantKnowledgeDetail detail, KnowledgeSceneItem item)
-    {
-        return !string.Equals(detail.KnowledgeName ?? string.Empty, item.Name ?? string.Empty, StringComparison.Ordinal)
-               || detail.FormatType != MapKnowledgeSceneItemType(item.Type)
-               || !string.Equals(detail.Content ?? string.Empty, item.Content ?? string.Empty, StringComparison.Ordinal)
-               || !string.Equals(detail.FileName ?? string.Empty, item.FileName ?? string.Empty, StringComparison.Ordinal)
-               || detail.SourceSceneId != item.SceneId
-               || detail.SourceSceneItemId != item.Id
-               || !string.Equals(detail.SourceType ?? string.Empty, SceneDetailSourceType, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static void ApplySceneDetail(AiSpeechAssistantKnowledgeDetail detail, KnowledgeSceneItem item)
-    {
-        detail.KnowledgeName = item.Name;
-        detail.FormatType = MapKnowledgeSceneItemType(item.Type);
-        detail.Content = item.Content;
-        detail.FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName;
-        detail.SourceType = SceneDetailSourceType;
-        detail.SourceSceneId = item.SceneId;
-        detail.SourceSceneItemId = item.Id;
-    }
-
-    private static AiSpeechAssistantKonwledgeFormatType MapKnowledgeSceneItemType(KnowledgeSceneItemType type)
-    {
-        return type == KnowledgeSceneItemType.File
-            ? AiSpeechAssistantKonwledgeFormatType.FIle
-            : type == KnowledgeSceneItemType.FAQ
-                ? AiSpeechAssistantKonwledgeFormatType.FAQ
-                : AiSpeechAssistantKonwledgeFormatType.Text;
-    }
-
-    private async Task<AiSpeechAssistantKnowledge> ResolveKnowledgeForRefreshAsync(
-        KnowledgeCopyRelatedInfoDto assistantKnowledge, IReadOnlyDictionary<int, AiSpeechAssistantKnowledge> knowledgeMap, CancellationToken cancellationToken)
-    {
-        if (knowledgeMap.TryGetValue(assistantKnowledge.KnowledgeId, out var knowledge))
-            return knowledge;
-
-        var (_, latestKnowledges) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgesAsync(assistantKnowledge.AssistantId, pageIndex: 1, pageSize: 1, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        knowledge = latestKnowledges.FirstOrDefault();
-
-        return knowledge;
     }
 }
