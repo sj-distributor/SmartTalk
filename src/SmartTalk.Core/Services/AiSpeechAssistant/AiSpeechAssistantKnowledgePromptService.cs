@@ -264,15 +264,15 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         if (setup == null)
             return;
 
-        var (assistantKnowledges, existingDetailCount, context) = setup.Value;
+        var (refreshTargets, existingDetailCount, context) = setup.Value;
 
-        foreach (var assistantKnowledge in assistantKnowledges)
-            await PrepareKnowledgeRefreshAsync(companyId, context, assistantKnowledge, cancellationToken).ConfigureAwait(false);
+        foreach (var refreshTarget in refreshTargets)
+            PrepareKnowledgeRefresh(companyId, context, refreshTarget);
 
         await SaveKnowledgeRefreshChangesAsync(companyId, existingDetailCount, context, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<(List<KnowledgeCopyRelatedInfoDto> AssistantKnowledges, int ExistingDetailCount, KnowledgeDetailRefreshContext Context)?> BuildKnowledgeDetailRefreshContextAsync(int companyId, CancellationToken cancellationToken)
+    private async Task<(List<KnowledgeRefreshTarget> RefreshTargets, int ExistingDetailCount, KnowledgeDetailRefreshContext Context)?> BuildKnowledgeDetailRefreshContextAsync(int companyId, CancellationToken cancellationToken)
     {
         var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: companyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (mappings.Count == 0)
@@ -285,27 +285,20 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             .GroupBy(x => x.Language)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
 
-        var assistantKnowledges = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgesByCompanyIdAsync(companyId, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        if (assistantKnowledges.Count == 0)
-        {
-            Log.Information("[KnowledgeDetailSync] Skip. No assistant knowledges. CompanyId={CompanyId}", companyId);
-            return null;
-        }
-
+        var assistantKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(companyId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
         var knowledgeIds = assistantKnowledges.Select(x => x.KnowledgeId).Where(x => x > 0).Distinct().ToList();
         var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
        
-        var existingDetails = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(knowledgeIds, cancellationToken)
-            .ConfigureAwait(false);
+        var existingDetails = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
        
         var sceneItems = await LoadSceneItemsAsync(mappingByLanguage.Values.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
        
         var crmAssistantIds = (await _aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantsInCompanyAsync(companyId, cancellationToken).ConfigureAwait(false))
             .Select(x => x.AssistantId)
             .ToHashSet();
+        
+        var refreshTargets = await BuildKnowledgeRefreshTargetsAsync(assistantKnowledges, knowledges, cancellationToken).ConfigureAwait(false);
        
         var singleKnowledgeCrmAssistantIds = assistantKnowledges
             .Where(x => x.AssistantId > 0 && crmAssistantIds.Contains(x.AssistantId))
@@ -318,7 +311,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             "[KnowledgeDetailSync] Loaded knowledges. CompanyId={CompanyId}, KnowledgeCount={KnowledgeCount}, MappingCount={MappingCount}",
             companyId, assistantKnowledges.Count, mappingByLanguage.Count);
 
-        return (assistantKnowledges, existingDetails.Count, new KnowledgeDetailRefreshContext
+        return (refreshTargets, existingDetails.Count, new KnowledgeDetailRefreshContext
         {
             MappingByLanguage = mappingByLanguage,
             KnowledgeMap = knowledges.ToDictionary(x => x.Id),
@@ -333,17 +326,48 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         if (sceneIds.Count == 0)
             return [];
 
-        return await _knowledgeScenarioDataProvider
-            .GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        return await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task PrepareKnowledgeRefreshAsync(
-        int companyId, KnowledgeDetailRefreshContext context, KnowledgeCopyRelatedInfoDto assistantKnowledge, CancellationToken cancellationToken)
+    private async Task<List<KnowledgeRefreshTarget>> BuildKnowledgeRefreshTargetsAsync(List<KnowledgeCopyRelatedInfoDto> assistantKnowledges, List<AiSpeechAssistantKnowledge> knowledges, CancellationToken cancellationToken)
     {
-        var knowledge = await ResolveKnowledgeForRefreshAsync(assistantKnowledge, context.KnowledgeMap, cancellationToken).ConfigureAwait(false);
-        if (knowledge == null)
-            return;
+        var knowledgeMap = knowledges.ToDictionary(x => x.Id);
+        var missingAssistantIds = assistantKnowledges
+            .Where(x => !knowledgeMap.ContainsKey(x.KnowledgeId) && x.AssistantId > 0)
+            .Select(x => x.AssistantId)
+            .Distinct()
+            .ToList();
+
+        var fallbackKnowledgeByAssistantId = new Dictionary<int, AiSpeechAssistantKnowledge>();
+        foreach (var assistantId in missingAssistantIds)
+        {
+            var (_, latestKnowledges) = await _aiSpeechAssistantDataProvider
+                .GetAiSpeechAssistantKnowledgesAsync(assistantId, pageIndex: 1, pageSize: 1, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            var latestKnowledge = latestKnowledges.FirstOrDefault();
+            if (latestKnowledge != null)
+                fallbackKnowledgeByAssistantId[assistantId] = latestKnowledge;
+        }
+
+        return assistantKnowledges
+            .Select(x =>
+            {
+                knowledgeMap.TryGetValue(x.KnowledgeId, out var knowledge);
+                if (knowledge == null)
+                    fallbackKnowledgeByAssistantId.TryGetValue(x.AssistantId, out knowledge);
+
+                return knowledge == null ? null : new KnowledgeRefreshTarget(x, knowledge);
+            })
+            .Where(x => x != null)
+            .ToList();
+    }
+
+    private void PrepareKnowledgeRefresh(
+        int companyId, KnowledgeDetailRefreshContext context, KnowledgeRefreshTarget refreshTarget)
+    {
+        var assistantKnowledge = refreshTarget.AssistantKnowledge;
+        var knowledge = refreshTarget.Knowledge;
 
         var isCrmAssistant = TryRepairInactiveSingleKnowledgeForCrmAssistant(
             companyId, assistantKnowledge.AssistantId, knowledge, context.SingleKnowledgeCrmAssistantIds);
@@ -412,10 +436,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
     }
 
     private static bool TryRepairInactiveSingleKnowledgeForCrmAssistant(
-        int companyId,
-        int assistantId,
-        AiSpeechAssistantKnowledge knowledge,
-        IReadOnlySet<int> singleKnowledgeCrmAssistantIds)
+        int companyId, int assistantId, AiSpeechAssistantKnowledge knowledge, IReadOnlySet<int> singleKnowledgeCrmAssistantIds)
     {
         var isCrmAssistant = singleKnowledgeCrmAssistantIds.Contains(assistantId);
         if (!isCrmAssistant)
@@ -432,29 +453,9 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         return true;
     }
     
-    private async Task<AiSpeechAssistantKnowledge> ResolveKnowledgeForRefreshAsync(
-        KnowledgeCopyRelatedInfoDto assistantKnowledge, IReadOnlyDictionary<int, AiSpeechAssistantKnowledge> knowledgeMap, CancellationToken cancellationToken)
-    {
-        if (knowledgeMap.TryGetValue(assistantKnowledge.KnowledgeId, out var knowledge))
-            return knowledge;
-
-        var (_, latestKnowledges) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgesAsync(assistantKnowledge.AssistantId, pageIndex: 1, pageSize: 1, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        knowledge = latestKnowledges.FirstOrDefault();
-
-        return knowledge;
-    }
-    
     private void SyncSceneGeneratedDetails(
-        int companyId,
-        KnowledgeDetailRefreshContext context,
-        int assistantId,
-        int knowledgeId,
-        int sceneId,
-        List<KnowledgeSceneItem> items,
-        List<AiSpeechAssistantKnowledgeDetail> existingDetails,
-        bool isCrmAssistant)
+        int companyId, KnowledgeDetailRefreshContext context, int assistantId, int knowledgeId, int sceneId,
+        List<KnowledgeSceneItem> items, List<AiSpeechAssistantKnowledgeDetail> existingDetails, bool isCrmAssistant)
     {
         var existingSceneDetails = existingDetails
             .Where(IsSceneGeneratedDetail)
@@ -509,4 +510,8 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         public Dictionary<int, string> PromptBySceneId { get; init; } = [];
         public Dictionary<int, AiSpeechAssistantKnowledge> KnowledgeUpdates { get; init; } = [];
     }
+
+    private sealed record KnowledgeRefreshTarget(
+        KnowledgeCopyRelatedInfoDto AssistantKnowledge,
+        AiSpeechAssistantKnowledge Knowledge);
 }
