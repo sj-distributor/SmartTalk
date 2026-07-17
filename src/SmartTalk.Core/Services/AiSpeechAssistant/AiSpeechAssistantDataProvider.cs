@@ -170,7 +170,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantKnowledgeDetail>> GetKnowledgeDetailsByKnowledgeIdAsync(int knowledgeId, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeDetail>> AddAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
-    
+
     Task<AiSpeechAssistantKnowledgeDetail> UpdateAiSpeechAssistantKnowledgeDetailAsync(AiSpeechAssistantKnowledgeDetail detail, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteAiSpeechAssistantKnowledgeDetailAsync(int detailId, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -182,6 +182,9 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantKnowledgeDetail>> GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgeAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantKnowledgeDetail>> UpdateAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
+
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -1050,5 +1053,17 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             return new List<AiSpeechAssistantKnowledge>();
 
         return await _repository.Query<AiSpeechAssistantKnowledge>().Where(k => knowledgeIds.Contains(k.Id)).ToListAsync(cancellationToken);
+    }
+    
+    public async Task<List<AiSpeechAssistantKnowledgeDetail>> UpdateAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (details == null || details.Count == 0)
+            return details;
+
+        await _repository.UpdateAllAsync(details, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return details;
     }
 }

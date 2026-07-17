@@ -26,6 +26,15 @@ public class AiSpeechAssistantKnowledgeDetail : IEntity, IHasModifiedFields
 
     [Column("file_name")]
     public string FileName { get; set; }
+
+    [Column("source_type")]
+    public string SourceType { get; set; }
+
+    [Column("source_scene_id")]
+    public int? SourceSceneId { get; set; }
+
+    [Column("source_scene_item_id")]
+    public int? SourceSceneItemId { get; set; }
     
     [Column("created_date")] 
     public DateTimeOffset CreatedDate { get; set; } = DateTimeOffset.Now; 
