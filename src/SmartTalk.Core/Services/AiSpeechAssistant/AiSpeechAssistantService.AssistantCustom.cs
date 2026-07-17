@@ -1052,7 +1052,6 @@ public partial class AiSpeechAssistantService
             {
                 KnowledgeId = targetKnowledgeId,
                 SceneId = x.SceneId,
-                SourceType = x.SourceType,
                 CreatedAt = DateTimeOffset.UtcNow
             })
             .ToList();
@@ -2239,7 +2238,6 @@ public partial class AiSpeechAssistantService
                 {
                     KnowledgeId = oldToNewKnowledgeIdMap[r.KnowledgeId],
                     SceneId = r.SceneId,
-                    SourceType = r.SourceType,
                     CreatedAt = DateTimeOffset.UtcNow
                 }).ToList();
 

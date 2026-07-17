@@ -1,4 +1,3 @@
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -10,8 +9,6 @@ public class AiSpeechAssistantKnowledgeSceneRelationDto
     public int KnowledgeId { get; set; }
 
     public int SceneId { get; set; }
-
-    public AiSpeechAssistantKnowledgeSceneRelationSourceType SourceType { get; set; }
 
     public int FolderId { get; set; }
 

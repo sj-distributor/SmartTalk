@@ -335,10 +335,8 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             return;
 
         var staleKnowledgeIds = staleKnowledges.Select(x => x.Id).ToList();
-        var sceneRelations = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
         var details = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
 
-        await _speechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(sceneRelations, false, cancellationToken).ConfigureAwait(false);
         await _speechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeDetailsAsync(details, false, cancellationToken).ConfigureAwait(false);
 
         staleKnowledges.ForEach(x =>
