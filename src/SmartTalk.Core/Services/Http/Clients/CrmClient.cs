@@ -174,12 +174,7 @@ public class CrmClient : ICrmClient
         while (true)
         {
             var pagedUrl = $"{url}?page={page}";
-            var response = await _httpClient
-                .GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, timeout: SyncRequestTimeout, headers: headers)
-                .ConfigureAwait(false);
-
-            if (response == null)
-                throw new InvalidOperationException($"Failed to load CRM sales auto sync customers. Url={pagedUrl}");
+            var response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
 
             if (response?.Data == null || response.Data.Count == 0)
                 break;
