@@ -5,6 +5,7 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using Xunit;
@@ -14,7 +15,7 @@ namespace SmartTalk.UnitTests.Services.AiSpeechAssistant;
 public class KnowledgeDetailSyncWithSceneMetadataTests
 {
     [Fact]
-    public async Task RefreshKnowledgeDetailsByCompanyId_ShouldRebuildLegacyCrmDetailsWithSceneMetadata()
+    public async Task RefreshKnowledgeDetailsByCompanyId_ShouldMigrateLegacyCrmSceneDetailsToRelations()
     {
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
         var knowledgeScenarioDataProvider = Substitute.For<IKnowledgeScenarioDataProvider>();
@@ -33,9 +34,9 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
         {
             Id = 1,
             KnowledgeId = 100,
-            KnowledgeName = "EN",
+            KnowledgeName = "item explain",
             FormatType = AiSpeechAssistantKonwledgeFormatType.Text,
-            Content = "old content"
+            Content = "Use {HiFood_商品_术语库需求}"
         };
 
         knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: 1, isActive: true, cancellationToken: Arg.Any<CancellationToken>())
@@ -70,7 +71,8 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
                 {
                     AssistantId = 10,
                     KnowledgeId = 100,
-                    AssiatantName = "crm-assistant"
+                    AssiatantName = "crm-assistant",
+                    SourceSystem = AgentSourceSystem.AiResource
                 }
             });
 
@@ -78,6 +80,12 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
                 Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 100),
                 Arg.Any<CancellationToken>())
             .Returns(new List<AiSpeechAssistantKnowledge> { knowledge });
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(
+                null,
+                100,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(knowledge);
 
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(
                 10,
@@ -86,6 +94,32 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
                 null,
                 Arg.Any<CancellationToken>())
             .Returns((1, new List<AiSpeechAssistantKnowledge> { knowledge }));
+
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(
+                Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 100),
+                Arg.Any<CancellationToken>())
+            .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>());
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(100, Arg.Any<CancellationToken>())
+            .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>
+            {
+                new()
+                {
+                    KnowledgeId = 100,
+                    SceneId = 49
+                }
+            });
+        aiSpeechAssistantDataProvider.GetKnowledgeScenesByIdsAsync(
+                Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 49),
+                Arg.Any<CancellationToken>())
+            .Returns(new List<KnowledgeScene>
+            {
+                new()
+                {
+                    Id = 49,
+                    Status = KnowledgeSceneStatus.Published,
+                    CreatedAt = DateTimeOffset.UtcNow
+                }
+            });
 
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(
                 Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 100),
@@ -118,15 +152,12 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
                 Arg.Any<CancellationToken>());
 
         await aiSpeechAssistantDataProvider.Received(1)
-            .AddAiSpeechAssistantKnowledgeDetailsAsync(
-                Arg.Is<List<AiSpeechAssistantKnowledgeDetail>>(x =>
+            .AddAiSpeechAssistantKnowledgeSceneRelationsAsync(
+                Arg.Is<List<AiSpeechAssistantKnowledgeSceneRelation>>(x =>
                     x.Count == 1 &&
                     x[0].KnowledgeId == 100 &&
-                    x[0].KnowledgeName == "item explain" &&
-                    x[0].Content == "Use {HiFood_商品_术语库需求}" &&
-                    x[0].SourceType == "scene" &&
-                    x[0].SourceSceneId == 49 &&
-                    x[0].SourceSceneItemId == 186),
+                    x[0].SceneId == 49 &&
+                    x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
                 true,
                 Arg.Any<CancellationToken>());
 
@@ -135,8 +166,7 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
                 Arg.Is<List<AiSpeechAssistantKnowledge>>(x =>
                     x.Count == 1 &&
                     x[0].Id == 100 &&
-                    x[0].Prompt == "场景知识点：\nUse {HiFood_商品_术语库需求}" &&
-                    x[0].ScenePrompt == string.Empty),
+                    x[0].ScenePrompt == "场景知识点：\nUse {HiFood_商品_术语库需求}"),
                 true,
                 Arg.Any<CancellationToken>());
     }
