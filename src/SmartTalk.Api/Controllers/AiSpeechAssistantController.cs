@@ -56,7 +56,7 @@ public class AiSpeechAssistantController : ControllerBase
     [AllowAnonymous]
     [HttpGet("outbound/connect")]
     [HttpGet("outbound/connect/{from}/{to}/{id}/{numberId}")]
-    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id, int numberId)
+    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id, int numberId, [FromQuery] string instruction = null)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
@@ -68,6 +68,7 @@ public class AiSpeechAssistantController : ControllerBase
                 AssistantId = id,
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
+                Instruction = instruction,
                 TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 OrderRecordType = PhoneOrderRecordType.OutBount,
             };

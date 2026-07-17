@@ -40,11 +40,13 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly IPhoneOrderDataProvider _phoneOrderDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClient;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ISpeechMaticsDataProvider _speechMaticsDataProvider;
     private readonly ISmartTalkHttpClientFactory _smartTalkHttpClientFactory;
     private readonly ISmartTalkBackgroundJobClient _smartTalkBackgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
+    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
 
     public PhoneOrderProcessJobService(
         ISalesClient salesClient,
@@ -61,8 +63,12 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         ISmartTalkHttpClientFactory smartTalkHttpClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         ISmartTalkHttpClientFactory smartTalkHttpClientFactory,
+        ISmartTalkBackgroundJobClient backgroundJobClient,
         ISmartTalkBackgroundJobClient smartTalkBackgroundJobClient,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, IPosUtilService posUtilService, IPhoneOrderUtilService phoneOrderUtilService)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        IPosUtilService posUtilService,
+        IPhoneOrderUtilService phoneOrderUtilService,
+        ISalesCustomerMatchService salesCustomerMatchService)
     {
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
@@ -75,6 +81,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _phoneOrderService = phoneOrderService;
         _salesDataProvider = salesDataProvider;
         _smartTalkHttpClient = smartTalkHttpClient;
+        _backgroundJobClient = backgroundJobClient;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _smartTalkHttpClientFactory = smartTalkHttpClientFactory;
@@ -82,6 +89,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _posUtilService = posUtilService;
         _phoneOrderUtilService = phoneOrderUtilService;
+        _salesCustomerMatchService = salesCustomerMatchService;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)

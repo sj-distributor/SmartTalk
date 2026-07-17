@@ -44,6 +44,10 @@ public class DistributeSpeechMaticsCallbackCommandHandler : ICommandHandler<Dist
                 _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.HandleReleasedSpeechMaticsCallBackAsync(job.JobId, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
                 break;
             
+            case SpeechMaticsJobScenario.AixvolinkReleased:
+                _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.HandleReleasedSpeechMaticsCallBackAsync(job.JobId, cancellationToken), HangfireConstants.InternalHostingAixvolinkPhoneOrder);
+                break;
+
             case SpeechMaticsJobScenario.TestingSalesPhoneOrder:
                 _backgroundJobClient.Enqueue<IAutoTestSalesPhoneOrderProcessJobService>(x =>
                     x.HandleTestingSalesPhoneOrderSpeechMaticsCallBackAsync(job.JobId, cancellationToken), HangfireConstants.InternalHostingTestingSalesPhoneOrder);
