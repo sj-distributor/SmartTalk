@@ -166,6 +166,16 @@ public class AiResourceSyncServiceTests
                 AgentId = 201,
                 Name = "100"
             });
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(101, null, true, Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledge
+            {
+                Id = 701,
+                AssistantId = 101,
+                IsActive = true,
+                ModelLanguage = "English"
+            });
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(701, Arg.Any<CancellationToken>())
+            .Returns(new List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>());
         aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(
                 Arg.Any<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(), true, Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
@@ -229,14 +239,15 @@ public class AiResourceSyncServiceTests
         Assert.NotNull(capturedAddAssistantCommand);
         Assert.Equal("100", capturedAddAssistantCommand!.AssistantName);
         Assert.Equal(888, capturedAddAssistantCommand.CreatedBy);
-        Assert.Single(capturedAddAssistantCommand.Details);
-        Assert.Equal("Scene item example", capturedAddAssistantCommand.Details[0].KnowledgeName);
-        Assert.Equal(AiSpeechAssistantKonwledgeFormatType.FAQ, capturedAddAssistantCommand.Details[0].FormatType);
-        Assert.Equal("scene item content", capturedAddAssistantCommand.Details[0].Content);
-        Assert.Equal("scene-item.txt", capturedAddAssistantCommand.Details[0].FileName);
-        Assert.Equal("scene", capturedAddAssistantCommand.Details[0].SourceType);
-        Assert.Equal(10, capturedAddAssistantCommand.Details[0].SourceSceneId);
-        Assert.Equal(1001, capturedAddAssistantCommand.Details[0].SourceSceneItemId);
+        Assert.Empty(capturedAddAssistantCommand.Details);
+        await aiSpeechAssistantDataProvider.Received(1).AddAiSpeechAssistantKnowledgeSceneRelationsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>>(x =>
+                x.Count == 1 &&
+                x[0].KnowledgeId == 701 &&
+                x[0].SceneId == 500 &&
+                x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
+            true,
+            Arg.Any<CancellationToken>());
 
         await mediator.Received(1).SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(
             Arg.Is<CreateCompanyStoreCommand>(x =>
@@ -731,6 +742,7 @@ public class AiResourceSyncServiceTests
         IAgentDataProvider? agentDataProvider = null,
         IPosDataProvider? posDataProvider = null,
         IAiSpeechAssistantDataProvider? aiSpeechAssistantDataProvider = null,
+        IAiSpeechAssistantKnowledgePromptService? aiSpeechAssistantKnowledgePromptService = null,
         IKnowledgeScenarioDataProvider? knowledgeScenarioDataProvider = null,
         ISalesDataProvider? salesDataProvider = null,
         IRedisSafeRunner? redisSafeRunner = null,
@@ -768,6 +780,7 @@ public class AiResourceSyncServiceTests
             agentDataProvider ?? Substitute.For<IAgentDataProvider>(),
             posDataProvider ?? Substitute.For<IPosDataProvider>(),
             aiSpeechAssistantDataProvider ?? Substitute.For<IAiSpeechAssistantDataProvider>(),
+            aiSpeechAssistantKnowledgePromptService ?? Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
             knowledgeScenarioDataProvider ?? Substitute.For<IKnowledgeScenarioDataProvider>(),
             salesDataProvider ?? Substitute.For<ISalesDataProvider>(),
             Substitute.For<IWeChatClient>(),
