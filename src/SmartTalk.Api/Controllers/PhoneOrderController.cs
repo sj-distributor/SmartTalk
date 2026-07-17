@@ -106,6 +106,17 @@ public class PhoneOrderController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("record/transcribe-analyze")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TranscribeAndAnalyzePhoneOrderRecordResponse))]
+    public async Task<IActionResult> TranscribeAndAnalyzePhoneOrderRecordAsync([FromBody] TranscribeAndAnalyzePhoneOrderRecordCommand command, CancellationToken cancellationToken)
+    {
+        var response = await _mediator
+            .SendAsync<TranscribeAndAnalyzePhoneOrderRecordCommand, TranscribeAndAnalyzePhoneOrderRecordResponse>(command, cancellationToken)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
     [HttpPost("aixvolink/call-ended")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ReceiveAixvolinkCallEndedAsync([FromBody] ReceiveAixvolinkPhoneOrderRecordCommand command)
