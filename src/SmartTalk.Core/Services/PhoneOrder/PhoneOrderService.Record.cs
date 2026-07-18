@@ -1208,7 +1208,7 @@ public partial class PhoneOrderService
             CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
         };
         
-        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
+        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderRecord>();
         var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
 
         var callInFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
@@ -1397,7 +1397,7 @@ public partial class PhoneOrderService
         var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
             agentIds: command.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
+        var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderRecord>();
         var prevCallOutRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
 
         var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
