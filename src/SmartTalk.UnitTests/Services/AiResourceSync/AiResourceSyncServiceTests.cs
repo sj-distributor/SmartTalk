@@ -175,7 +175,16 @@ public class AiResourceSyncServiceTests
                 ModelLanguage = "English"
             });
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(701, Arg.Any<CancellationToken>())
-            .Returns(new List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>());
+            .Returns(new List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>
+            {
+                new()
+                {
+                    Id = 1,
+                    KnowledgeId = 701,
+                    SceneId = 499,
+                    SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync
+                }
+            });
         aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(
                 Arg.Any<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(), true, Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
@@ -245,6 +254,14 @@ public class AiResourceSyncServiceTests
                 x.Count == 1 &&
                 x[0].KnowledgeId == 701 &&
                 x[0].SceneId == 500 &&
+                x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
+            true,
+            Arg.Any<CancellationToken>());
+        await aiSpeechAssistantDataProvider.Received(1).DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>>(x =>
+                x.Count == 1 &&
+                x[0].KnowledgeId == 701 &&
+                x[0].SceneId == 499 &&
                 x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
             true,
             Arg.Any<CancellationToken>());

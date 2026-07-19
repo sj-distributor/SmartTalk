@@ -569,6 +569,17 @@ public class AiResourceSyncService : IAiResourceSyncService
             .GetAiSpeechAssistantKnowledgeSceneRelationsAsync(knowledge.Id, cancellationToken)
             .ConfigureAwait(false);
 
+        var obsoleteCrmRelations = existingRelations
+            .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync && x.SceneId != scene.Id)
+            .ToList();
+
+        if (obsoleteCrmRelations.Count > 0)
+        {
+            await _aiSpeechAssistantDataProvider
+                .DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(obsoleteCrmRelations, true, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         if (existingRelations.All(x => x.SceneId != scene.Id))
         {
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(

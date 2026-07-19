@@ -98,7 +98,16 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(
                 Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 100),
                 Arg.Any<CancellationToken>())
-            .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>());
+            .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>
+            {
+                new()
+                {
+                    Id = 2,
+                    KnowledgeId = 100,
+                    SceneId = 48,
+                    SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync
+                }
+            });
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(100, Arg.Any<CancellationToken>())
             .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>
             {
@@ -157,6 +166,16 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
                     x.Count == 1 &&
                     x[0].KnowledgeId == 100 &&
                     x[0].SceneId == 49 &&
+                    x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
+                true,
+                Arg.Any<CancellationToken>());
+
+        await aiSpeechAssistantDataProvider.Received(1)
+            .DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(
+                Arg.Is<List<AiSpeechAssistantKnowledgeSceneRelation>>(x =>
+                    x.Count == 1 &&
+                    x[0].Id == 2 &&
+                    x[0].SceneId == 48 &&
                     x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
                 true,
                 Arg.Any<CancellationToken>());

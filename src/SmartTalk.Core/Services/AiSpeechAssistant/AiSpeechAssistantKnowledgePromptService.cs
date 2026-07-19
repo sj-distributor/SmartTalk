@@ -252,6 +252,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         var sceneItemsLookup = sceneItems.GroupBy(x => x.SceneId).ToDictionary(x => x.Key, x => x.ToList());
 
         var relationsToAdd = new List<AiSpeechAssistantKnowledgeSceneRelation>();
+        var relationsToDelete = new List<AiSpeechAssistantKnowledgeSceneRelation>();
         var detailsToDelete = new List<AiSpeechAssistantKnowledgeDetail>();
         var affectedKnowledgeIds = new HashSet<int>();
 
@@ -285,6 +286,16 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
                 affectedKnowledgeIds.Add(knowledge.Id);
             }
 
+            var obsoleteCrmRelations = relations?
+                .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync && x.SceneId != sceneId)
+                .ToList() ?? [];
+
+            if (obsoleteCrmRelations.Count > 0)
+            {
+                relationsToDelete.AddRange(obsoleteCrmRelations);
+                affectedKnowledgeIds.Add(knowledge.Id);
+            }
+
             if (!detailMap.TryGetValue(knowledge.Id, out var details) || details.Count == 0)
                 continue;
 
@@ -297,6 +308,9 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
 
         if (relationsToAdd.Count > 0)
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToAdd, true, cancellationToken).ConfigureAwait(false);
+
+        if (relationsToDelete.Count > 0)
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToDelete, true, cancellationToken).ConfigureAwait(false);
 
         if (detailsToDelete.Count > 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeDetailsAsync(detailsToDelete, true, cancellationToken).ConfigureAwait(false);
