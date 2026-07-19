@@ -68,8 +68,7 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
                 Log.Error(ex, "SyncCrmSalesAutoCreate failed after {MaxAttempts} attempts", MaxSyncAttempts);
                 await _aiResourceSyncService.RecordSyncRunAsync(command, null, false, false, ex.Message, cancellationToken).ConfigureAwait(false);
 
-                if (!command.IsManual)
-                    await _aiResourceSyncService.SendNotifyAsync(false, cancellationToken).ConfigureAwait(false);
+                await _aiResourceSyncService.SendNotifyAsync(false, cancellationToken).ConfigureAwait(false);
             }
         }
 
