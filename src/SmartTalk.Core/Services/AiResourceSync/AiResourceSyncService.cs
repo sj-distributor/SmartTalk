@@ -242,10 +242,10 @@ public class AiResourceSyncService : IAiResourceSyncService
         var isInitialRelease = !command.IsManual
             && !await _aiSpeechAssistantDataProvider.HasCrmAutoSyncAssistantsInCompanyAsync(company.Id, cancellationToken).ConfigureAwait(false);
 
-        if (isInitialRelease)
+        if (isInitialRelease || command.IsFullSync)
         {
             var (customers, totalCount) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return new AiResourceSyncCustomerLoadResult(company, customers, totalCount ?? customers.Count, true, true);
+            return new AiResourceSyncCustomerLoadResult(company, customers, totalCount ?? customers.Count, true, isInitialRelease);
         }
 
         var customersChanged = await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
@@ -1276,7 +1276,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         var run = new CrmSalesAutoSyncRun
         {
-            Mode = isInitialRelease ? "initial" : command.IsManual ? "manual" : "automatic",
+            Mode = isInitialRelease ? "initial" : command.IsManual && command.IsFullSync ? "manual_full" : command.IsManual ? "manual" : "automatic",
             IsSuccess = isSuccess,
             TotalCount = stats?.TotalCount ?? 0,
             CreatedStoreCount = stats?.CreatedStoreCount ?? 0,
