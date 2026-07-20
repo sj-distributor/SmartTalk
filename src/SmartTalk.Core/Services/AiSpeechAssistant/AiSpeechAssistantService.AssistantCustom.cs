@@ -545,14 +545,6 @@ public partial class AiSpeechAssistantService
 
         await UpdateAiSpeechAssistantConfigsAsync(assistant, command.TransferCallNumber, cancellationToken).ConfigureAwait(false);
 
-        if (command.PhoneNoiseReductionEnabled.HasValue)
-        {
-            if (!AssistantHasPhoneChannel(assistant))
-                throw new InvalidOperationException("Phone noise reduction can only be configured for phone assistants.");
-
-            await SetPhoneNoiseReductionAsync(assistant, command.PhoneNoiseReductionEnabled.Value, cancellationToken).ConfigureAwait(false);
-        }
-
         var assistantDto = _mapper.Map<AiSpeechAssistantDto>(assistant);
         assistantDto.PhoneNoiseReductionEnabled = await GetPhoneNoiseReductionEnabledAsync(
             assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
