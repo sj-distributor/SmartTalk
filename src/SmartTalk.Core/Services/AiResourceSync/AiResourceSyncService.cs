@@ -47,7 +47,7 @@ public partial interface IAiResourceSyncService : IScopedDependency
     
     Task RecordSyncRunAsync(AiResourceSyncCommand command, AiResourceSyncExecutionStatsDto stats, bool isInitialRelease, bool isSuccess, string errorMessage, CancellationToken cancellationToken);
 
-    Task SendNotifyAsync(bool isSuccess, CancellationToken cancellationToken);
+    Task SendNotifyAsync(bool isSuccess, bool isManual, CancellationToken cancellationToken);
 }
 
 public class AiResourceSyncService : IAiResourceSyncService
@@ -1427,7 +1427,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         await _salesDataProvider.AddCrmSalesAutoSyncRunAsync(run, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task SendNotifyAsync(bool isSuccess, CancellationToken cancellationToken)
+    public async Task SendNotifyAsync(bool isSuccess, bool isManual, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_aiResourceSyncSetting.NotifyRobotUrl))
             return;
@@ -1435,9 +1435,13 @@ public class AiResourceSyncService : IAiResourceSyncService
         var pstZone = PstTimeZone.Get();
         var currentTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, pstZone).ToString("yyyy-MM-dd HH:mm:ss");
 
-        var content = isSuccess
-            ? $"✅SMT Sales Auto Create: Success\nTime: {currentTime}"
-            : $"❌SMT Sales Auto Create: Failed\nTime: {currentTime}";
+        var content = isManual
+            ? isSuccess
+                ? $"✅SMT Sales Manual Create: Success\nTime: {currentTime}"
+                : $"❌SMT Sales Manual Create: Failed\nTime: {currentTime}"
+            : isSuccess
+                ? $"✅SMT Sales Auto Create: Success\nTime: {currentTime}"
+                : $"❌SMT Sales Auto Create: Failed\nTime: {currentTime}";
         var text = new SendWorkWechatGroupRobotTextDto
         {
             Content = content,
