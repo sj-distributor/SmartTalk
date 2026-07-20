@@ -330,6 +330,58 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
     }
 
     [Fact]
+    public async Task UpdateKnowledgeCapabilities_ShouldNotRequireStoreBinding()
+    {
+        var harness = CapabilityHarness.Create([]);
+        var agent = new Agent { Id = 20, Name = "Agent", Type = AgentType.Agent, RelateId = 30 };
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 30,
+            AgentId = 20,
+            Name = "Alice",
+            IsDisplay = true,
+            ManualRecordWholeAudio = false,
+            ModelLanguage = "En",
+            ModelProvider = RealtimeAiProvider.OpenAi
+        };
+        var knowledge = new AiSpeechAssistantKnowledge
+        {
+            Id = 40,
+            AssistantId = 30,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+
+        harness.SetupCapabilityGraph(agent, assistant, knowledge);
+        harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+                Arg.Any<List<int>>(),
+                Arg.Any<List<string>>(),
+                AiSpeechAssistantSessionConfigType.Tool,
+                Arg.Any<RealtimeAiProvider?>(),
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(new List<AiSpeechAssistantFunctionCall>());
+
+        await harness.Sut.UpdateAiSpeechAssistantKnowledgeCapabilitiesAsync(
+            new UpdateAiSpeechAssistantKnowledgeCapabilitiesCommand
+            {
+                StoreId = 10,
+                Items =
+                [
+                    new UpdateAiSpeechAssistantKnowledgeCapabilityDto
+                    {
+                        AssistantId = 30,
+                        RepeatOrderEnabled = true
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        assistant.ManualRecordWholeAudio.ShouldBeTrue();
+        await harness.PosDataProvider.DidNotReceive()
+            .GetPosStoreUsersByUserIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task UpdateKnowledgeCapabilities_WhenHifoodDisabled_RemovesPromptAndRestoresSalesAgent()
     {
         var harness = CapabilityHarness.Create();
@@ -400,7 +452,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
 
         public ISalesDataProvider SalesDataProvider { get; private set; } = null!;
 
-        public static CapabilityHarness Create()
+        public static CapabilityHarness Create(List<StoreUser>? storeUsers = null)
         {
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -418,7 +470,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
 
             var posDataProvider = Substitute.For<IPosDataProvider>();
             posDataProvider.GetPosStoreUsersByUserIdAsync(CurrentUserId, Arg.Any<CancellationToken>())
-                .Returns(new List<StoreUser> { new() { UserId = CurrentUserId, StoreId = 10 } });
+                .Returns(storeUsers ?? [new StoreUser { UserId = CurrentUserId, StoreId = 10 }]);
 
             var harness = new CapabilityHarness
             {
