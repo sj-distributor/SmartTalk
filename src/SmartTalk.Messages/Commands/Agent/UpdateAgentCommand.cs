@@ -27,6 +27,8 @@ public class UpdateAgentCommand : HasServiceProviderId, ICommand
     public string ServiceHours { get; set; }
     
     public AiSpeechAssistantChannel Channel { get; set; }
+
+    public bool? PhoneNoiseReductionEnabled { get; set; }
 }
 
 public class UpdateAgentResponse : SmartTalkResponse<AgentDto>
