@@ -307,7 +307,29 @@ public class AgentService : IAgentService
             agent.Assistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
         }
 
+        await EnrichAssistantsNoiseReductionAsync(agents.SelectMany(x => x.Assistants ?? []).ToList(), cancellationToken).ConfigureAwait(false);
         await EnrichAgentTransferCallConfigsAsync(agents, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnrichAssistantsNoiseReductionAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
+    {
+        if (assistants == null || assistants.Count == 0) return;
+
+        var assistantIds = assistants.Select(x => x.Id).ToList();
+
+        var noiseReductionFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+            assistantIds,
+            [InputAudioNoiseReductionName],
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+            isActive: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        foreach (var assistant in assistants)
+        {
+            assistant.PhoneNoiseReductionEnabled = noiseReductionFunctionCalls.Any(x =>
+                x.AssistantId == assistant.Id &&
+                x.ModelProvider == assistant.ModelProvider);
+        }
     }
 
     private async Task<AgentDto> MapAgentDtoAsync(Agent agent, CancellationToken cancellationToken)
