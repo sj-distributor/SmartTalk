@@ -136,8 +136,6 @@ public partial class AiSpeechAssistantService
         int storeId,
         CancellationToken cancellationToken)
     {
-        await EnsureStorePermissionAsync(storeId, cancellationToken).ConfigureAwait(false);
-
         var store = await _posDataProvider.GetPosCompanyStoreAsync(id: storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (store == null) throw new InvalidOperationException($"Store not found. StoreId: {storeId}");
