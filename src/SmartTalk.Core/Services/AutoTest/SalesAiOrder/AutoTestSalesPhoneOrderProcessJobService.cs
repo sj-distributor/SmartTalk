@@ -732,6 +732,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             "現在是2026年。如果客戶只說月日、沒有說年份，DeliveryDate 必須使用2026年。\n" +
             "如果客戶只說明天送貨，不需要輸出 DeliveryDate，因為系統默認就是明天。\n" +
             "歷史物料列表中的日期只用於匹配 materialNumber，不能作為 DeliveryDate。\n" +
+            "範例 JSON 中的 DeliveryDate 只是格式示例，不是今天日期，也不是默認送貨日期，不能照抄或參照範例日期推斷。\n" +
+            "只有客戶分析報告中非常清楚地提到具體送貨日期（例如幾月幾日）時，才可以填入 DeliveryDate；否則 DeliveryDate 必須留空字符串。\n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
             "範例：\n" +
             "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2026-07-10\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
