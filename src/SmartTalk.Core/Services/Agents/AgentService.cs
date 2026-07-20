@@ -106,7 +106,7 @@ public class AgentService : IAgentService
             Data = new GetSurfaceAgentsResponseData
             {
                 Count = count,
-                Agents = _mapper.Map<List<AgentDto>>(enrichAgents)
+                Agents = enrichAgents
             }
         };
     }
@@ -281,6 +281,29 @@ public class AgentService : IAgentService
             var assistants = agentAssistantPairs.Where(x => x.Item1.AgentId == agent.Id).Select(x => x.Item2).ToList();
             
             agent.Assistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
+        }
+
+        await EnrichAssistantsNoiseReductionAsync(agents.SelectMany(x => x.Assistants ?? []).ToList(), cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnrichAssistantsNoiseReductionAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
+    {
+        if (assistants == null || assistants.Count == 0) return;
+
+        var assistantIds = assistants.Select(x => x.Id).ToList();
+
+        var noiseReductionFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+            assistantIds,
+            [InputAudioNoiseReductionName],
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+            isActive: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        foreach (var assistant in assistants)
+        {
+            assistant.PhoneNoiseReductionEnabled = noiseReductionFunctionCalls.Any(x =>
+                x.AssistantId == assistant.Id &&
+                x.ModelProvider == assistant.ModelProvider);
         }
     }
 
