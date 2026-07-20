@@ -32,10 +32,7 @@ public partial class AiSpeechAssistantConnectService
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
                 Prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt,   // 代客致电: 有 instruction 则用作本通指令 (non-breaking)
-                Tools = _ctx.FunctionCalls
-                    .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
-                    .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
-                    .ToList(),
+                Tools = BuildTools(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 VendorOptions = new OpenAiRealtimeModelOptions
                 {
@@ -67,6 +64,16 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
+    private List<object> BuildTools()
+    {
+        return _ctx.FunctionCalls
+            .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
+            .Select(x => JsonConvert.DeserializeObject<JObject>(x.Content))
+            .Where(x => x != null)
+            .Cast<object>()
+            .ToList();
+    }
+    
     private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)
     {
         return _ttsConfigResolver.Resolve(new RealtimeAiTtsRequest
