@@ -1011,7 +1011,7 @@ public partial class AiSpeechAssistantService
 
         var promptSegments = new List<string>();
 
-        if (command.Details is { Count: > 0 })
+        if (command.SourceSystem != AgentSourceSystem.AiResource && command.Details is { Count: > 0 })
         {
             var details = command.Details.Select(x => new AiSpeechAssistantKnowledgeDetail
             {
@@ -1028,6 +1028,13 @@ public partial class AiSpeechAssistantService
             var detailPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(detailPrompt))
                 promptSegments.Add(detailPrompt);
+        }
+        else if (command.SourceSystem == AgentSourceSystem.AiResource && command.Details is { Count: > 0 })
+        {
+            Log.Warning(
+                "InitialAssistantKnowledgeAsync ignored details for AiResource assistant. AssistantId={AssistantId}, DetailCount={DetailCount}",
+                assistant.Id,
+                command.Details.Count);
         }
 
         if (!string.IsNullOrWhiteSpace(knowledge.Json))
@@ -1100,6 +1107,7 @@ public partial class AiSpeechAssistantService
             {
                 KnowledgeId = targetKnowledgeId,
                 SceneId = x.SceneId,
+                SourceType = x.SourceType,
                 CreatedAt = DateTimeOffset.UtcNow
             })
             .ToList();
@@ -2286,6 +2294,7 @@ public partial class AiSpeechAssistantService
                 {
                     KnowledgeId = oldToNewKnowledgeIdMap[r.KnowledgeId],
                     SceneId = r.SceneId,
+                    SourceType = r.SourceType,
                     CreatedAt = DateTimeOffset.UtcNow
                 }).ToList();
 

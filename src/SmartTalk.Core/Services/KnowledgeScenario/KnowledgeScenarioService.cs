@@ -16,6 +16,7 @@ using Smarties.Messages.Requests.Ask;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
 
@@ -733,7 +734,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             var relationsToAdd = knowledgeIdsToAdd.Select(knowledgeId => new AiSpeechAssistantKnowledgeSceneRelation
             {
                 KnowledgeId = knowledgeId,
-                SceneId = command.SceneId
+                SceneId = command.SceneId,
+                SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.Manual
             }).ToList();
 
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToAdd, true, cancellationToken).ConfigureAwait(false);

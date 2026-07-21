@@ -49,8 +49,7 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
 
                 await _aiResourceSyncService.RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, true, null, cancellationToken).ConfigureAwait(false);
 
-                if (!command.IsManual)
-                    await _aiResourceSyncService.SendNotifyAsync(true, cancellationToken).ConfigureAwait(false);
+                await _aiResourceSyncService.SendNotifyAsync(true, command.IsManual, cancellationToken).ConfigureAwait(false);
 
                 return;
             }
@@ -68,8 +67,7 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
                 Log.Error(ex, "SyncCrmSalesAutoCreate failed after {MaxAttempts} attempts", MaxSyncAttempts);
                 await _aiResourceSyncService.RecordSyncRunAsync(command, null, false, false, ex.Message, cancellationToken).ConfigureAwait(false);
 
-                if (!command.IsManual)
-                    await _aiResourceSyncService.SendNotifyAsync(false, cancellationToken).ConfigureAwait(false);
+                await _aiResourceSyncService.SendNotifyAsync(false, command.IsManual, cancellationToken).ConfigureAwait(false);
             }
         }
 
