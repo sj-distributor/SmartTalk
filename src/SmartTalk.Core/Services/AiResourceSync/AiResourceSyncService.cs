@@ -1281,7 +1281,9 @@ public partial class AiResourceSyncService : IAiResourceSyncService
         if (string.IsNullOrWhiteSpace(_aiResourceSyncSetting.NotifyRobotUrl))
             return;
 
-        var currentTime = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        var pstZone = PstTimeZone.Get();
+        var currentTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, pstZone).ToString("yyyy-MM-dd HH:mm:ss");
+
         var content = isSuccess
             ? $"✅SMT Sales Auto Create: Success\nTime: {currentTime}"
             : $"❌SMT Sales Auto Create: Failed\nTime: {currentTime}";
