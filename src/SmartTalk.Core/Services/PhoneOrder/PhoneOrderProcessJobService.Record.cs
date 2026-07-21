@@ -174,10 +174,9 @@ public partial class PhoneOrderProcessJobService
         record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
         record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
         
-        if (record.Scenario == DialogueScenarios.ComplaintFeedback)
+        if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
         {
-            var originalReportText = record.TranscriptionText;
-            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(originalReportText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
 
             if (!string.IsNullOrWhiteSpace(complaintSection))
                 record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";

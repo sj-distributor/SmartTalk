@@ -76,6 +76,9 @@ public class AiSpeechAssistant : IEntity<int>, IAgent, IHasCreatedFields
     [Column("is_auto_generate_order")]
     public bool IsAutoGenerateOrder { get; set; }
     
+    [Column("is_complaint_analysis_enabled")]
+    public bool IsComplaintAnalysisEnabled { get; set; }
+
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
     
