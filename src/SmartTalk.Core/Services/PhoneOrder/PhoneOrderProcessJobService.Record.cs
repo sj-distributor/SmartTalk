@@ -535,6 +535,8 @@ public partial class PhoneOrderProcessJobService
             "現在是2026年。如果客戶只說月日、沒有說年份，DeliveryDate 必須使用2026年。\n" +
             "如果客戶只說明天送貨，不需要輸出 DeliveryDate，因為系統默認就是明天。\n" +
             "歷史物料列表中的日期只用於匹配 materialNumber，不能作為 DeliveryDate。\n" +
+            "範例 JSON 中的 DeliveryDate 只是格式示例，不是今天日期，也不是默認送貨日期，不能照抄或參照範例日期推斷。\n" +
+            "只有客戶分析報告中非常清楚地提到具體送貨日期（例如幾月幾日）時，才可以填入 DeliveryDate；否則 DeliveryDate 必須留空字符串。\n" +
             
             "【訂單意圖判斷規則（非常重要）】\n" +
             "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
@@ -561,7 +563,7 @@ public partial class PhoneOrderProcessJobService
             "    {\n" +
             "      \"StoreName\": \"HaiDiLao\",\n" +
             "      \"StoreNumber\": \"1\",\n" +
-            "      \"DeliveryDate\": \"2026-07-10\",\n" +
+            "      \"DeliveryDate\": \"yyyy-mm-dd\",\n" +
             "      \"IsDeleteWholeOrder\": false,\n" +
             "      \"IsUndoCancel\": false,\n" +
             "      \"orders\": [\n" +
@@ -791,11 +793,22 @@ public partial class PhoneOrderProcessJobService
             };
         }
 
+        var customerLookupPhoneNumbers = GetAixvolinkCustomerLookupNumbers(record);
         var matched = await _salesCustomerMatchService
-            .MatchCustomerAsync(record.PhoneNumber, record.IncomingCallNumber, storeOrder.StoreName, [record.PhoneNumber, record.IncomingCallNumber], cancellationToken)
+            .MatchCustomerAsync(customerLookupPhoneNumbers[0], customerLookupPhoneNumbers[1], storeOrder.StoreName, customerLookupPhoneNumbers, cancellationToken)
             .ConfigureAwait(false);
 
         return matched;
+    }
+
+    private static List<string> GetAixvolinkCustomerLookupNumbers(PhoneOrderRecord record)
+    {
+        var phoneNumbers = new List<string> { record.PhoneNumber, record.IncomingCallNumber };
+
+        if (record.OrderRecordType == PhoneOrderRecordType.OutBount)
+            phoneNumbers = [record.IncomingCallNumber, record.PhoneNumber];
+
+        return phoneNumbers;
     }
 
     private void BackfillMaterialNumbers(ExtractedOrderDto storeOrder, List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems)
