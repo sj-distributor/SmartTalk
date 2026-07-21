@@ -7,7 +7,7 @@ namespace SmartTalk.Core.Services.Sale;
 
 public interface ISalesCustomerMatchService : IScopedDependency
 {
-    Task<SalesCustomerMatchResult> MatchCustomerAsync(string callerNumber, string calleeNumber, string storeName, IEnumerable<string> salesPhoneNumbers, CancellationToken cancellationToken);
+    Task<SalesCustomerMatchResult> MatchCustomerAsync(string primaryPhoneNumber, string secondaryPhoneNumber, string storeName, IEnumerable<string> salesPhoneNumbers, CancellationToken cancellationToken);
 }
 
 public class SalesCustomerMatchResult
@@ -30,13 +30,13 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
         _daovikaClient = daovikaClient;
     }
 
-    public async Task<SalesCustomerMatchResult> MatchCustomerAsync(string callerNumber, string calleeNumber, string storeName, IEnumerable<string> salesPhoneNumbers, CancellationToken cancellationToken)
+    public async Task<SalesCustomerMatchResult> MatchCustomerAsync(string primaryPhoneNumber, string secondaryPhoneNumber, string storeName, IEnumerable<string> salesPhoneNumbers, CancellationToken cancellationToken)
     {
         var crmToken = await TryGetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(crmToken))
         {
-            var phoneMatch = await MatchByPhonesAsync([callerNumber, calleeNumber], crmToken, cancellationToken).ConfigureAwait(false);
+            var phoneMatch = await MatchByPhonesAsync([primaryPhoneNumber, secondaryPhoneNumber], crmToken, cancellationToken).ConfigureAwait(false);
             if (phoneMatch.SoldToIds.Count > 0)
                 return phoneMatch;
 
