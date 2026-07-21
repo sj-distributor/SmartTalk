@@ -52,6 +52,8 @@ public class AgentDto
 
     public List<AgentTransferCallConfigDto> AgentTransferCallConfigs { get; set; }
     
+    public bool PhoneNoiseReductionEnabled { get; set; }
+
     public DateTimeOffset CreatedDate { get; set; }
 
     public int UnreviewCount { get; set; } = 0;

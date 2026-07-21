@@ -850,9 +850,44 @@ public partial class AiSpeechAssistantService
         await UpdateAiSpeechAssistantConfigsAsync(assistant, agent.TransferCallNumber, cancellationToken).ConfigureAwait(false);
 
         if (assistant.HasPhoneChannel())
-            await _aiSpeechAssistantDataProvider.SetPhoneNoiseReductionAsync(assistant, true, cancellationToken).ConfigureAwait(false);
+        {
+            var phoneNoiseReductionEnabled = await ResolveAgentPhoneNoiseReductionEnabledAsync(
+                    agent.Id, assistant.Id, cancellationToken)
+                .ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.SetPhoneNoiseReductionAsync(assistant, phoneNoiseReductionEnabled, cancellationToken)
+                .ConfigureAwait(false);
+        }
         
         return assistant;
+    }
+
+    private async Task<bool> ResolveAgentPhoneNoiseReductionEnabledAsync(
+        int agentId,
+        int currentAssistantId,
+        CancellationToken cancellationToken)
+    {
+        var existingAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByAgentIdAsync(agentId, cancellationToken)
+            .ConfigureAwait(false);
+        var phoneAssistants = (existingAssistants ?? [])
+            .Where(x => x.Id != currentAssistantId &&
+                        x.ModelProvider == RealtimeAiProvider.OpenAi &&
+                        x.HasPhoneChannel())
+            .OrderByDescending(x => x.CreatedDate)
+            .ThenByDescending(x => x.Id)
+            .ToList();
+
+        if (phoneAssistants.Count == 0) return true;
+
+        var functionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+            phoneAssistants.Select(x => x.Id).ToList(),
+            [AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName],
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+            RealtimeAiProvider.OpenAi,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (functionCalls.Count == 0) return false;
+
+        return functionCalls.Any(x => x.IsActive);
     }
 
     private async Task<Agent> AddAgentAsync(int? relateId, int? serviceProviderId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, bool isSurface, CancellationToken cancellationToken)

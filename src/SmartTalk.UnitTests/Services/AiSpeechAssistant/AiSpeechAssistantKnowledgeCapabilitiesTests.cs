@@ -258,6 +258,100 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
     }
 
     [Fact]
+    public async Task AddAiSpeechAssistant_WhenAgentNoiseReductionDisabled_ShouldCreateInactiveNoiseReductionConfig()
+    {
+        var harness = CapabilityHarness.Create();
+        var agent = new Agent
+        {
+            Id = 20,
+            Type = AgentType.Agent,
+            Voice = "alloy",
+            WaitInterval = 500,
+            IsTransferHuman = false
+        };
+        var existingAssistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 30,
+            AgentId = agent.Id,
+            Channel = ((int)AiSpeechAssistantChannel.PhoneChat).ToString(),
+            ModelProvider = RealtimeAiProvider.OpenAi
+        };
+
+        harness.AgentDataProvider.GetAgentByIdAsync(agent.Id, Arg.Any<CancellationToken>())
+            .Returns(agent);
+        harness.AgentDataProvider.GetAgentsByIdsAsync(
+                Arg.Is<List<int>>(x => x.SequenceEqual(new[] { agent.Id })),
+                Arg.Any<CancellationToken>())
+            .Returns([agent]);
+        harness.PosDataProvider.GetPosStoreByAgentIdAsync(agent.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromResult<CompanyStore>(null!));
+        harness.AiSpeechAssistantDataProvider.GetAgentAssistantsAsync(
+                Arg.Is<List<int>>(x => x.SequenceEqual(new[] { agent.Id })),
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns([new AgentAssistant { AgentId = agent.Id, AssistantId = existingAssistant.Id }]);
+        harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantsByAgentIdAsync(agent.Id, Arg.Any<CancellationToken>())
+            .Returns([existingAssistant]);
+        harness.AiSpeechAssistantDataProvider.When(x => x.AddAiSpeechAssistantsAsync(
+                Arg.Any<List<Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(),
+                true,
+                Arg.Any<CancellationToken>()))
+            .Do(callInfo => callInfo.Arg<List<Core.Domain.AISpeechAssistant.AiSpeechAssistant>>()[0].Id = 31);
+        harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
+                Arg.Is<List<int>>(x => x.SequenceEqual(new[] { 31 })),
+                RealtimeAiProvider.OpenAi,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns([]);
+        harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+                Arg.Is<List<int>>(x => x.SequenceEqual(new[] { existingAssistant.Id })),
+                Arg.Is<List<string>>(x => x.SequenceEqual(new[] { AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName })),
+                AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+                RealtimeAiProvider.OpenAi,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns([
+                new AiSpeechAssistantFunctionCall
+                {
+                    AssistantId = existingAssistant.Id,
+                    Name = AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName,
+                    Type = AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+                    ModelProvider = RealtimeAiProvider.OpenAi,
+                    IsActive = false
+                }
+            ]);
+        harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+                Arg.Is<List<int>>(x => x.SequenceEqual(new[] { 31 })),
+                Arg.Is<List<string>>(x => x.SequenceEqual(new[] { AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName })),
+                AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+                RealtimeAiProvider.OpenAi,
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        await harness.Sut.AddAiSpeechAssistantAsync(new AddAiSpeechAssistantCommand
+        {
+            AgentId = agent.Id,
+            AgentType = AgentType.Agent,
+            AssistantName = "New Assistant",
+            Channels = [AiSpeechAssistantChannel.PhoneChat],
+            Json = "{}",
+            Details = []
+        }, CancellationToken.None);
+
+        await harness.AiSpeechAssistantDataProvider.Received(1).AddAiSpeechAssistantFunctionCallsAsync(
+            Arg.Is<List<AiSpeechAssistantFunctionCall>>(calls =>
+                calls.Count == 1 &&
+                calls[0].AssistantId == 31 &&
+                calls[0].Name == AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName &&
+                calls[0].Type == AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction &&
+                calls[0].ModelProvider == RealtimeAiProvider.OpenAi &&
+                !calls[0].IsActive),
+            true,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task UpdateKnowledgeCapabilities_WhenRepeatOrderEnabled_AddsToolsAndUpdatesAssistant()
     {
         var harness = CapabilityHarness.Create();
