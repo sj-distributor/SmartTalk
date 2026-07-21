@@ -543,7 +543,7 @@ public partial class AiSpeechAssistantService
         var humanContacts = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactsAsync(assistantIds, cancellationToken).ConfigureAwait(false);
         var noiseReductionFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
             assistantIds,
-            [InputAudioNoiseReductionName],
+            [AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName],
             AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
             isActive: true,
             cancellationToken: cancellationToken).ConfigureAwait(false);

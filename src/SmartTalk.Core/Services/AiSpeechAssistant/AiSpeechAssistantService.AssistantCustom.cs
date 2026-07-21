@@ -849,8 +849,8 @@ public partial class AiSpeechAssistantService
 
         await UpdateAiSpeechAssistantConfigsAsync(assistant, agent.TransferCallNumber, cancellationToken).ConfigureAwait(false);
 
-        if (AssistantHasPhoneChannel(assistant))
-            await SetPhoneNoiseReductionAsync(assistant, true, cancellationToken).ConfigureAwait(false);
+        if (assistant.HasPhoneChannel())
+            await _aiSpeechAssistantDataProvider.SetPhoneNoiseReductionAsync(assistant, true, cancellationToken).ConfigureAwait(false);
         
         return assistant;
     }

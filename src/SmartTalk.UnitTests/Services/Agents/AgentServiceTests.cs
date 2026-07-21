@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Mappings;
 using SmartTalk.Core.Services.Account;
