@@ -35,12 +35,6 @@ using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.AiResourceSync;
 
-public record AiResourceSyncShardExecutionResult(string SalesKey, int CustomerGroupCount, AiResourceSyncExecutionStatsDto Stats);
-
-public record AiResourceSyncExecutionResult(int TotalCount, int ShardCount, IReadOnlyList<AiResourceSyncShardExecutionResult> Shards, AiResourceSyncExecutionStatsDto Stats, bool IsInitialRelease);
-
-internal record AiResourceSyncCustomerLoadResult(Company Company, List<CrmSalesAutoSyncCustomerDto> Customers, int TotalCount, bool IsFullSync, bool IsInitialRelease);
-
 public partial interface IAiResourceSyncService : IScopedDependency
 {
     Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
@@ -54,40 +48,9 @@ public class AiResourceSyncService : IAiResourceSyncService
 {
     private const int MaxWarningEntriesToPersist = 100;
     private const int MaxDetailEntriesPerCategoryToPersist = 50;
+    private const int MaxConcurrentCrmCustomerLookups = 8;
 
-    private record SalesKnowledgeSyncTask(string StoreName, CrmSalesAutoSyncCustomerDto SeedCustomer, CrmSalesAutoSyncCustomerGroup MergedGroup);
-   
-    private record AiResourceSyncStoreContext(Dictionary<string, CompanyStore> StoreMap, IReadOnlyDictionary<int, string> ExistingStoreNamesById);
-   
-    private record AiResourceSyncAssistantContext(
-        List<CrmAutoSyncAssistantLocationDto> ExistingCrmAssistants,
-        IReadOnlyDictionary<int, CrmAutoSyncAssistantLocationDto> ExistingCrmAssistantsById,
-        Dictionary<string, CrmAutoSyncAssistantLocationDto> ExistingCrmAssistantsByName,
-        Dictionary<int, HashSet<string>> AssistantCustomerIdsByAssistantId,
-        Dictionary<string, HashSet<int>> AssistantIdsByCustomerId,
-        HashSet<int> ClaimedAssistantIds,
-        Dictionary<string, Agent> SalesAgentCache,
-        Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> CustomerKnowledgeAssistantCache);
-
-    private record AiResourceSyncInputContext(
-        Company Company,
-        List<CrmSalesAutoSyncCustomerDto> Customers,
-        List<CrmSalesAutoSyncCustomerGroup> CustomerGroups,
-        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> CustomerIdLookup,
-        HashSet<string> ActiveCustomerIds,
-        bool IsFullSync,
-        bool IsInitialRelease,
-        AiResourceSyncExecutionStatsDto Stats);
-
-    private record AiResourceSyncExecutionContext(
-        AiResourceSyncStoreContext StoreContext,
-        AiResourceSyncAssistantContext AssistantContext,
-        SourceSceneLookup SourceSceneLookup,
-        List<SalesKnowledgeSyncTask> SyncTasks);
-    
     public sealed record StoreLockResult(CompanyStore Store, bool IsCreated);
-  
-    private record SourceSceneLookup(Dictionary<AutoAddLanguage, KnowledgeScene> MappingScenes, Dictionary<int, List<KnowledgeSceneItem>> SceneItems);
  
     private readonly IMediator _mediator;
     private readonly ICrmClient _crmClient;
@@ -139,38 +102,50 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         if (inputContext.Customers.Count == 0)
         {
-            return new AiResourceSyncExecutionResult(0, 0, [], new AiResourceSyncExecutionStatsDto { TotalCount = 0 }, inputContext.IsInitialRelease);
+            return new AiResourceSyncExecutionResult
+            {
+                TotalCount = 0,
+                ShardCount = 0,
+                Shards = [],
+                Stats = new AiResourceSyncExecutionStatsDto { TotalCount = 0 },
+                IsInitialRelease = inputContext.IsInitialRelease
+            };
         }
 
         var executionContext = await BuildSyncExecutionContextAsync(inputContext.Company, inputContext.CustomerGroups, cancellationToken).ConfigureAwait(false);
         var shardResults = await ExecuteShardSyncAsync(command, inputContext, executionContext, cancellationToken).ConfigureAwait(false);
         await FinalizeSyncAsync(inputContext, executionContext.AssistantContext, cancellationToken).ConfigureAwait(false);
 
-        return new AiResourceSyncExecutionResult(
-            inputContext.Customers.Count,
-            shardResults.Count,
-            shardResults,
-            inputContext.Stats,
-            inputContext.IsInitialRelease);
+        return new AiResourceSyncExecutionResult
+        {
+            TotalCount = inputContext.Customers.Count,
+            ShardCount = shardResults.Count,
+            Shards = shardResults,
+            Stats = inputContext.Stats,
+            IsInitialRelease = inputContext.IsInitialRelease
+        };
     }
-
+    
     private async Task<AiResourceSyncInputContext> LoadSyncInputContextAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
         var customerLoadResult = await LoadSyncCustomersAsync(command, cancellationToken).ConfigureAwait(false);
         var customers = customerLoadResult.Customers;
         var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
 
-        return new AiResourceSyncInputContext(
-            customerLoadResult.Company,
-            customers,
-            customerGroups,
-            CrmSalesAutoSyncGrouping.BuildCustomerIdLookup(customerGroups),
-            CrmSalesAutoSyncGrouping.BuildActiveCustomerIds(customers),
-            customerLoadResult.IsFullSync,
-            customerLoadResult.IsInitialRelease, 
-            new AiResourceSyncExecutionStatsDto { TotalCount = customers.Count });
+        return new AiResourceSyncInputContext
+        {
+            Company = customerLoadResult.Company,
+            Customers = customers,
+            CustomerGroups = customerGroups,
+            CustomerIdLookup = CrmSalesAutoSyncGrouping.BuildCustomerIdLookup(customerGroups),
+            ActiveCustomerIds = CrmSalesAutoSyncGrouping.BuildActiveCustomerIds(customers),
+            IsFullSync = customerLoadResult.IsFullSync,
+            IsInitialRelease = customerLoadResult.IsInitialRelease,
+            Stats = new AiResourceSyncExecutionStatsDto { TotalCount = customers.Count }
+        };
     }
-
+    
+    // 这个阶段的目标是把“系统里已经存在的数据”一次性准备成内存索引，避免后续每处理一个客户组都重新查一遍。
     private async Task<AiResourceSyncExecutionContext> BuildSyncExecutionContextAsync(
         Company company, List<CrmSalesAutoSyncCustomerGroup> customerGroups, CancellationToken cancellationToken)
     {
@@ -184,18 +159,18 @@ public class AiResourceSyncService : IAiResourceSyncService
         if (company.Name.Equals(_salesSetting.CompanyName, StringComparison.OrdinalIgnoreCase) && sourceSceneLookup.MappingScenes.Count == 0)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] has no active knowledge scene mapping.");
 
-        return new AiResourceSyncExecutionContext(
-            BuildStoreContext(existingStores, customerGroups),
-            BuildAssistantContext(existingCrmAssistants),
-            sourceSceneLookup,
-            BuildSyncTasks(customerGroups));
+        return new AiResourceSyncExecutionContext
+        {
+            StoreContext = BuildStoreContext(existingStores, customerGroups),
+            AssistantContext = BuildAssistantContext(existingCrmAssistants),
+            SourceSceneLookup = sourceSceneLookup,
+            SyncTasks = BuildSyncTasks(customerGroups)
+        };
     }
 
+    // 按门店分片执行同步。
     private async Task<List<AiResourceSyncShardExecutionResult>> ExecuteShardSyncAsync(
-        AiResourceSyncCommand command,
-        AiResourceSyncInputContext inputContext,
-        AiResourceSyncExecutionContext executionContext,
-        CancellationToken cancellationToken)
+        AiResourceSyncCommand command, AiResourceSyncInputContext inputContext, AiResourceSyncExecutionContext executionContext, CancellationToken cancellationToken)
     {
         var shardResults = new List<AiResourceSyncShardExecutionResult>();
         Log.Information(
@@ -209,15 +184,8 @@ public class AiResourceSyncService : IAiResourceSyncService
             Log.Information("Sync shard start. StoreName={StoreName}, TaskCount={TaskCount}", salesShard.Key, salesShard.Count());
 
             var shardResult = await ExecuteSalesShardAsync(
-                command,
-                inputContext.Company.Id,
-                salesShard.Key,
-                salesShard.ToList(),
-                inputContext.CustomerIdLookup,
-                executionContext.StoreContext,
-                executionContext.AssistantContext,
-                executionContext.SourceSceneLookup,
-                cancellationToken).ConfigureAwait(false);
+                command, inputContext.Company.Id, salesShard.Key, salesShard.ToList(), inputContext.CustomerIdLookup, 
+                executionContext.StoreContext, executionContext.AssistantContext, executionContext.SourceSceneLookup, cancellationToken).ConfigureAwait(false);
 
             shardResults.Add(shardResult);
             MergeStats(inputContext.Stats, shardResult.Stats);
@@ -233,6 +201,12 @@ public class AiResourceSyncService : IAiResourceSyncService
         return shardResults;
     }
 
+    // 同步收尾阶段。
+    // 只有全量同步才会进入这里，因为只有全量同步我们才敢判断“哪些旧助理已经不该继续存在”。
+    // 这里的核心动作是：
+    // - 找出本次没有被认领到的旧 CRM 助理
+    // - 如果助理关联的客户都已经失效，则停用知识
+    // - 如果只是客户集合缩小了，则把助理名称收缩到最新客户集合
     private async Task FinalizeSyncAsync(AiResourceSyncInputContext inputContext, AiResourceSyncAssistantContext assistantContext, CancellationToken cancellationToken)
     {
         if (!inputContext.IsFullSync)
@@ -258,9 +232,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     private async Task<List<CrmAutoSyncAssistantLocationDto>> LoadExistingCrmAssistantsAsync(int companyId, CancellationToken cancellationToken)
     {
-        var loadedCrmAssistants = await _aiSpeechAssistantDataProvider
-            .GetCrmAutoSyncAssistantsInCompanyAsync(companyId, cancellationToken)
-            .ConfigureAwait(false);
+        var loadedCrmAssistants = await _aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantsInCompanyAsync(companyId, cancellationToken).ConfigureAwait(false);
         var duplicateAssistantIds = loadedCrmAssistants
             .GroupBy(x => x.AssistantId)
             .Where(x => x.Key > 0 && x.Count() > 1)
@@ -269,9 +241,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         if (duplicateAssistantIds.Count > 0)
         {
-            Log.Warning(
-                "Duplicate CRM assistant locations found. AssistantIds={AssistantIds}",
-                string.Join(",", duplicateAssistantIds));
+            Log.Warning("Duplicate CRM assistant locations found. AssistantIds={AssistantIds}", string.Join(",", duplicateAssistantIds));
         }
 
         var existingCrmAssistants = loadedCrmAssistants
@@ -303,7 +273,11 @@ public class AiResourceSyncService : IAiResourceSyncService
             .GroupBy(x => x.StoreName)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store, StringComparer.OrdinalIgnoreCase);
 
-        return new AiResourceSyncStoreContext(storeMap, existingStoreNamesById);
+        return new AiResourceSyncStoreContext
+        {
+            StoreMap = storeMap,
+            ExistingStoreNamesById = existingStoreNamesById
+        };
     }
 
     private static AiResourceSyncAssistantContext BuildAssistantContext(List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants)
@@ -325,15 +299,17 @@ public class AiResourceSyncService : IAiResourceSyncService
                     ? ids
                     : new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
-        return new AiResourceSyncAssistantContext(
-            existingCrmAssistants,
-            existingCrmAssistantsById,
-            existingCrmAssistantsByName,
-            assistantCustomerIdsByAssistantId,
-            BuildAssistantIdsByCustomerId(assistantCustomerIdsByAssistantId),
-            claimedAssistantIds,
-            new Dictionary<string, Agent>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant>(StringComparer.OrdinalIgnoreCase));
+        return new AiResourceSyncAssistantContext
+        {
+            ExistingCrmAssistants = existingCrmAssistants,
+            ExistingCrmAssistantsById = existingCrmAssistantsById,
+            ExistingCrmAssistantsByName = existingCrmAssistantsByName,
+            AssistantCustomerIdsByAssistantId = assistantCustomerIdsByAssistantId,
+            AssistantIdsByCustomerId = BuildAssistantIdsByCustomerId(assistantCustomerIdsByAssistantId),
+            ClaimedAssistantIds = claimedAssistantIds,
+            SalesAgentCache = new Dictionary<string, Agent>(StringComparer.OrdinalIgnoreCase),
+            CustomerKnowledgeAssistantCache = new Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant>(StringComparer.OrdinalIgnoreCase)
+        };
     }
 
     private static List<SalesKnowledgeSyncTask> BuildSyncTasks(List<CrmSalesAutoSyncCustomerGroup> customerGroups)
@@ -343,11 +319,21 @@ public class AiResourceSyncService : IAiResourceSyncService
             .SelectMany(salesBucket =>
             {
                 var seedCustomer = salesBucket.First().Customers.First();
-                return salesBucket.Select(mergedGroup => new SalesKnowledgeSyncTask(salesBucket.Key, seedCustomer, mergedGroup));
+                return salesBucket.Select(mergedGroup => new SalesKnowledgeSyncTask
+                {
+                    StoreName = salesBucket.Key,
+                    SeedCustomer = seedCustomer,
+                    MergedGroup = mergedGroup
+                });
             })
             .ToList();
     }
 
+    // 决定这次同步到底从 CRM 拉哪些客户。
+    // 规则是：
+    // - 如果是首次发布，或者用户显式指定全量同步，就拉全量客户
+    // - 否则只拉 CRM 标记为“最近变更”的客户
+    // 首次发布的判断依据不是命令本身，而是系统里当前是否还没有 CRM 自动同步产生的助理。
     private async Task<AiResourceSyncCustomerLoadResult> LoadSyncCustomersAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
         var company = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
@@ -360,23 +346,37 @@ public class AiResourceSyncService : IAiResourceSyncService
         if (isInitialRelease || command.IsFullSync)
         {
             var (customers, totalCount) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            return new AiResourceSyncCustomerLoadResult(company, customers, totalCount ?? customers.Count, true, isInitialRelease);
+            return new AiResourceSyncCustomerLoadResult
+            {
+                Company = company,
+                Customers = customers,
+                TotalCount = totalCount ?? customers.Count,
+                IsFullSync = true,
+                IsInitialRelease = isInitialRelease
+            };
         }
 
         var customersChanged = await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
-        return new AiResourceSyncCustomerLoadResult(company, customersChanged, customersChanged.Count, false, false);
+        return new AiResourceSyncCustomerLoadResult
+        {
+            Company = company,
+            Customers = customersChanged,
+            TotalCount = customersChanged.Count,
+            IsFullSync = false,
+            IsInitialRelease = false
+        };
     }
 
+    // 执行单个门店分片的同步。
+    // 一个分片内的处理顺序固定为：
+    // 1. 先确保门店存在
+    // 2. 再确保该门店下的销售员 Agent 存在
+    // 3. 最后逐个处理这个门店下的客户组，确保每个客户组对应的知识助理状态正确
+    // 这里对 syncTasks 的循环保留顺序执行，因为里面会持续修改助理匹配状态。
     private async Task<AiResourceSyncShardExecutionResult> ExecuteSalesShardAsync(
-        AiResourceSyncCommand command,
-        int companyId,
-        string salesKey,
-        IReadOnlyList<SalesKnowledgeSyncTask> syncTasks,
-        IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup,
-        AiResourceSyncStoreContext storeContext,
-        AiResourceSyncAssistantContext assistantContext,
-        SourceSceneLookup sourceSceneLookup,
-        CancellationToken cancellationToken)
+        AiResourceSyncCommand command, int companyId, string salesKey,
+        IReadOnlyList<SalesKnowledgeSyncTask> syncTasks, IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup, AiResourceSyncStoreContext storeContext,
+        AiResourceSyncAssistantContext assistantContext, SourceSceneLookup sourceSceneLookup, CancellationToken cancellationToken)
     {
         var stats = new AiResourceSyncExecutionStatsDto();
         var seedCustomer = syncTasks.First().SeedCustomer;
@@ -394,9 +394,18 @@ public class AiResourceSyncService : IAiResourceSyncService
                 storeContext, assistantContext, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
         }
 
-        return new AiResourceSyncShardExecutionResult(salesKey, syncTasks.Count, stats);
+        return new AiResourceSyncShardExecutionResult
+        {
+            SalesKey = salesKey,
+            CustomerGroupCount = syncTasks.Count,
+            Stats = stats
+        };
     }
 
+    // 确保销售门店存在。
+    // 先查内存缓存，如果没有，再在分布式锁里二次检查数据库，最后才真正创建门店。
+    // 这样做是为了避免多个同步任务同时发现“门店不存在”而重复创建。
+    // 创建成功后会补充一些默认字段，并写回本地 storeMap，供后续同批任务复用。
     private async Task<CompanyStore> EnsureSalesStoreAsync(
         CrmSalesAutoSyncCustomerDto customer, int companyId, Dictionary<string, CompanyStore> storeMap,
         int? initiatedByUserId, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
@@ -461,6 +470,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         return store;
     }
 
+    // 确保门店下的销售员 Agent 存在。
     private async Task<Agent> EnsureSalesAgentAsync(
         int serviceProviderId, int storeId, string salesAgentName, Dictionary<string, Agent> salesAgentCache, 
         AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
@@ -542,6 +552,8 @@ public class AiResourceSyncService : IAiResourceSyncService
         return salesAgent;
     }
 
+    // 处理一个“归并后的客户组”。
+    // 这里会先根据客户组生成目标助理名称，然后把真正复杂的“匹配现有助理 / 迁移 / 拆分 / 新建”决策下沉到 ResolveMergedCustomerAssistantAsync。
     private async Task EnsureMergedCustomerKnowledgeAsync(
         int serviceProviderId,
         int? initiatedByUserId,
@@ -568,6 +580,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     }
 
+    // 确保某个客户知识助理存在。
     private async Task<Core.Domain.AISpeechAssistant.AiSpeechAssistant> EnsureCustomerKnowledgeAssistantAsync(
         int serviceProviderId,
         int? initiatedByUserId,
@@ -618,6 +631,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         return assistant;
     }
 
+    // 创建知识助理
     private async Task<Domain.AISpeechAssistant.AiSpeechAssistant> CreateCustomerKnowledgeAssistantAsync(
         int serviceProviderId, int? initiatedByUserId, int salesAgentId, int storeId, string customerKnowledgeAssistantName, string language,
         IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup,
@@ -648,6 +662,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         return assistant;
     }
 
+    // 把“语言对应的源场景”挂到助理当前的活跃知识上。
     private async Task AttachSceneToAssistantKnowledgeAsync(
         int assistantId, string language, IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup, 
         AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
@@ -711,6 +726,14 @@ public class AiResourceSyncService : IAiResourceSyncService
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync([knowledge.Id], cancellationToken).ConfigureAwait(false);
     }
 
+    // 这是整个同步里最核心的“助理决策器”。
+    // 输入是“某个客户组最终应该长什么样”，输出是把系统里的助理状态调整到这个目标状态。
+    // 它会按优先级依次尝试：
+    // 1. 直接命中同名助理
+    // 2. 命中同门店下客户集合最匹配的助理
+    // 3. 命中跨门店的匹配助理，并决定是迁移、拆分还是复制
+    // 4. 都匹配不到时创建新助理
+    // 这个方法之所以复杂，是因为它既要复用旧数据，又要避免把原来已经正确的助理打乱。
     private async Task ResolveMergedCustomerAssistantAsync(
         int serviceProviderId, int? initiatedByUserId, int companyId, int targetStoreId, int salesAgentId, string assistantName, CrmSalesAutoSyncCustomerGroup mergedGroup,
         IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup, AiResourceSyncStoreContext storeContext,
@@ -976,6 +999,9 @@ public class AiResourceSyncService : IAiResourceSyncService
         return overlap;
     }
 
+    // 对单个助理做改名。
+    // 这里是“即时改名”路径，主要给主同步过程中的单个助理调整使用。
+    // 与全量收尾阶段不同，那里是先收集再批量更新；这里需要立刻改名并更新统计，以便后续匹配逻辑马上使用新名称。
     private async Task RenameCustomerAssistantAsync(
         CrmAutoSyncAssistantLocationDto assistantLocation, string assistantName, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
@@ -991,6 +1017,9 @@ public class AiResourceSyncService : IAiResourceSyncService
         Log.Information("Assistant renamed. AssistantId={AssistantId}, From={FromName}, To={ToName}", assistant.Id, previousAssistantName, assistantName);
     }
 
+    // 当一个旧助理包含的客户集合比目标客户组更大时，先把“被拆出去的客户”复制成新的目标助理，再回头缩小旧助理。
+    // 这样做是为了避免先把旧助理直接改小后，丢失那些被拆出去客户原本应该继承的知识与归属关系。
+    // 可以把它理解成：先复制出去，再收缩原对象。
     private async Task CopySplitCustomersBeforeShrinkAsync(
         int serviceProviderId,
         int? initiatedByUserId,
@@ -1082,6 +1111,8 @@ public class AiResourceSyncService : IAiResourceSyncService
         }
     }
 
+    // 基于现有客户查找表，补齐一些缺失 customerId 的最新 CRM 信息，然后重新构建 customerId -> group 的映射。
+    // 这个方法主要服务于“增量同步只拿到了部分客户，但拆分时又需要知道其他客户现在属于哪个组”的场景。
     private async Task<IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup>> BuildLatestCustomerLookupAsync(
         IEnumerable<string> customerIds,
         IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> existingLookup,
@@ -1092,32 +1123,61 @@ public class AiResourceSyncService : IAiResourceSyncService
             .GroupBy(x => x.CustomerId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var customerId in customerIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+        var missingCustomerIds = customerIds
+            .Where(x => !string.IsNullOrWhiteSpace(x) && !customers.ContainsKey(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var loadedCustomers = await LoadCustomersBySapIdsAsync(missingCustomerIds, cancellationToken).ConfigureAwait(false);
+        foreach (var customer in loadedCustomers)
         {
-            if (customers.ContainsKey(customerId))
-                continue;
-
-            var customer = await _crmClient.GetSalesAutoSyncCustomerBySapIdAsync(customerId, cancellationToken).ConfigureAwait(false);
-            if (customer == null)
-                continue;
-
             customers[customer.CustomerId] = customer;
         }
 
         return CrmSalesAutoSyncGrouping.BuildCustomerIdLookup(CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers.Values));
     }
 
+    // 根据一组 customerId 重新从 CRM 拉最新客户信息，再重新做一次分组。
+    // 主要用于“跨门店 superset 助理拆分”时，重新判断旧助理剩余客户到底应该保留成哪个组。
     private async Task<IReadOnlyList<CrmSalesAutoSyncCustomerGroup>> LoadLatestCustomerGroupsAsync(IEnumerable<string> customerIds, CancellationToken cancellationToken)
     {
-        var customers = new List<CrmSalesAutoSyncCustomerDto>();
-        foreach (var customerId in customerIds.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var customer = await _crmClient.GetSalesAutoSyncCustomerBySapIdAsync(customerId, cancellationToken).ConfigureAwait(false);
-            if (customer != null)
-                customers.Add(customer);
-        }
-
+        var customers = await LoadCustomersBySapIdsAsync(customerIds, cancellationToken).ConfigureAwait(false);
         return CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
+    }
+
+    // 根据 customerId 集合从 CRM 补查客户详情。
+    // 这里做了两件优化：
+    // - 先去重，避免同一个 customerId 重复请求 CRM
+    // - 用受控并发方式查询，最多同时发 8 个请求，减少总等待时间但不把 CRM 打爆
+    private async Task<List<CrmSalesAutoSyncCustomerDto>> LoadCustomersBySapIdsAsync(
+        IEnumerable<string> customerIds,
+        CancellationToken cancellationToken)
+    {
+        var distinctCustomerIds = customerIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (distinctCustomerIds.Count == 0)
+            return [];
+
+        using var concurrencyLimiter = new SemaphoreSlim(MaxConcurrentCrmCustomerLookups);
+        var lookupTasks = distinctCustomerIds.Select(async customerId =>
+        {
+            await concurrencyLimiter.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await _crmClient
+                    .GetSalesAutoSyncCustomerBySapIdAsync(customerId, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                concurrencyLimiter.Release();
+            }
+        });
+
+        var customers = await Task.WhenAll(lookupTasks).ConfigureAwait(false);
+        return customers.Where(x => x != null).ToList();
     }
 
     private static CrmSalesAutoSyncCustomerGroup SelectRetainedGroup(
@@ -1132,6 +1192,12 @@ public class AiResourceSyncService : IAiResourceSyncService
             .FirstOrDefault();
     }
 
+    // 把一个已存在助理重新归位到新的客户组。
+    // 它做的事情比较直接：
+    // - 确保目标门店和目标销售员存在
+    // - 如果门店/销售员变了，先迁移助理
+    // - 再把助理名称改成目标客户组应该有的名字
+    // 常见于“一个旧助理被拆分后，它保留下来的那部分客户应该归到另一个组”的情况。
     private async Task ReassignExistingAssistantToGroupAsync(
         int serviceProviderId,
         int companyId,
@@ -1186,10 +1252,36 @@ public class AiResourceSyncService : IAiResourceSyncService
         AddAssistantIdsByCustomerId(assistantIdsByCustomerId, newCustomerIds, assistantId);
     }
 
+    // 全量同步收尾时，对“这次没有被认领到”的旧助理做善后处理。
+    // 这里分两种情况：
+    // - 该助理对应的客户都已经不活跃了：停用知识
+    // - 还有部分客户活跃，但集合变小了：把助理名称缩到剩余客户集合
+    // 这里先批量预取候选助理和活跃知识，循环里只做判断与收集，最后再批量更新。
     private async Task ReconcileInactiveCustomerAssistantsAsync(
         HashSet<string> activeCustomerIds, List<CrmAutoSyncAssistantLocationDto> existingCrmAssistants, Dictionary<int, HashSet<string>> assistantCustomerIdsByAssistantId, HashSet<int> claimedAssistantIds,
         AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
+        var candidates = existingCrmAssistants
+            .Where(x => !claimedAssistantIds.Contains(x.AssistantId))
+            .Where(x => assistantCustomerIdsByAssistantId.TryGetValue(x.AssistantId, out var customerIds) && customerIds.Count > 0)
+            .ToList();
+        if (candidates.Count == 0)
+            return;
+
+        var candidateAssistantIds = candidates.Select(x => x.AssistantId).Distinct().ToList();
+        var activeKnowledges = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantActiveKnowledgesAsync(candidateAssistantIds, cancellationToken)
+            .ConfigureAwait(false) ?? [];
+        var assistants = await _aiSpeechAssistantDataProvider
+            .GetAiSpeechAssistantsByIdsAsync(candidateAssistantIds, cancellationToken)
+            .ConfigureAwait(false) ?? [];
+        var activeKnowledgeByAssistantId = activeKnowledges
+            .GroupBy(x => x.AssistantId)
+            .ToDictionary(x => x.Key, x => x.First());
+        var assistantsById = assistants.ToDictionary(x => x.Id);
+        var knowledgesToDeactivate = new List<AiSpeechAssistantKnowledge>();
+        var assistantsToRename = new List<Core.Domain.AISpeechAssistant.AiSpeechAssistant>();
+
         foreach (var assistant in existingCrmAssistants.Where(x => !claimedAssistantIds.Contains(x.AssistantId)))
         {
             if (!assistantCustomerIdsByAssistantId.TryGetValue(assistant.AssistantId, out var existingIds) || existingIds.Count == 0)
@@ -1201,12 +1293,20 @@ public class AiResourceSyncService : IAiResourceSyncService
 
             if (remainingIds.Count == 0)
             {
-                Log.Information("Assistant deactivate. AssistantId={AssistantId}, Name={AssistantName}", assistant.AssistantId, assistant.Name);
-                await DeactivateCustomerAssistantKnowledgeAsync(assistant.AssistantId, cancellationToken).ConfigureAwait(false);
+                if (activeKnowledgeByAssistantId.TryGetValue(assistant.AssistantId, out var activeKnowledge))
+                {
+                    activeKnowledge.IsActive = false;
+                    knowledgesToDeactivate.Add(activeKnowledge);
+                }
+                else
+                {
+                    Log.Information("Knowledge deactivate skip. AssistantId={AssistantId}", assistant.AssistantId);
+                }
+
                 stats.DeactivatedAssistantCount++;
-                
                 RecordDeactivatedAssistant(stats, assistant.AssistantId, assistant.StoreId, assistant.AgentId, assistant.Name);
                 stats.Warnings.Add($"Assistant [{assistant.Name}] has no active CRM customers remaining; knowledge deactivated.");
+                Log.Information("Assistant deactivate. AssistantId={AssistantId}, Name={AssistantName}", assistant.AssistantId, assistant.Name);
                 continue;
             }
 
@@ -1215,28 +1315,43 @@ public class AiResourceSyncService : IAiResourceSyncService
 
             var renamedAssistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(remainingIds, language);
             Log.Information("Assistant shrink. AssistantId={AssistantId}, From={FromName}, To={ToName}", assistant.AssistantId, assistant.Name, renamedAssistantName);
-           
-            await RenameCustomerAssistantAsync(assistant, renamedAssistantName, stats, cancellationToken).ConfigureAwait(false);
+
+            if (assistantsById.TryGetValue(assistant.AssistantId, out var assistantToRename) &&
+                !string.Equals(assistantToRename.Name, renamedAssistantName, StringComparison.OrdinalIgnoreCase))
+            {
+                var previousAssistantName = assistantToRename.Name;
+                assistantToRename.Name = renamedAssistantName;
+                assistantsToRename.Add(assistantToRename);
+                RecordRenamedAssistant(stats, assistantToRename.Id, assistant.StoreId, assistant.AgentId, renamedAssistantName, previousAssistantName);
+            }
             
             assistant.Name = renamedAssistantName;
             assistantCustomerIdsByAssistantId[assistant.AssistantId] = remainingIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
-    }
 
-    private async Task DeactivateCustomerAssistantKnowledgeAsync(int assistantId, CancellationToken cancellationToken)
-    {
-        var activeKnowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (activeKnowledge == null)
+        if (knowledgesToDeactivate.Count > 0)
         {
-            Log.Information("Knowledge deactivate skip. AssistantId={AssistantId}", assistantId);
-            return;
+            await _aiSpeechAssistantDataProvider
+                .UpdateAiSpeechAssistantKnowledgesAsync(knowledgesToDeactivate, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (var knowledge in knowledgesToDeactivate)
+                Log.Information("Knowledge deactivated. AssistantId={AssistantId}, KnowledgeId={KnowledgeId}", knowledge.AssistantId, knowledge.Id);
         }
 
-        activeKnowledge.IsActive = false;
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([activeKnowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
-        Log.Information("Knowledge deactivated. AssistantId={AssistantId}, KnowledgeId={KnowledgeId}", assistantId, activeKnowledge.Id);
+        if (assistantsToRename.Count > 0)
+        {
+            await _aiSpeechAssistantDataProvider
+                .UpdateAiSpeechAssistantsAsync(assistantsToRename, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
+    // 把一个助理迁移到新的门店销售员名下。
+    // 迁移动作包含两层：
+    // - 先处理 AgentAssistant 关联表
+    // - 再修正助理实体本身的 AgentId
+    // 这样做是为了保证“关系表”和“助理主表”的归属信息一致。
     private async Task TransferCustomerAssistantToSalesAgentAsync(
         CrmAutoSyncAssistantLocationDto assistantLocation, int targetStoreId, int targetAgentId, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
@@ -1272,6 +1387,9 @@ public class AiResourceSyncService : IAiResourceSyncService
             assistant.Id, previousStoreId, targetStoreId, previousAgentId, targetAgentId);
     }
 
+    // 构建“语言 -> 源场景 -> 场景项”的查找表。
+    // 这个查找表是后面创建助理知识时挂场景的基础数据。
+    // 逻辑上会先选出每种语言当前最新且有效的映射，再一次性加载这些场景及其场景项。
     private async Task<SourceSceneLookup> BuildSourceSceneLookupAsync(int companyId, CancellationToken cancellationToken)
     {
         var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(
@@ -1282,7 +1400,11 @@ public class AiResourceSyncService : IAiResourceSyncService
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
 
         if (mappingSceneIds.Count == 0)
-            return new SourceSceneLookup(new Dictionary<AutoAddLanguage, KnowledgeScene>(), new Dictionary<int, List<KnowledgeSceneItem>>());
+            return new SourceSceneLookup
+            {
+                MappingScenes = new Dictionary<AutoAddLanguage, KnowledgeScene>(),
+                SceneItems = new Dictionary<int, List<KnowledgeSceneItem>>()
+            };
 
         var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(mappingSceneIds.Values.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
        
@@ -1290,15 +1412,22 @@ public class AiResourceSyncService : IAiResourceSyncService
         var mappingScenes = mappingSceneIds
             .Where(x => sceneMap.ContainsKey(x.Value))
             .ToDictionary(x => x.Key, x => sceneMap[x.Value]);
-        var sceneItemsLookup = new Dictionary<int, List<KnowledgeSceneItem>>();
+        var sceneIds = mappingScenes.Values.Select(x => x.Id).Distinct().ToList();
+        var sceneItems = await _knowledgeScenarioDataProvider
+                .GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken)
+                .ConfigureAwait(false) ?? [];
+        var sceneItemsLookup = sceneItems
+            .GroupBy(x => x.SceneId)
+            .ToDictionary(x => x.Key, x => x.ToList());
 
-        foreach (var sceneId in mappingScenes.Values.Select(x => x.Id).Distinct())
+        foreach (var sceneId in sceneIds)
+            sceneItemsLookup.TryAdd(sceneId, []);
+
+        return new SourceSceneLookup
         {
-            var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(sceneId, cancellationToken).ConfigureAwait(false);
-            sceneItemsLookup[sceneId] = sceneItems;
-        }
-
-        return new SourceSceneLookup(mappingScenes, sceneItemsLookup);
+            MappingScenes = mappingScenes,
+            SceneItems = sceneItemsLookup
+        };
     }
 
     private KnowledgeScene ResolveSourceScene(SourceSceneLookup sourceSceneLookup, string language)

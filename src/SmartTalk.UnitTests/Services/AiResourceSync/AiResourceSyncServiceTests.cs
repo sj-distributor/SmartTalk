@@ -203,7 +203,7 @@ public class AiResourceSyncServiceTests
             {
                 new() { Id = 500, Status = KnowledgeSceneStatus.Published }
             });
-        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeSceneItem>
             {
                 new()
@@ -479,7 +479,7 @@ public class AiResourceSyncServiceTests
             {
                 new() { Id = 500, Status = KnowledgeSceneStatus.Published }
             });
-        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeSceneItem>
             {
                 new()
@@ -680,7 +680,7 @@ public class AiResourceSyncServiceTests
             });
         knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeScene> { new() { Id = 500, Status = KnowledgeSceneStatus.Published } });
-        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeSceneItem>());
 
         var sut = CreateSut(
@@ -853,7 +853,7 @@ public class AiResourceSyncServiceTests
             {
                 new() { Id = 500, Status = KnowledgeSceneStatus.Published }
             });
-        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeSceneItem>
             {
                 new()
