@@ -5,6 +5,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.KnowledgeScenario;
 using Serilog;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 
@@ -146,132 +147,6 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         await RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task RefreshKnowledgeDetailsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
-    {
-        if (companyId <= 0)
-            return;
-
-        Log.Information("[KnowledgeDetailSync] Start. CompanyId={CompanyId}", companyId);
-
-        await RepairInactiveSingleKnowledgeForCrmAssistantsAsync(companyId, cancellationToken).ConfigureAwait(false);
-
-        var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: companyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (mappings.Count == 0)
-        {
-            Log.Information("[KnowledgeDetailSync] Skip. No active mapping. CompanyId={CompanyId}", companyId);
-            return;
-        }
-
-        var sceneIds = mappings.Select(x => x.SceneId).Where(x => x > 0).Distinct().ToList();
-        if (sceneIds.Count == 0)
-        {
-            Log.Information("[KnowledgeDetailSync] Skip. No valid scene ids. CompanyId={CompanyId}", companyId);
-            return;
-        }
-
-        var mappingByLanguage = mappings
-            .GroupBy(x => x.Language)
-            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
-
-        var assistantKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(companyId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (assistantKnowledges.Count == 0)
-        {
-            Log.Information("[KnowledgeDetailSync] Skip. No assistant knowledges. CompanyId={CompanyId}", companyId);
-            return;
-        }
-
-        Log.Information(
-            "[KnowledgeDetailSync] Loaded knowledges. CompanyId={CompanyId}, KnowledgeCount={KnowledgeCount}, MappingCount={MappingCount}",
-            companyId, assistantKnowledges.Count, mappingByLanguage.Count);
-
-        var knowledgeIds = assistantKnowledges.Select(x => x.KnowledgeId).Where(x => x > 0).Distinct().ToList();
-        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
-        var knowledgeMap = knowledges.ToDictionary(x => x.Id);
-        var existingDetails = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
-        var detailKnowledgeIds = existingDetails
-            .Select(x => x.KnowledgeId)
-            .Where(x => x > 0)
-            .ToHashSet();
-        var mappedSceneIds = mappingByLanguage.Values.Distinct().ToList();
-        var sceneItems = mappedSceneIds.Count == 0
-            ? []
-            : await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(mappedSceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var sceneItemsLookup = sceneItems
-            .GroupBy(x => x.SceneId)
-            .ToDictionary(x => x.Key, x => x.ToList());
-
-        var detailsToAdd = new List<AiSpeechAssistantKnowledgeDetail>();
-        var promptBySceneId = new Dictionary<int, string>();
-        var knowledgeUpdates = new Dictionary<int, AiSpeechAssistantKnowledge>();
-
-        foreach (var assistantKnowledge in assistantKnowledges)
-        {
-            var knowledge = await ResolveKnowledgeForRefreshAsync(assistantKnowledge, knowledgeMap, cancellationToken).ConfigureAwait(false);
-            if (knowledge == null) continue;
-
-            if (!TryResolveKnowledgeLanguage(knowledge.ModelLanguage, out var language)) continue;
-            
-            if (!mappingByLanguage.TryGetValue(language.Value, out var sceneId)) continue;
-            
-            if (!sceneItemsLookup.TryGetValue(sceneId, out var items))
-                items = [];
-            
-            if (items.Count == 0)
-            {
-                Log.Information(
-                    "[KnowledgeDetailSync] Skip. Scene has no items. CompanyId={CompanyId}, AssistantId={AssistantId}, KnowledgeId={KnowledgeId}, SceneId={SceneId}",
-                    companyId, assistantKnowledge.AssistantId, knowledge.Id, sceneId);
-                continue;
-            }
-
-            if (!detailKnowledgeIds.Contains(knowledge.Id))
-            {
-                var hasExistingDetails = knowledge.Id != assistantKnowledge.KnowledgeId && (await _aiSpeechAssistantDataProvider.GetKnowledgeDetailsByKnowledgeIdAsync(knowledge.Id, cancellationToken).ConfigureAwait(false)).Count > 0;
-
-                if (hasExistingDetails)
-                    detailKnowledgeIds.Add(knowledge.Id);
-            }
-
-            if (!detailKnowledgeIds.Contains(knowledge.Id))
-            {
-                detailsToAdd.AddRange(BuildKnowledgeDetails(knowledge.Id, items));
-                detailKnowledgeIds.Add(knowledge.Id);
-
-                Log.Information(
-                    "[KnowledgeDetailSync] Prepared new details. CompanyId={CompanyId}, AssistantId={AssistantId}, KnowledgeId={KnowledgeId}, SceneId={SceneId}, DetailCount={DetailCount}",
-                    companyId, assistantKnowledge.AssistantId, knowledge.Id, sceneId, items.Count);
-            }
-
-            var scenePrompt = GetOrBuildScenePrompt(sceneId, items, promptBySceneId);
-            knowledge.Prompt = scenePrompt;
-            knowledgeUpdates.TryAdd(knowledge.Id, knowledge);
-
-            Log.Information(
-                "[KnowledgeDetailSync] Prepared prompt update. CompanyId={CompanyId}, AssistantId={AssistantId}, KnowledgeId={KnowledgeId}, SceneId={SceneId}, SceneItemCount={SceneItemCount}",
-                companyId, assistantKnowledge.AssistantId, knowledge.Id, sceneId, items.Count);
-        }
-
-        Log.Information(
-            "[KnowledgeDetailSync] Prepared details. CompanyId={CompanyId}, DetailCount={DetailCount}, SceneCount={SceneCount}, ExistingDetailCount={ExistingDetailCount}",
-            companyId, detailsToAdd.Count, promptBySceneId.Count, existingDetails.Count);
-
-        if (detailsToAdd.Count > 0)
-        {
-            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeDetailsAsync(detailsToAdd, true, cancellationToken).ConfigureAwait(false);
-            Log.Information("[KnowledgeDetailSync] Saved details. CompanyId={CompanyId}, DetailCount={DetailCount}", companyId, detailsToAdd.Count);
-        }
-        else
-        {
-            Log.Information("[KnowledgeDetailSync] Nothing to save. CompanyId={CompanyId}", companyId);
-        }
-
-        if (knowledgeUpdates.Count > 0)
-        {
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(knowledgeUpdates.Values.ToList(), true, cancellationToken).ConfigureAwait(false);
-            Log.Information("[KnowledgeDetailSync] Updated prompts. CompanyId={CompanyId}, KnowledgeCount={KnowledgeCount}", companyId, knowledgeUpdates.Count);
-        }
-    }
-
     private static string GenerateKnowledgePromptForSceneItems(List<KnowledgeSceneItem> items)
     {
         if (items == null || items.Count == 0)
@@ -299,24 +174,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         promptBySceneId[sceneId] = prompt;
         return prompt;
     }
-
-    private static List<AiSpeechAssistantKnowledgeDetail> BuildKnowledgeDetails(int knowledgeId, List<KnowledgeSceneItem> items)
-    {
-        return items.Select(item => new AiSpeechAssistantKnowledgeDetail
-        {
-            KnowledgeId = knowledgeId,
-            KnowledgeName = item.Name,
-            FormatType = item.Type == KnowledgeSceneItemType.File
-                ? AiSpeechAssistantKonwledgeFormatType.FIle
-                : item.Type == KnowledgeSceneItemType.FAQ
-                    ? AiSpeechAssistantKonwledgeFormatType.FAQ
-                    : AiSpeechAssistantKonwledgeFormatType.Text,
-            Content = item.Content,
-            FileName = string.IsNullOrWhiteSpace(item.FileName) ? null : item.FileName,
-            CreatedDate = DateTimeOffset.UtcNow
-        }).ToList();
-    }
-
+    
     private static string ResolveSceneKnowledgeContent(KnowledgeSceneItem sceneKnowledge)
     {
         if (sceneKnowledge.Type == KnowledgeSceneItemType.File)
@@ -344,81 +202,155 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         return false;
     }
 
-    private async Task RepairInactiveSingleKnowledgeForCrmAssistantsAsync(int companyId, CancellationToken cancellationToken)
+    private static AiSpeechAssistantKonwledgeFormatType MapKnowledgeSceneItemType(KnowledgeSceneItemType type)
     {
-        var crmAssistants = await _aiSpeechAssistantDataProvider
-            .GetCrmAutoSyncAssistantsInCompanyAsync(companyId, cancellationToken)
-            .ConfigureAwait(false);
+        return type == KnowledgeSceneItemType.File
+            ? AiSpeechAssistantKonwledgeFormatType.FIle
+            : type == KnowledgeSceneItemType.FAQ
+                ? AiSpeechAssistantKonwledgeFormatType.FAQ
+                : AiSpeechAssistantKonwledgeFormatType.Text;
+    }
+    
+    public async Task RefreshKnowledgeDetailsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
+    {
+        if (companyId <= 0)
+            return;
 
-        if (crmAssistants.Count == 0)
+        Log.Information("[KnowledgeDetailSync] Start. CompanyId={CompanyId}", companyId);
+        var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: companyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (mappings.Count == 0)
         {
-            Log.Information("[KnowledgeDetailSync] CRM repair skip. No CRM assistants. CompanyId={CompanyId}", companyId);
+            Log.Information("[KnowledgeDetailSync] Skip. No active mapping. CompanyId={CompanyId}", companyId);
             return;
         }
+
+        var mappingByLanguage = mappings
+            .GroupBy(x => x.Language)
+            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
+
+        var assistantKnowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(companyId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var crmAssistantKnowledges = assistantKnowledges
+            .Where(x => x.SourceSystem == AgentSourceSystem.AiResource && x.KnowledgeId > 0)
+            .GroupBy(x => x.KnowledgeId)
+            .Select(x => x.First())
+            .ToList();
+
+        if (crmAssistantKnowledges.Count == 0)
+        {
+            Log.Information("[KnowledgeDetailSync] Skip. No CRM assistant knowledges. CompanyId={CompanyId}", companyId);
+            return;
+        }
+
+        var knowledgeIds = crmAssistantKnowledges.Select(x => x.KnowledgeId).Where(x => x > 0).Distinct().ToList();
+        var knowledges = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        var knowledgeMap = knowledges.ToDictionary(x => x.Id);
+        var existingRelations = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        var relationMap = existingRelations.GroupBy(x => x.KnowledgeId).ToDictionary(x => x.Key, x => x.ToList());
+        var existingDetails = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        var detailMap = existingDetails.GroupBy(x => x.KnowledgeId).ToDictionary(x => x.Key, x => x.OrderBy(y => y.CreatedDate).ThenBy(y => y.Id).ToList());
+        var sceneItems = await LoadSceneItemsAsync(mappingByLanguage.Values.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
+        var sceneItemsLookup = sceneItems.GroupBy(x => x.SceneId).ToDictionary(x => x.Key, x => x.ToList());
+
+        var relationsToAdd = new List<AiSpeechAssistantKnowledgeSceneRelation>();
+        var relationsToDelete = new List<AiSpeechAssistantKnowledgeSceneRelation>();
+        var detailsToDelete = new List<AiSpeechAssistantKnowledgeDetail>();
+        var affectedKnowledgeIds = new HashSet<int>();
 
         Log.Information(
-            "[KnowledgeDetailSync] CRM repair scan. CompanyId={CompanyId}, AssistantCount={AssistantCount}",
-            companyId, crmAssistants.Select(x => x.AssistantId).Distinct().Count());
+            "[KnowledgeDetailSync] Loaded knowledges. CompanyId={CompanyId}, KnowledgeCount={KnowledgeCount}, MappingCount={MappingCount}",
+            companyId, crmAssistantKnowledges.Count, mappingByLanguage.Count);
 
-        var repairs = new List<AiSpeechAssistantKnowledge>();
-
-        foreach (var crmAssistant in crmAssistants
-                     .Where(x => x.AssistantId > 0)
-                     .GroupBy(x => x.AssistantId)
-                     .Select(x => x.First()))
+        foreach (var assistantKnowledge in crmAssistantKnowledges)
         {
-            var (_, knowledges) = await _aiSpeechAssistantDataProvider
-                .GetAiSpeechAssistantKnowledgesAsync(crmAssistant.AssistantId, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-
-            if (knowledges.Count != 1)
-            {
-                Log.Information(
-                    "[KnowledgeDetailSync] CRM repair skip. Assistant has {KnowledgeCount} knowledges. CompanyId={CompanyId}, AssistantId={AssistantId}",
-                    knowledges.Count, companyId, crmAssistant.AssistantId);
+            if (!knowledgeMap.TryGetValue(assistantKnowledge.KnowledgeId, out var knowledge))
                 continue;
+
+            if (!TryResolveKnowledgeLanguage(knowledge.ModelLanguage, out var language))
+                continue;
+
+            if (!mappingByLanguage.TryGetValue(language.Value, out var sceneId))
+                continue;
+
+            if (!sceneItemsLookup.TryGetValue(sceneId, out var items) || items.Count == 0)
+                continue;
+
+            if (!relationMap.TryGetValue(knowledge.Id, out var relations) || relations.All(x => x.SceneId != sceneId))
+            {
+                relationsToAdd.Add(new AiSpeechAssistantKnowledgeSceneRelation
+                {
+                    KnowledgeId = knowledge.Id,
+                    SceneId = sceneId,
+                    SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+                affectedKnowledgeIds.Add(knowledge.Id);
             }
 
-            var onlyKnowledge = knowledges[0];
-            if (onlyKnowledge.IsActive)
+            var obsoleteCrmRelations = relations?
+                .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync && x.SceneId != sceneId)
+                .ToList() ?? [];
+
+            if (obsoleteCrmRelations.Count > 0)
             {
-                Log.Information(
-                    "[KnowledgeDetailSync] CRM repair skip. Single knowledge already active. CompanyId={CompanyId}, AssistantId={AssistantId}, KnowledgeId={KnowledgeId}",
-                    companyId, crmAssistant.AssistantId, onlyKnowledge.Id);
-                continue;
+                relationsToDelete.AddRange(obsoleteCrmRelations);
+                affectedKnowledgeIds.Add(knowledge.Id);
             }
 
-            onlyKnowledge.IsActive = true;
-            repairs.Add(onlyKnowledge);
+            if (!detailMap.TryGetValue(knowledge.Id, out var details) || details.Count == 0)
+                continue;
 
-            Log.Warning(
-                "[KnowledgeDetailSync] Repair inactive single CRM knowledge. CompanyId={CompanyId}, AssistantId={AssistantId}, KnowledgeId={KnowledgeId}",
-                companyId, crmAssistant.AssistantId, onlyKnowledge.Id);
+            if (!IsExactSceneCopy(details, items))
+                continue;
+
+            detailsToDelete.AddRange(details);
+            affectedKnowledgeIds.Add(knowledge.Id);
         }
 
-        if (repairs.Count == 0)
-            return;
+        if (relationsToAdd.Count > 0)
+            await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToAdd, true, cancellationToken).ConfigureAwait(false);
 
-        await _aiSpeechAssistantDataProvider
-            .UpdateAiSpeechAssistantKnowledgesAsync(repairs, true, cancellationToken)
-            .ConfigureAwait(false);
+        if (relationsToDelete.Count > 0)
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToDelete, true, cancellationToken).ConfigureAwait(false);
 
-        Log.Warning(
-            "[KnowledgeDetailSync] Repaired inactive single CRM knowledges. CompanyId={CompanyId}, Count={Count}",
-            companyId, repairs.Count);
+        if (detailsToDelete.Count > 0)
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeDetailsAsync(detailsToDelete, true, cancellationToken).ConfigureAwait(false);
+
+        if (affectedKnowledgeIds.Count > 0)
+            await RefreshScenePromptsAsync(affectedKnowledgeIds.ToList(), cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<AiSpeechAssistantKnowledge> ResolveKnowledgeForRefreshAsync(
-        KnowledgeCopyRelatedInfoDto assistantKnowledge, IReadOnlyDictionary<int, AiSpeechAssistantKnowledge> knowledgeMap, CancellationToken cancellationToken)
+    private async Task<List<KnowledgeSceneItem>> LoadSceneItemsAsync(List<int> sceneIds, CancellationToken cancellationToken)
     {
-        if (knowledgeMap.TryGetValue(assistantKnowledge.KnowledgeId, out var knowledge))
-            return knowledge;
+        if (sceneIds.Count == 0)
+            return [];
 
-        var (_, latestKnowledges) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgesAsync(assistantKnowledge.AssistantId, pageIndex: 1, pageSize: 1, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        knowledge = latestKnowledges.FirstOrDefault();
-
-        return knowledge;
+        return await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+
+    private static bool IsExactSceneCopy(List<AiSpeechAssistantKnowledgeDetail> details, List<KnowledgeSceneItem> sceneItems)
+    {
+        if (details.Count != sceneItems.Count)
+            return false;
+
+        var detailKeys = details
+            .Select(x => BuildSceneSyncDetailKey(x.KnowledgeName, x.FormatType, x.Content, x.FileName))
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
+        var sceneKeys = sceneItems
+            .Select(x => BuildSceneSyncDetailKey(x.Name, MapKnowledgeSceneItemType(x.Type), x.Content, x.FileName))
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
+
+        return detailKeys.SequenceEqual(sceneKeys, StringComparer.Ordinal);
+    }
+
+    private static string BuildSceneSyncDetailKey(string knowledgeName, AiSpeechAssistantKonwledgeFormatType formatType, string content, string fileName)
+    {
+        return string.Join("|",
+            knowledgeName ?? string.Empty,
+            ((int)formatType).ToString(),
+            content ?? string.Empty,
+            fileName ?? string.Empty);
+    }
+
 }
