@@ -381,13 +381,15 @@ public partial class PhoneOrderProcessJobService
             "2. 禁止輸出「好的」、「請稍等」、「我會」、「我將」、「以下是」、「正在生成」等過渡語。\n" +
             "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
             "4. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。\n" +
-            "5. 「客人下單內容」不是必填項。只有在錄音中明確聽到客戶下單且包含可識別的物料，才可以輸出具體下單內容。\n";
+            "5. 「客人下單內容」不是必填項。如果錄音中沒有任何客戶下單行為，則寫「客人下單內容：無明確下單」。\n" +
+            "6. 【重要】如果通話中同時包含投訴/反饋和新下單內容，兩者必須獨立分析和記錄。投訴內容的存在不影響下單內容的識別與提取。\n" +
+            "7. 【重要】蔬菜類（西蘭花、白菜、生菜、番茄、馬鈴薯等）、水果類、乾貨類同樣屬於可識別物料，必須在下單內容中列出。\n";
 
         List<ChatMessage> messages =
         [
             new SystemChatMessage(recordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。沒有明確下單時，請寫「客人下單內容：無明確下單」")
+            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。請仔細聆聽錄音中所有下單內容，包括蔬菜及其他非肉類產品。只有錄音中完全沒有任何下單行為時，才寫「客人下單內容：無明確下單」。")
         ];
         
         return messages; 
@@ -582,7 +584,10 @@ public partial class PhoneOrderProcessJobService
             "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
             "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
             "6. 生成的json請不要重複物料名\n" +
-            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 IsTargetQuantity=true。";
+            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 IsTargetQuantity=true。\n" +
+            "8. 【重要】客戶分析報告中可能同時包含投訴信息和下單信息。投訴文本（如「投訴信息」、「投诉对象」等章節）中的物料名稱僅為投訴對象，不是新下單，不得從投訴章節提取訂單。\n" +
+            "9. 【重要】訂單信息應從報告的「內容摘要」、「待辦事項」、「客戶下單內容」等章節提取。即使「客戶下單內容」寫了「無明確下單」，如果「內容摘要」中提到了客戶下單的具體品項（如「客戶下單一顆西蘭花」），仍然需要將這些品項提取到 orders 中。\n" +
+            "10. 蔬菜、水果、乾貨等非肉類產品同樣屬於可識別物料，必須提取。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
