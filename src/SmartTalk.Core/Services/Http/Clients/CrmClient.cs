@@ -35,6 +35,7 @@ public interface ICrmClient : IScopedDependency
 public class CrmClient : ICrmClient
 {
     private const string CustomerIdsByShopNamePath = "/api/external/get-customers-by-shop-name?shop_name={0}";
+    private static readonly TimeSpan SyncRequestTimeout = TimeSpan.FromMinutes(5);
     private readonly CrmSetting _crmSetting;
     private readonly ISmartTalkHttpClientFactory _httpClient;
 
@@ -200,8 +201,14 @@ public class CrmClient : ICrmClient
             { "Accept", "application/json" }
         };
 
-        return await _httpClient.GetAsync<List<CrmSalesAutoSyncCustomerDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false)
-               ?? [];
+        var changedCustomers = await _httpClient
+            .GetAsync<List<CrmSalesAutoSyncCustomerDto>>(url, cancellationToken: cancellationToken, timeout: SyncRequestTimeout, headers: headers)
+            .ConfigureAwait(false);
+
+        if (changedCustomers == null)
+            throw new InvalidOperationException($"Failed to load changed CRM sales auto sync customers. Url={url}");
+
+        return changedCustomers;
     }
 
     public async Task<CrmSalesAutoSyncCustomerDto> GetSalesAutoSyncCustomerBySapIdAsync(string sapId, CancellationToken cancellationToken = default)
