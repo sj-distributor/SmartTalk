@@ -28,9 +28,6 @@ public partial interface IAiSpeechAssistantService
 
 public partial class AiSpeechAssistantService
 {
-    private const string InputAudioNoiseReductionName = "input_audio_noise_reduction";
-    private const string DefaultNoiseReductionType = "near_field";
-
     public async Task<GetAiSpeechAssistantKnowledgeCapabilitiesResponse> GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
         GetAiSpeechAssistantKnowledgeCapabilitiesRequest request,
         CancellationToken cancellationToken)
@@ -478,7 +475,7 @@ public partial class AiSpeechAssistantService
         bool enabled,
         CancellationToken cancellationToken)
     {
-        await UpsertAssistantFunctionCallAsync(
+        await _aiSpeechAssistantDataProvider.UpsertAssistantFunctionCallAsync(
             assistant,
             OpenAiToolConstants.RepeatOrder,
             AiSpeechAssistantSessionConfigType.Tool,
@@ -486,7 +483,7 @@ public partial class AiSpeechAssistantService
             enabled,
             cancellationToken).ConfigureAwait(false);
 
-        await UpsertAssistantFunctionCallAsync(
+        await _aiSpeechAssistantDataProvider.UpsertAssistantFunctionCallAsync(
             assistant,
             OpenAiToolConstants.SatisfyOrder,
             AiSpeechAssistantSessionConfigType.Tool,
@@ -495,79 +492,17 @@ public partial class AiSpeechAssistantService
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task SetPhoneNoiseReductionAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-        bool enabled,
-        CancellationToken cancellationToken)
-    {
-        var content = JsonConvert.SerializeObject(new { type = DefaultNoiseReductionType });
-
-        await UpsertAssistantFunctionCallAsync(
-            assistant,
-            InputAudioNoiseReductionName,
-            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
-            content,
-            enabled,
-            cancellationToken).ConfigureAwait(false);
-    }
-
     private async Task<bool> GetPhoneNoiseReductionEnabledAsync(int assistantId, RealtimeAiProvider provider, CancellationToken cancellationToken)
     {
         var functionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
             [assistantId],
-            [InputAudioNoiseReductionName],
+            [AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName],
             AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
             provider,
             true,
             cancellationToken).ConfigureAwait(false);
 
         return functionCalls.Any();
-    }
-
-    private async Task UpsertAssistantFunctionCallAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-        string name,
-        AiSpeechAssistantSessionConfigType type,
-        string content,
-        bool isActive,
-        CancellationToken cancellationToken)
-    {
-        var existingFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
-            [assistant.Id],
-            [name],
-            type,
-            assistant.ModelProvider,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (existingFunctionCalls.Count == 0)
-        {
-            var functionCall = new AiSpeechAssistantFunctionCall
-            {
-                AssistantId = assistant.Id,
-                Name = name,
-                Content = content,
-                Type = type,
-                ModelProvider = assistant.ModelProvider,
-                IsActive = isActive
-            };
-
-            await _aiSpeechAssistantDataProvider
-                .AddAiSpeechAssistantFunctionCallsAsync([functionCall], cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            return;
-        }
-
-        foreach (var functionCall in existingFunctionCalls)
-        {
-            functionCall.IsActive = isActive;
-
-            if (isActive && string.IsNullOrWhiteSpace(functionCall.Content))
-                functionCall.Content = content;
-        }
-
-        await _aiSpeechAssistantDataProvider
-            .UpdateAiSpeechAssistantFunctionCallAsync(existingFunctionCalls, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
     }
 
     private static string BuildRepeatOrderToolContent(string name)
@@ -715,18 +650,6 @@ public partial class AiSpeechAssistantService
             return "cantonese";
 
         return "en";
-    }
-
-    private static bool AssistantHasPhoneChannel(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
-    {
-        if (string.IsNullOrWhiteSpace(assistant.Channel)) return false;
-
-        return assistant.Channel
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
-            .Any(x =>
-                x == ((int)AiSpeechAssistantChannel.PhoneChat).ToString() ||
-                string.Equals(x, AiSpeechAssistantChannel.PhoneChat.ToString(), StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsSharedCrmAutoSyncSalesAgent(Agent agent)

@@ -43,9 +43,6 @@ public interface IAgentService : IScopedDependency
 
 public class AgentService : IAgentService
 {
-    private const string InputAudioNoiseReductionName = "input_audio_noise_reduction";
-    private const string DefaultNoiseReductionType = "near_field";
-
     private readonly IMapper _mapper;
     private readonly ICurrentUser _currentUser;
     private readonly IPosDataProvider _posDataProvider;
@@ -294,7 +291,7 @@ public class AgentService : IAgentService
 
         var noiseReductionFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
             assistantIds,
-            [InputAudioNoiseReductionName],
+            [AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName],
             AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
             isActive: true,
             cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -410,87 +407,15 @@ public class AgentService : IAgentService
         if (!phoneNoiseReductionEnabled.HasValue) return;
 
         var phoneAssistants = assistants
-            .Where(x => x.ModelProvider == RealtimeAiProvider.OpenAi && AssistantHasPhoneChannel(x))
+            .Where(x => x.ModelProvider == RealtimeAiProvider.OpenAi && x.HasPhoneChannel())
             .ToList();
 
         foreach (var assistant in phoneAssistants)
         {
-            await SetPhoneNoiseReductionAsync(assistant, phoneNoiseReductionEnabled.Value, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private async Task SetPhoneNoiseReductionAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-        bool enabled,
-        CancellationToken cancellationToken)
-    {
-        var content = JsonConvert.SerializeObject(new { type = DefaultNoiseReductionType });
-
-        await UpsertAssistantFunctionCallAsync(
-            assistant,
-            InputAudioNoiseReductionName,
-            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
-            content,
-            enabled,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task UpsertAssistantFunctionCallAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
-        string name,
-        AiSpeechAssistantSessionConfigType type,
-        string content,
-        bool isActive,
-        CancellationToken cancellationToken)
-    {
-        var existingFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
-            [assistant.Id],
-            [name],
-            type,
-            assistant.ModelProvider,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        if (existingFunctionCalls.Count == 0)
-        {
-            var functionCall = new AiSpeechAssistantFunctionCall
-            {
-                AssistantId = assistant.Id,
-                Name = name,
-                Content = content,
-                Type = type,
-                ModelProvider = assistant.ModelProvider,
-                IsActive = isActive
-            };
-
             await _aiSpeechAssistantDataProvider
-                .AddAiSpeechAssistantFunctionCallsAsync([functionCall], cancellationToken: cancellationToken)
+                .SetPhoneNoiseReductionAsync(assistant, phoneNoiseReductionEnabled.Value, cancellationToken)
                 .ConfigureAwait(false);
-            return;
         }
-
-        foreach (var functionCall in existingFunctionCalls)
-        {
-            functionCall.IsActive = isActive;
-
-            if (isActive && string.IsNullOrWhiteSpace(functionCall.Content))
-                functionCall.Content = content;
-        }
-
-        await _aiSpeechAssistantDataProvider
-            .UpdateAiSpeechAssistantFunctionCallAsync(existingFunctionCalls, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-    }
-
-    private static bool AssistantHasPhoneChannel(Domain.AISpeechAssistant.AiSpeechAssistant assistant)
-    {
-        if (string.IsNullOrWhiteSpace(assistant.Channel)) return false;
-
-        return assistant.Channel
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Trim())
-            .Any(x =>
-                x == ((int)AiSpeechAssistantChannel.PhoneChat).ToString() ||
-                string.Equals(x, AiSpeechAssistantChannel.PhoneChat.ToString(), StringComparison.OrdinalIgnoreCase));
     }
     
     private async Task HandleAiSpeechAssistantHumanContactAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, string number, CancellationToken cancellationToken)
