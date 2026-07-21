@@ -176,7 +176,7 @@ public partial class PhoneOrderProcessJobService
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
-        if (aiSpeechAssistant.IsComplaintAnalysisEnabled)
+        if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
         {
             var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
 
