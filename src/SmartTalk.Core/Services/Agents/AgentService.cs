@@ -281,6 +281,8 @@ public class AgentService : IAgentService
         }
 
         await EnrichAssistantsNoiseReductionAsync(agents.SelectMany(x => x.Assistants ?? []).ToList(), cancellationToken).ConfigureAwait(false);
+
+        EnrichAgentsNoiseReduction(agents);
     }
 
     private async Task EnrichAssistantsNoiseReductionAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
@@ -301,6 +303,19 @@ public class AgentService : IAgentService
             assistant.PhoneNoiseReductionEnabled = noiseReductionFunctionCalls.Any(x =>
                 x.AssistantId == assistant.Id &&
                 x.ModelProvider == assistant.ModelProvider);
+        }
+    }
+
+    private static void EnrichAgentsNoiseReduction(List<AgentDto> agents)
+    {
+        foreach (var agent in agents)
+        {
+            var phoneAssistants = (agent.Assistants ?? [])
+                .Where(x => x.ModelProvider == RealtimeAiProvider.OpenAi && x.Channels.Contains(AiSpeechAssistantChannel.PhoneChat))
+                .ToList();
+
+            agent.PhoneNoiseReductionEnabled = phoneAssistants.Count == 0 ||
+                                                phoneAssistants.Any(x => x.PhoneNoiseReductionEnabled);
         }
     }
 

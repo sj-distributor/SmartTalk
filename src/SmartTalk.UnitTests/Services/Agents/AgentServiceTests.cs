@@ -104,6 +104,7 @@ public class AgentServiceTests
 
         response.Data.Count.ShouldBe(1);
         response.Data.Agents.ShouldHaveSingleItem();
+        response.Data.Agents[0].PhoneNoiseReductionEnabled.ShouldBeTrue();
         response.Data.Agents[0].Assistants.ShouldHaveSingleItem();
         response.Data.Agents[0].Assistants[0].PhoneNoiseReductionEnabled.ShouldBeTrue();
     }
