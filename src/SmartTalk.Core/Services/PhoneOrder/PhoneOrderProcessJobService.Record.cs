@@ -176,10 +176,9 @@ public partial class PhoneOrderProcessJobService
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
-        if (record.Scenario == DialogueScenarios.ComplaintFeedback)
+        if (aiSpeechAssistant.IsComplaintAnalysisEnabled)
         {
-            var originalReportText = record.TranscriptionText;
-            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(originalReportText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
 
             if (!string.IsNullOrWhiteSpace(complaintSection))
                 record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
