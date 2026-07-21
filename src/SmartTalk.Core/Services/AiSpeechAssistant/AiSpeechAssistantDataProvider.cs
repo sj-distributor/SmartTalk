@@ -66,6 +66,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken);
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken);
+
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken);
     
     Task<int> GetMessageCountByAgentAndDateAsync(int groupKey, DateTimeOffset date, CancellationToken cancellationToken);
     
@@ -436,6 +438,20 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     {
         return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
             .Where(x => x.Id == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByIdsAsync(
+        List<int> assistantIds,
+        CancellationToken cancellationToken)
+    {
+        var distinctAssistantIds = (assistantIds ?? []).Where(x => x > 0).Distinct().ToList();
+        if (distinctAssistantIds.Count == 0)
+            return [];
+
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            .Where(x => distinctAssistantIds.Contains(x.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<int> GetMessageCountByAgentAndDateAsync(int groupKey, DateTimeOffset date, CancellationToken cancellationToken)
