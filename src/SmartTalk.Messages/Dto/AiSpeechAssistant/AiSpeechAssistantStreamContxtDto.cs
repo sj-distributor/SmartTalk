@@ -47,6 +47,10 @@ public class AiSpeechAssistantStreamContextDto
     
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
 
+    public List<string> CandidateCustomerIds { get; set; } = [];
+
+    public List<string> MatchedCustomerIds { get; set; } = [];
+
     public List<(AiSpeechAssistantSpeaker, string)> ConversationTranscription { get; set; } = new();
     
     public bool IsTransfer { get; set; } = false;

@@ -7,6 +7,8 @@ namespace SmartTalk.Core.Services.Sale;
 
 public interface ISalesCustomerMatchService : IScopedDependency
 {
+    Task<SalesCustomerMatchResult> MatchStoreNameInCustomerScopeAsync(string assistantName, string storeName, CancellationToken cancellationToken);
+    
     Task<SalesCustomerMatchResult> MatchCustomerAsync(string primaryPhoneNumber, string secondaryPhoneNumber, string storeName, IEnumerable<string> salesPhoneNumbers, CancellationToken cancellationToken);
 }
 
@@ -15,6 +17,8 @@ public class SalesCustomerMatchResult
     public string SoldToId { get; set; } = string.Empty;
 
     public List<string> SoldToIds { get; set; } = [];
+
+    public List<string> CrmMatchedSoldToIds { get; set; } = [];
 
     public string SalesGroup { get; set; } = string.Empty;
 }
@@ -50,6 +54,43 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
         return new SalesCustomerMatchResult
         {
             SalesGroup = salesGroup
+        };
+    }
+
+    public async Task<SalesCustomerMatchResult> MatchStoreNameInCustomerScopeAsync(string assistantName, string storeName, CancellationToken cancellationToken)
+    {
+        var scopedSoldToIds = SplitCustomerIds(assistantName);
+        if (scopedSoldToIds.Count == 0 || string.IsNullOrWhiteSpace(storeName))
+            return new SalesCustomerMatchResult();
+
+        List<string> crmSoldToIds;
+
+        try
+        {
+            var crmCustomers = await _crmClient.GetCustomerIdsByShopNameAsync(storeName, cancellationToken).ConfigureAwait(false);
+            crmSoldToIds = crmCustomers
+                .Select(x => NormalizeCustomerId(x.SapId))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "CRM scoped store-name matching failed for store {StoreName}", storeName);
+            return new SalesCustomerMatchResult();
+        }
+
+        var crmLookup = crmSoldToIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var matchedSoldToIds = scopedSoldToIds
+            .Where(crmLookup.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new SalesCustomerMatchResult
+        {
+            SoldToId = matchedSoldToIds.Count == 1 ? matchedSoldToIds[0] : string.Empty,
+            SoldToIds = matchedSoldToIds,
+            CrmMatchedSoldToIds = crmSoldToIds
         };
     }
 
@@ -179,5 +220,17 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
 
         var normalized = customerId.Trim().TrimStart('0');
         return string.IsNullOrWhiteSpace(normalized) ? "0" : normalized;
+    }
+
+    private static List<string> SplitCustomerIds(string assistantName)
+    {
+        if (string.IsNullOrWhiteSpace(assistantName)) return [];
+
+        return assistantName
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(NormalizeCustomerId)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 }

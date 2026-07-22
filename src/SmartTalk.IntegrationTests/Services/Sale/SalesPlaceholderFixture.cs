@@ -44,6 +44,7 @@ public class SalesPlaceholderFixture
             attachmentService: null!,
             salesDataProvider: salesDataProvider,
             speechMaticsService: null!,
+            salesCustomerMatchService: null!,
             speechToTextService: null!,
             fileTextExtractor: null!,
             workWeChatKeySetting: null!,

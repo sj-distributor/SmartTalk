@@ -22,6 +22,7 @@ using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Pos;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.AiResourceSync;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Sales;
@@ -53,6 +54,21 @@ public class AiResourceSyncServiceTests
             Arg.Is<AiResourceSyncCommand>(x => x.IsManual && x.ServiceProviderId == 123 && x.InitiatedByUserId == 888),
             Arg.Any<CancellationToken>());
         Assert.NotNull(response);
+    }
+
+    [Fact]
+    public async Task SchedulingRefreshCrmCustomerContactPhoneMapCommandHandler_RefreshesContactPhoneMaps()
+    {
+        var processJobService = Substitute.For<IAiResourceSyncProcessJobService>();
+        var handler = new SchedulingRefreshCrmCustomerContactPhoneMapCommandHandler(processJobService);
+        var context = Substitute.For<IReceiveContext<SchedulingRefreshCrmCustomerContactPhoneMapCommand>>();
+        context.Message.Returns(new SchedulingRefreshCrmCustomerContactPhoneMapCommand());
+
+        await handler.Handle(context, CancellationToken.None);
+
+        await processJobService.Received(1).RefreshCrmCustomerContactPhoneMapsAsync(
+            Arg.Any<SchedulingRefreshCrmCustomerContactPhoneMapCommand>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -547,6 +563,10 @@ public class AiResourceSyncServiceTests
         crmClient.GetChangedSalesAutoSyncCustomersAsync(
                 Arg.Any<CancellationToken>())
             .Returns(new List<CrmSalesAutoSyncCustomerDto>());
+        crmClient.GetSalesAutoSyncCustomersAsync(
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns((new List<CrmSalesAutoSyncCustomerDto>(), 0));
 
         var posDataProvider = Substitute.For<IPosDataProvider>();
         posDataProvider.GetPosCompanyByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -719,6 +739,86 @@ public class AiResourceSyncServiceTests
     }
 
     [Fact]
+    public async Task RefreshCrmCustomerContactPhoneMapsAsync_RefreshesMultipleContactPhoneMappingsForSameCustomer()
+    {
+        var customer = new CrmSalesAutoSyncCustomerDto
+        {
+            CustomerId = "118895",
+            CustomerName = "PHO DAY",
+            SalesName = "TIFFANY.X",
+            SalesGroup = "008",
+            Language = "中文",
+            Contacts =
+            [
+                new() { Name = "NICOLE", Phone = "415-218-2467", Identity = "老闆", Language = "粵語" },
+                new() { Name = "JINGXIAN", Phone = "415-535-7933", Identity = "未知", Language = "粵語" },
+                new() { Name = "STEVEN", Phone = "415-407-6788", Identity = "未知", Language = "粵語" }
+            ]
+        };
+
+        var crmClient = Substitute.For<ICrmClient>();
+        crmClient.GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(([customer], 1));
+
+        var posDataProvider = Substitute.For<IPosDataProvider>();
+        posDataProvider.GetPosCompanyByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.Pos.Company { Id = 1, Name = "OME" });
+        posDataProvider.GetPosCompanyStoresAsync(
+                Arg.Any<List<int>>(), Arg.Any<List<int>>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new SmartTalk.Core.Domain.Pos.CompanyStore
+                {
+                    Id = 10,
+                    CompanyId = 1,
+                    CreatedDate = DateTimeOffset.UtcNow,
+                    Names = "{\"en\":{\"name\":\"TIFFANY.X 008\"},\"cn\":{\"name\":\"TIFFANY.X 008\"}}"
+                }
+            ]);
+        posDataProvider.GetPosAgentsAsync(Arg.Any<List<int>>(), null, Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new PosAgent { StoreId = 10, AgentId = 201, CreatedDate = DateTimeOffset.UtcNow }
+            ]);
+
+        var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
+        aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(10, "118895", Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Id = 9801,
+                AgentId = 201,
+                Name = "118895"
+            });
+        aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap> capturedMappings = null;
+        aiSpeechAssistantDataProvider
+            .When(x => x.AddCrmCustomerContactPhoneMapsAsync(Arg.Any<List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap>>(), true, Arg.Any<CancellationToken>()))
+            .Do(call => capturedMappings = call.Arg<List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap>>());
+
+        var sut = CreateSut(
+            crmClient: crmClient,
+            posDataProvider: posDataProvider,
+            aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider);
+
+        await sut.RefreshCrmCustomerContactPhoneMapsAsync(CancellationToken.None);
+
+        Assert.NotNull(capturedMappings);
+        Assert.Equal(3, capturedMappings.Count);
+        Assert.All(capturedMappings, x =>
+        {
+            Assert.Equal("118895", x.CustomerId);
+            Assert.Equal("PHO DAY", x.CustomerName);
+            Assert.Equal(9801, x.AssistantId);
+            Assert.Equal(201, x.AgentId);
+            Assert.True(x.IsActive);
+        });
+        Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4152182467" && x.ContactName == "NICOLE");
+        Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4155357933" && x.ContactName == "JINGXIAN");
+        Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4154076788" && x.ContactName == "STEVEN");
+    }
+    [Fact]
     public async Task SyncInternalAsync_ManualSync_SplitsExistingAssistantWhenOnlyChangedCustomerIsReturned()
     {
         var crmClient = Substitute.For<ICrmClient>();
@@ -734,6 +834,22 @@ public class AiResourceSyncServiceTests
                     Language = "English"
                 }
             });
+        crmClient.GetSalesAutoSyncCustomersAsync(
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns((
+                new List<CrmSalesAutoSyncCustomerDto>
+                {
+                    new()
+                    {
+                        CustomerId = "116399",
+                        SalesName = "CHRISTINE.C",
+                        SalesGroup = "057",
+                        Language = "English"
+                    }
+                },
+                1
+            ));
         crmClient.GetSalesAutoSyncCustomerBySapIdAsync("1", Arg.Any<CancellationToken>())
             .Returns(new CrmSalesAutoSyncCustomerDto
             {
@@ -750,6 +866,27 @@ public class AiResourceSyncServiceTests
                 SalesGroup = "G1",
                 Language = "English"
             });
+        crmClient.GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns((
+                new List<CrmSalesAutoSyncCustomerDto>
+                {
+                    new()
+                    {
+                        CustomerId = "1",
+                        SalesName = "B",
+                        SalesGroup = "G2",
+                        Language = "English"
+                    },
+                    new()
+                    {
+                        CustomerId = "2",
+                        SalesName = "A",
+                        SalesGroup = "G1",
+                        Language = "English"
+                    }
+                },
+                2
+            ));
 
         var mediator = Substitute.For<IMediator>();
         mediator.SendAsync<AddAgentCommand, AddAgentResponse>(

@@ -6,6 +6,7 @@ using SmartTalk.Core.Domain.AIAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Sales;
@@ -187,6 +188,13 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task<List<AiSpeechAssistantKnowledgeDetail>> UpdateAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task<List<CrmCustomerContactPhoneMap>> GetCrmCustomerContactPhoneMapsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default);
+
+    Task<CrmCustomerContactPhoneMap> GetActiveCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(int agentId, string normalizedPhoneNumber, CancellationToken cancellationToken = default);
+
+    Task AddCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task UpdateCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -222,12 +230,6 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        // Use null-conditional access so a no-match (FirstOrDefaultAsync returns null on the
-        // anonymous projection) yields a (null, null, null) tuple instead of NRE'ing on
-        // `result.assistant`. Callers that assume non-null tuple elements (V1) keep their
-        // existing crash semantics — they will now NRE on the next deref of the returned
-        // null instead of inside this method, which is functionally equivalent. Callers that
-        // null-check (V2's LoadAssistantInfoAsync) can react cleanly.
         return (result?.assistant, result?.knowledge, result?.userProfile);
     }
 

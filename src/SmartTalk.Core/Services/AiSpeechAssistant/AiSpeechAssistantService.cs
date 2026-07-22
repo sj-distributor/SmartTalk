@@ -89,6 +89,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IAttachmentService _attachmentService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISpeechMaticsService _speechMaticsService;
+    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IFileTextExtractor _fileTextExtractor;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
@@ -130,6 +131,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IAttachmentService attachmentService,
         ISalesDataProvider salesDataProvider,
         ISpeechMaticsService speechMaticsService,
+        ISalesCustomerMatchService salesCustomerMatchService,
         ISpeechToTextService speechToTextService,
         IFileTextExtractor fileTextExtractor,
         WorkWeChatKeySetting workWeChatKeySetting,
@@ -163,6 +165,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
+        _speechMaticsService = speechMaticsService;
+        _salesCustomerMatchService = salesCustomerMatchService;
         _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
@@ -290,6 +294,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 
+        var candidateCustomerIds = SplitAssistantCustomerIds(assistant.Name);
+        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+
         if (numberId.HasValue && finalPrompt.Contains("#{greeting}"))
         {
             var greeting = await _smartiesClient.GetSaleAutoCallNumberAsync(new GetSaleAutoCallNumberRequest(){ Id = numberId.Value }, cancellationToken).ConfigureAwait(false);
@@ -298,13 +305,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
         }
         
-        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
-
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
-            var customerItemsText = " ";
-
-            if (soldToIds.Any())
+            if (candidateCustomerIds.Count > 1)
+            {
+                finalPrompt = finalPrompt.Replace("#{customer_items}", " ");
+            }
+            else if (soldToIds.Any())
             {
                 var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
 
@@ -313,10 +320,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                     .Where(value => !string.IsNullOrWhiteSpace(value))
                     .ToList();
 
-                customerItemsText = customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ";
+                var customerItemsText = customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ";
+                finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsText);
             }
-
-            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsText);
         }
 
         if (finalPrompt.Contains("#{delivery_progress}", StringComparison.OrdinalIgnoreCase))
@@ -372,6 +378,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+        _aiSpeechAssistantStreamContext.CandidateCustomerIds = candidateCustomerIds;
     }
     
     private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)
@@ -854,6 +861,10 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
                                         case OpenAiToolConstants.CollectComplaintInfo:
                                             await ProcessCollectComplaintInfoAsync(outputElement, cancellationToken).ConfigureAwait(false);
+                                            break;
+
+                                        case OpenAiToolConstants.QueryCustomerItemsByStoreName:
+                                            await ProcessQueryCustomerItemsByStoreNameAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
                                         
                                         case OpenAiToolConstants.RepeatOrder:
@@ -1479,6 +1490,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.LastPrompt = AiSpeechAssistantComplaintInfoHelper.AppendPromptInstructionIfEnabled(
             _aiSpeechAssistantStreamContext.LastPrompt,
             functions.Select(x => x.Name));
+        EnsureCustomerItemsTool(functions, assistant);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }

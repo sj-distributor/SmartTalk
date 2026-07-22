@@ -44,7 +44,7 @@ public partial interface IAiResourceSyncService : IScopedDependency
     Task SendNotifyAsync(bool isSuccess, bool isManual, CancellationToken cancellationToken);
 }
 
-public class AiResourceSyncService : IAiResourceSyncService
+public partial class AiResourceSyncService : IAiResourceSyncService
 {
     private const int MaxWarningEntriesToPersist = 100;
     private const int MaxDetailEntriesPerCategoryToPersist = 50;
@@ -258,7 +258,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             .Select(x => x.SalesKey)
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-      
+
         var storeMap = existingStores
             .Select(x => new { Store = x, StoreName = GetStoreName(x.Names) })
             .Where(x => !string.IsNullOrWhiteSpace(x.StoreName) && storeNames.Contains(x.StoreName))

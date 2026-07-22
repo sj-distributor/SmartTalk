@@ -123,4 +123,40 @@ public class SalesCustomerMatchServiceTests
         await _daovikaClient.Received(1).GetSalesGroupByPhoneNumberAsync("+19164284295", Arg.Any<CancellationToken>());
         await _daovikaClient.Received(1).GetSalesGroupByPhoneNumberAsync("+19165550000", Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task MatchStoreNameInCustomerScopeAsync_ShouldReturnOnlyIdsInsideAssistantName()
+    {
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
+
+        _crmClient.GetCustomerIdsByShopNameAsync("Lucky House", Arg.Any<CancellationToken>())
+            .Returns([
+                new GetCustomerIdByShopNameResponseDto { SapId = "000101", CustomerName = "Lucky House A" },
+                new GetCustomerIdByShopNameResponseDto { SapId = "000102", CustomerName = "Lucky House B" },
+                new GetCustomerIdByShopNameResponseDto { SapId = "000999", CustomerName = "Lucky House Other Sales" }
+            ]);
+
+        var result = await sut.MatchStoreNameInCustomerScopeAsync("101/102/103", "Lucky House", CancellationToken.None);
+
+        result.SoldToId.ShouldBeEmpty();
+        result.SoldToIds.ShouldBe(["101", "102"]);
+        result.CrmMatchedSoldToIds.ShouldBe(["101", "102", "999"]);
+    }
+
+    [Fact]
+    public async Task MatchStoreNameInCustomerScopeAsync_ShouldReturnEmpty_WhenCrmMatchesOnlyOutsideAssistantName()
+    {
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
+
+        _crmClient.GetCustomerIdsByShopNameAsync("Lucky House", Arg.Any<CancellationToken>())
+            .Returns([
+                new GetCustomerIdByShopNameResponseDto { SapId = "000999", CustomerName = "Lucky House Other Sales" }
+            ]);
+
+        var result = await sut.MatchStoreNameInCustomerScopeAsync("101/102/103", "Lucky House", CancellationToken.None);
+
+        result.SoldToId.ShouldBeEmpty();
+        result.SoldToIds.ShouldBeEmpty();
+        result.CrmMatchedSoldToIds.ShouldBe(["999"]);
+    }
 }

@@ -45,6 +45,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
     private readonly IFfmpegService _ffmpegService;
     private readonly IPosUtilService _posUtilService;
+    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
     private readonly IRealtimeAiService _realtimeAiService;
     private readonly IAgentTransferCallRoutingService _agentTransferCallRoutingService;
     private readonly RealtimeAiTtsConfigResolver _ttsConfigResolver;
@@ -69,6 +70,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
+        ISalesCustomerMatchService salesCustomerMatchService,
         IRealtimeAiService realtimeAiService,
         IAgentTransferCallRoutingService agentTransferCallRoutingService,
         RealtimeAiTtsConfigResolver ttsConfigResolver,
@@ -85,6 +87,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _ffmpegService = ffmpegService;
         _posUtilService = posUtilService;
+        _salesCustomerMatchService = salesCustomerMatchService;
         _realtimeAiService = realtimeAiService;
         _agentTransferCallRoutingService = agentTransferCallRoutingService;
         _ttsConfigResolver = ttsConfigResolver;

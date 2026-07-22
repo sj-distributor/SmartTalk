@@ -109,6 +109,19 @@ public class CrmSalesAutoSyncGroupingTests
         Assert.Equal(new[] { "100", "200" }, groups[0].CustomerIds);
     }
 
+    [Theory]
+    [InlineData("415-218-2467", "4152182467")]
+    [InlineData("+1 415-218-2467", "4152182467")]
+    [InlineData("1 (415) 218-2467", "4152182467")]
+    [InlineData("   ", "")]
+    [InlineData(null, "")]
+    public void NormalizePhoneNumber_NormalizesForInboundMatching(string rawPhoneNumber, string expected)
+    {
+        var normalized = CrmSalesAutoSyncGrouping.NormalizePhoneNumber(rawPhoneNumber);
+
+        Assert.Equal(expected, normalized);
+    }
+
     private static CrmSalesAutoSyncCustomerDto CreateCustomer(string sapId, string salesName, string phone)
         => CreateCustomer(sapId, salesName, "GroupA", phone, null);
 

@@ -14,6 +14,9 @@ public partial interface IAiResourceSyncProcessJobService: IScopedDependency
     Task AiResourceSyncAsync (SchedulingAiResourceSyncCommand command, CancellationToken cancellationToken);
     
     Task ExecuteSyncCrmSalesAutoCreateAsync(AiResourceSyncCommand command, CancellationToken cancellationToken);
+
+    [Semaphore(HangfireConstants.SemaphoreRefreshCrmCustomerContactPhoneMap)]
+    Task RefreshCrmCustomerContactPhoneMapsAsync(SchedulingRefreshCrmCustomerContactPhoneMapCommand command, CancellationToken cancellationToken);
 }
 
 public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
@@ -72,5 +75,10 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
         }
 
         throw lastException!;
+    }
+
+    public async Task RefreshCrmCustomerContactPhoneMapsAsync(SchedulingRefreshCrmCustomerContactPhoneMapCommand command, CancellationToken cancellationToken)
+    {
+        await _aiResourceSyncService.RefreshCrmCustomerContactPhoneMapsAsync(cancellationToken).ConfigureAwait(false);
     }
 }

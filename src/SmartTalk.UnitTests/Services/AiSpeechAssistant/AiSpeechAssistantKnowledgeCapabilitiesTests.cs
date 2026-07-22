@@ -596,6 +596,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 Substitute.For<IAttachmentService>(),
                 harness.SalesDataProvider,
                 Substitute.For<ISpeechMaticsService>(),
+                Substitute.For<ISalesCustomerMatchService>(),
                 Substitute.For<ISpeechToTextService>(),
                 Substitute.For<IFileTextExtractor>(),
                 new WorkWeChatKeySetting(configuration),
