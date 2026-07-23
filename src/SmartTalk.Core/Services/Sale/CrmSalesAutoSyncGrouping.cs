@@ -154,7 +154,7 @@ public static class CrmSalesAutoSyncGrouping
         return NormalizePhoneKey(contact?.Phone);
     }
 
-    private static string NormalizePhoneKey(string phoneNumber)
+    public static string NormalizePhoneNumber(string phoneNumber)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber))
             return string.Empty;
@@ -167,6 +167,11 @@ public static class CrmSalesAutoSyncGrouping
             digits = digits[^10..];
 
         return digits;
+    }
+
+    private static string NormalizePhoneKey(string phoneNumber)
+    {
+        return NormalizePhoneNumber(phoneNumber);
     }
 
     private static int Find(int[] parent, int index)
