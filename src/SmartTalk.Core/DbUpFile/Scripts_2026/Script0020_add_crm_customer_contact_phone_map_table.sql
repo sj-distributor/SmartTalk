@@ -18,6 +18,5 @@ create table if not exists `crm_customer_contact_phone_map`
     `last_modified_date` datetime(3) null
 );
 
-create index `idx_crm_customer_contact_phone_map_company_id` on `crm_customer_contact_phone_map` (`company_id`);
 create index `idx_crm_customer_contact_phone_map_agent_phone` on `crm_customer_contact_phone_map` (`agent_id`, `contact_phone_normalized`, `is_active`);
 create unique index `uq_crm_customer_contact_phone_map_customer_agent_phone` on `crm_customer_contact_phone_map` (`customer_id`, `agent_id`, `assistant_id`, `contact_phone_normalized`);

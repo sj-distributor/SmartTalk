@@ -165,7 +165,11 @@ public class AiResourceSyncServiceTests
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
         aiSpeechAssistantDataProvider.HasCrmAutoSyncAssistantsInCompanyAsync(1, Arg.Any<CancellationToken>()).Returns(true);
         aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantsInCompanyAsync(1, Arg.Any<CancellationToken>())
-            .Returns(new List<CrmAutoSyncAssistantLocationDto>());
+            .Returns(new List<CrmAutoSyncAssistantLocationDto>
+            {
+                new() { AssistantId = 999, StoreId = 9, AgentId = 99, Name = "200" },
+                new() { AssistantId = 999, StoreId = 9, AgentId = 99, Name = "200" }
+            });
         aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(10, "100", Arg.Any<CancellationToken>())
             .Returns(
                 Task.FromResult<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>(null),
@@ -182,6 +186,25 @@ public class AiResourceSyncServiceTests
                 AgentId = 201,
                 Name = "100"
             });
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(101, null, true, Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledge
+            {
+                Id = 701,
+                AssistantId = 101,
+                IsActive = true,
+                ModelLanguage = "English"
+            });
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(701, Arg.Any<CancellationToken>())
+            .Returns(new List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>
+            {
+                new()
+                {
+                    Id = 1,
+                    KnowledgeId = 701,
+                    SceneId = 499,
+                    SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync
+                }
+            });
         aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(
                 Arg.Any<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(), true, Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
@@ -196,7 +219,7 @@ public class AiResourceSyncServiceTests
             {
                 new() { Id = 500, Status = KnowledgeSceneStatus.Published }
             });
-        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeSceneItem>
             {
                 new()
@@ -245,11 +268,23 @@ public class AiResourceSyncServiceTests
         Assert.NotNull(capturedAddAssistantCommand);
         Assert.Equal("100", capturedAddAssistantCommand!.AssistantName);
         Assert.Equal(888, capturedAddAssistantCommand.CreatedBy);
-        Assert.Single(capturedAddAssistantCommand.Details);
-        Assert.Equal("Scene item example", capturedAddAssistantCommand.Details[0].KnowledgeName);
-        Assert.Equal(AiSpeechAssistantKonwledgeFormatType.FAQ, capturedAddAssistantCommand.Details[0].FormatType);
-        Assert.Equal("scene item content", capturedAddAssistantCommand.Details[0].Content);
-        Assert.Equal("scene-item.txt", capturedAddAssistantCommand.Details[0].FileName);
+        Assert.Empty(capturedAddAssistantCommand.Details);
+        await aiSpeechAssistantDataProvider.Received(1).AddAiSpeechAssistantKnowledgeSceneRelationsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>>(x =>
+                x.Count == 1 &&
+                x[0].KnowledgeId == 701 &&
+                x[0].SceneId == 500 &&
+                x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
+            true,
+            Arg.Any<CancellationToken>());
+        await aiSpeechAssistantDataProvider.Received(1).DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>>(x =>
+                x.Count == 1 &&
+                x[0].KnowledgeId == 701 &&
+                x[0].SceneId == 499 &&
+                x[0].SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync),
+            true,
+            Arg.Any<CancellationToken>());
 
         await mediator.Received(1).SendAsync<CreateCompanyStoreCommand, CreateCompanyStoreResponse>(
             Arg.Is<CreateCompanyStoreCommand>(x =>
@@ -460,7 +495,7 @@ public class AiResourceSyncServiceTests
             {
                 new() { Id = 500, Status = KnowledgeSceneStatus.Published }
             });
-        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeSceneItem>
             {
                 new()
@@ -556,6 +591,150 @@ public class AiResourceSyncServiceTests
             Arg.Any<CancellationToken>());
         await crmClient.DidNotReceive().GetSalesAutoSyncCustomersAsync(
             Arg.Any<int>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SyncInternalAsync_WhenCustomerSalesChanges_ShouldMoveAssistantToTargetSalesAgentWithoutMovingSourceAgent()
+    {
+        var crmClient = Substitute.For<ICrmClient>();
+        crmClient.GetChangedSalesAutoSyncCustomersAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<CrmSalesAutoSyncCustomerDto>
+            {
+                new()
+                {
+                    CustomerId = "1",
+                    SalesName = "B",
+                    SalesGroup = "G2",
+                    Language = "English"
+                }
+            });
+
+        var posDataProvider = Substitute.For<IPosDataProvider>();
+        posDataProvider.GetPosCompanyByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.Pos.Company { Id = 1, Name = "OME" });
+        posDataProvider.GetPosCompanyStoresAsync(
+                Arg.Any<List<int>>(), Arg.Any<List<int>>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new List<SmartTalk.Core.Domain.Pos.CompanyStore>
+            {
+                new()
+                {
+                    Id = 10,
+                    CompanyId = 1,
+                    Names = "{\"en\":{\"name\":\"A G1\"}}",
+                    CreatedDate = DateTimeOffset.UtcNow.AddDays(-1)
+                },
+                new()
+                {
+                    Id = 20,
+                    CompanyId = 1,
+                    Names = "{\"en\":{\"name\":\"B G2\"}}",
+                    CreatedDate = DateTimeOffset.UtcNow
+                }
+            });
+        posDataProvider.GetPosAgentsAsync(
+                Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 20),
+                null,
+                Arg.Any<CancellationToken>())
+            .Returns(new List<PosAgent> { new() { StoreId = 20, AgentId = 201 } });
+
+        var agentDataProvider = Substitute.For<IAgentDataProvider>();
+        agentDataProvider.GetAgentsByIdsAsync(
+                Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 201),
+                Arg.Any<CancellationToken>())
+            .Returns(new List<Agent>
+            {
+                new()
+                {
+                    Id = 201,
+                    Name = "B G2",
+                    Type = AgentType.Sales,
+                    SourceSystem = AgentSourceSystem.AiResource
+                }
+            });
+
+        var assistant = new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 900,
+            AgentId = 300,
+            Name = "1"
+        };
+        var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
+        aiSpeechAssistantDataProvider.HasCrmAutoSyncAssistantsInCompanyAsync(1, Arg.Any<CancellationToken>()).Returns(true);
+        aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantsInCompanyAsync(1, Arg.Any<CancellationToken>())
+            .Returns(new List<CrmAutoSyncAssistantLocationDto>
+            {
+                new() { AssistantId = 900, StoreId = 10, AgentId = 300, Name = "1" }
+            });
+        aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(900, Arg.Any<CancellationToken>())
+            .Returns(assistant);
+        aiSpeechAssistantDataProvider.GetAgentAssistantsAsync(
+                Arg.Any<List<int>>(),
+                Arg.Any<List<int>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new List<SmartTalk.Core.Domain.AISpeechAssistant.AgentAssistant>
+            {
+                new() { Id = 1, AgentId = 300, AssistantId = 900 }
+            });
+        aiSpeechAssistantDataProvider.DeleteAgentAssistantsAsync(
+                Arg.Any<List<SmartTalk.Core.Domain.AISpeechAssistant.AgentAssistant>>(),
+                true,
+                Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        aiSpeechAssistantDataProvider.AddAgentAssistantsAsync(
+                Arg.Any<List<SmartTalk.Core.Domain.AISpeechAssistant.AgentAssistant>>(),
+                true,
+                Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(
+                Arg.Any<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(),
+                true,
+                Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var knowledgeScenarioDataProvider = Substitute.For<IKnowledgeScenarioDataProvider>();
+        knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(1, null, null, true, Arg.Any<CancellationToken>())
+            .Returns(new List<KnowledgeSceneLanguageMapping>
+            {
+                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.English, CreatedAt = DateTimeOffset.UtcNow }
+            });
+        knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<KnowledgeScene> { new() { Id = 500, Status = KnowledgeSceneStatus.Published } });
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<KnowledgeSceneItem>());
+
+        var sut = CreateSut(
+            crmClient: crmClient,
+            agentDataProvider: agentDataProvider,
+            posDataProvider: posDataProvider,
+            aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
+            knowledgeScenarioDataProvider: knowledgeScenarioDataProvider);
+
+        await sut.SyncInternalAsync(new AiResourceSyncCommand
+        {
+            IsManual = true,
+            ServiceProviderId = 123,
+            InitiatedByUserId = 888
+        }, CancellationToken.None);
+
+        await aiSpeechAssistantDataProvider.Received(1).DeleteAgentAssistantsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AgentAssistant>>(x =>
+                x.Count == 1 && x[0].AgentId == 300 && x[0].AssistantId == 900),
+            true,
+            Arg.Any<CancellationToken>());
+        await aiSpeechAssistantDataProvider.Received(1).AddAgentAssistantsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AgentAssistant>>(x =>
+                x.Count == 1 && x[0].AgentId == 201 && x[0].AssistantId == 900),
+            true,
+            Arg.Any<CancellationToken>());
+        await aiSpeechAssistantDataProvider.Received(1).UpdateAiSpeechAssistantsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(x =>
+                x.Count == 1 && x[0].Id == 900 && x[0].AgentId == 201),
+            true,
+            Arg.Any<CancellationToken>());
+        await posDataProvider.DidNotReceive().UpdatePosAgentsAsync(
+            Arg.Any<List<PosAgent>>(),
+            Arg.Any<bool>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -742,10 +921,6 @@ public class AiResourceSyncServiceTests
             });
         posDataProvider.GetPosAgentsAsync(Arg.Any<List<int>>(), null, Arg.Any<CancellationToken>())
             .Returns(new List<PosAgent>());
-        posDataProvider.GetPosAgentByAgentIdAsync(300, Arg.Any<CancellationToken>())
-            .Returns(new PosAgent { AgentId = 300, StoreId = 10, CreatedDate = DateTimeOffset.UtcNow.AddDays(-1) });
-        posDataProvider.UpdatePosAgentsAsync(Arg.Any<List<PosAgent>>(), true, Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
 
         var agentDataProvider = Substitute.For<IAgentDataProvider>();
         agentDataProvider.GetAgentsByIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
@@ -816,7 +991,7 @@ public class AiResourceSyncServiceTests
             {
                 new() { Id = 500, Status = KnowledgeSceneStatus.Published }
             });
-        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(500, Arg.Any<CancellationToken>())
+        knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<KnowledgeSceneItem>
             {
                 new()
@@ -866,6 +1041,7 @@ public class AiResourceSyncServiceTests
         IAgentDataProvider? agentDataProvider = null,
         IPosDataProvider? posDataProvider = null,
         IAiSpeechAssistantDataProvider? aiSpeechAssistantDataProvider = null,
+        IAiSpeechAssistantKnowledgePromptService? aiSpeechAssistantKnowledgePromptService = null,
         IKnowledgeScenarioDataProvider? knowledgeScenarioDataProvider = null,
         ISalesDataProvider? salesDataProvider = null,
         IRedisSafeRunner? redisSafeRunner = null,
@@ -903,6 +1079,7 @@ public class AiResourceSyncServiceTests
             agentDataProvider ?? Substitute.For<IAgentDataProvider>(),
             posDataProvider ?? Substitute.For<IPosDataProvider>(),
             aiSpeechAssistantDataProvider ?? Substitute.For<IAiSpeechAssistantDataProvider>(),
+            aiSpeechAssistantKnowledgePromptService ?? Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
             knowledgeScenarioDataProvider ?? Substitute.For<IKnowledgeScenarioDataProvider>(),
             salesDataProvider ?? Substitute.For<ISalesDataProvider>(),
             Substitute.For<IWeChatClient>(),

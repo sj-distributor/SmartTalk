@@ -66,6 +66,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken);
     
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken);
+
+    Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByIdsAsync(List<int> assistantIds, CancellationToken cancellationToken);
     
     Task<int> GetMessageCountByAgentAndDateAsync(int groupKey, DateTimeOffset date, CancellationToken cancellationToken);
     
@@ -163,7 +165,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantKnowledgeDetail>> GetKnowledgeDetailsByKnowledgeIdAsync(int knowledgeId, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeDetail>> AddAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
-    
+
     Task<AiSpeechAssistantKnowledgeDetail> UpdateAiSpeechAssistantKnowledgeDetailAsync(AiSpeechAssistantKnowledgeDetail detail, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task DeleteAiSpeechAssistantKnowledgeDetailAsync(int detailId, bool forceSave = true, CancellationToken cancellationToken = default);
@@ -183,6 +185,9 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task AddCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task UpdateCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantKnowledgeDetail>> UpdateAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
+
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -217,7 +222,13 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         assistantInfo = assistantInfo.Where(x => assistantId.HasValue ? x.assistant.Id == assistantId.Value : x.assistant.AnsweringNumber == didNumber);
 
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+
+        // Use null-conditional access so a no-match (FirstOrDefaultAsync returns null on the
+        // anonymous projection) yields a (null, null, null) tuple instead of NRE'ing on
+        // `result.assistant`. Callers that assume non-null tuple elements (V1) keep their
+        // existing crash semantics — they will now NRE on the next deref of the returned
+        // null instead of inside this method, which is functionally equivalent. Callers that
+        // null-check (V2's LoadAssistantInfoAsync) can react cleanly.
         return (result?.assistant, result?.knowledge, result?.userProfile);
     }
 
@@ -435,6 +446,20 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
     {
         return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
             .Where(x => x.Id == assistantId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByIdsAsync(
+        List<int> assistantIds,
+        CancellationToken cancellationToken)
+    {
+        var distinctAssistantIds = (assistantIds ?? []).Where(x => x > 0).Distinct().ToList();
+        if (distinctAssistantIds.Count == 0)
+            return [];
+
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            .Where(x => distinctAssistantIds.Contains(x.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<int> GetMessageCountByAgentAndDateAsync(int groupKey, DateTimeOffset date, CancellationToken cancellationToken)
@@ -1007,5 +1032,17 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             return new List<AiSpeechAssistantKnowledge>();
 
         return await _repository.Query<AiSpeechAssistantKnowledge>().Where(k => knowledgeIds.Contains(k.Id)).ToListAsync(cancellationToken);
+    }
+    
+    public async Task<List<AiSpeechAssistantKnowledgeDetail>> UpdateAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (details == null || details.Count == 0)
+            return details;
+
+        await _repository.UpdateAllAsync(details, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return details;
     }
 }
