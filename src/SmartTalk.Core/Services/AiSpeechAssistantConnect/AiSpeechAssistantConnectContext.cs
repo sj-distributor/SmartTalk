@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
@@ -36,6 +37,8 @@ public class AiSpeechAssistantConnectContext
     public int? ForwardAssistantId { get; set; }
     public string HumanContactPhone { get; set; }
     public string TransferCallNumber { get; set; }
+    public List<AgentTransferCallConfig> AgentTransferCallConfigs { get; set; }
+    public TimeZoneInfo TimeZone { get; set; }
 
     // Service hours
     public bool IsInAiServiceHours { get; set; } = true;

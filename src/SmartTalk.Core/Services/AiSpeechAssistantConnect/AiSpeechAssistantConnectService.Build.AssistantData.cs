@@ -6,9 +6,6 @@ public partial class AiSpeechAssistantConnectService
     {
         var assistantId = _ctx.Assistant.Id;
 
-        _ctx.HumanContactPhone = (await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false))?.HumanPhone;
-
         _ctx.Timer = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantTimerByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
 
