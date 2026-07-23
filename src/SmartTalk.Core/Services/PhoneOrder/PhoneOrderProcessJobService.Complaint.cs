@@ -93,7 +93,6 @@ public partial class PhoneOrderProcessJobService
     {
         if (items.Count == 0) return new List<ProductCustomerMatchResult>();
 
-        var productNames = items.Select(i => i.ProductName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var customerOrderContexts = await BuildCustomerComplaintInvoiceOrderContextsAsync(customerIds, cancellationToken).ConfigureAwait(false);
         var results = items.Select(i => new ProductCustomerMatchResult
         {
@@ -103,9 +102,31 @@ public partial class PhoneOrderProcessJobService
             DeliveryDate = i.DeliveryDate
         }).ToList();
 
-        if (customerOrderContexts.Any(c => c.Orders.Count > 0))
+        if (customerOrderContexts.All(c => c.Orders.Count == 0))
+            return results;
+
+        var allOrderInfos = customerOrderContexts
+            .SelectMany(c => c.Orders.Select(o => new ComplaintOrderInfo
+            {
+                CustomerId = c.CustomerId,
+                QueryCustomerId = c.QueryCustomerId,
+                InvNumber = o.InvNumber,
+                InvDate = o.InvDate,
+                MaterialNames = o.MaterialNames
+            }))
+            .ToList();
+
+        TryMatchByInvoiceNumber(items, results, allOrderInfos);
+
+        var unmatchedItems = items
+            .Zip(results, (item, result) => new { item, result })
+            .Where(x => !x.result.IsMatched)
+            .Select(x => x.item)
+            .ToList();
+
+        if (unmatchedItems.Count > 0)
         {
-            var llmResults = await MatchProductsByLlmAsync(productNames, customerOrderContexts, cancellationToken).ConfigureAwait(false);
+            var llmResults = await MatchProductsByLlmAsync(unmatchedItems, customerOrderContexts, cancellationToken).ConfigureAwait(false);
             foreach (var llm in llmResults.Where(x => x.IsMatched && !string.IsNullOrWhiteSpace(x.CustomerId)))
             {
                 foreach (var r in results.Where(x => string.Equals(x.ProductName, llm.ProductName, StringComparison.OrdinalIgnoreCase)))
@@ -121,6 +142,33 @@ public partial class PhoneOrderProcessJobService
         }
 
         return results;
+    }
+
+    private static void TryMatchByInvoiceNumber(
+        List<ComplaintExtractionItem> items,
+        List<ProductCustomerMatchResult> results,
+        List<ComplaintOrderInfo> allOrders)
+    {
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            if (item.InvoiceNumbers == null || item.InvoiceNumbers.Count == 0) continue;
+
+            foreach (var invoiceNo in item.InvoiceNumbers)
+            {
+                var match = allOrders.FirstOrDefault(o =>
+                    string.Equals(o.InvNumber, invoiceNo, StringComparison.OrdinalIgnoreCase));
+
+                if (match == null) continue;
+
+                results[i].CustomerId = match.CustomerId;
+                results[i].QueryCustomerId = match.QueryCustomerId;
+                results[i].IsMatched = true;
+                results[i].MatchedInvoiceNumber = match.InvNumber;
+                results[i].MatchReason = $"订单号精确匹配：{invoiceNo}";
+                break;
+            }
+        }
     }
 
     private async Task<List<ComplaintCustomerInvoiceOrderContext>> BuildCustomerComplaintInvoiceOrderContextsAsync(
@@ -144,7 +192,7 @@ public partial class PhoneOrderProcessJobService
     }
 
     private async Task<List<ComplaintLlmProductMatchResult>> MatchProductsByLlmAsync(
-        List<string> products,
+        List<ComplaintExtractionItem> items,
         List<ComplaintCustomerInvoiceOrderContext> customerOrderContexts,
         CancellationToken cancellationToken)
     {
@@ -172,9 +220,12 @@ public partial class PhoneOrderProcessJobService
                         Content = new CompletionsStringContent(
                             "你是一名订单商品匹配助手。请逐个判断每个投诉商品分别由哪个客户的哪张 invoice 配送。\n" +
                             "【重要】对于每个投诉商品，在 results 数组中只输出一条记录，不要为同一个投诉商品输出多条结果。\n" +
-                            "【匹配策略】使用模糊匹配：从候选客户订单中找出与投诉商品名称最相似的商品，取相似度最高的客户和 invoice。\n" +
-                            "允许繁简体、中英文名称、产地、部位（如鸡胸/鸡腿/鸡翼）、品牌、包装规格等差异。同品类（如都是鸡肉类、都是牛肉类）或名称部分重合即可视为匹配成功，isMatched 为 true，reason 注明相似程度（如「模糊匹配：鸡胸→CHICKEN BREAST」「部位接近：鸡翼→CHICKEN WING」）。\n" +
-                            "如果候选订单中完全没有可关联的商品（不同物种、完全不同的品类，如投诉猪肉但订单只有海鲜），则 isMatched 为 false，customerId 和 queryCustomerId 留空。\n" +
+                            "【匹配策略】需要综合评估以下三个维度，权重依次递减：\n" +
+                            "1. 送货日期（deliveryDate）：优先匹配相同或相近日期（±3天内）的 invoice。\n" +
+                            "2. Invoice 单号：投诉中可能提供了单号，优先匹配订单号相同或高度相似的 invoice（允许格式差异如缺前导零、分隔符不同等）。\n" +
+                            "3. 商品名称（productName）：在满足前两项的候选 invoice 中，匹配商品名最接近的。允许繁简体、中英文名称、产地、部位（如鸡胸/鸡腿/鸡翼）、品牌、包装规格等差异。同品类且日期和单号接近即可判定为匹配成功。\n" +
+                            "只有三个维度综合评估后确实找不到任何关联（不同日期、无匹配单号、完全不同的品类），才设置 isMatched 为 false。\n" +
+                            "reason 中注明匹配依据，例如「日期接近+单号匹配」「日期+品名模糊匹配」「单号模糊匹配+同品类」等。\n" +
                             "只返回 JSON，不要额外解释。\n" +
                             "{\n" +
                             "  \"results\": [\n" +
@@ -193,7 +244,14 @@ public partial class PhoneOrderProcessJobService
                     {
                         Role = "user",
                         Content = new CompletionsStringContent(
-                            "投诉商品：\n" + JsonConvert.SerializeObject(products) + "\n\n" +
+                            "投诉商品（含日期和单号信息，请综合三个维度匹配）：\n" +
+                            JsonConvert.SerializeObject(items.Select(i => new
+                            {
+                                i.ProductName,
+                                i.InvoiceNumbers,
+                                i.DeliveryDate,
+                                i.DeliveryDateText
+                            })) + "\n\n" +
                             "候选客户订单：\n" + JsonConvert.SerializeObject(customerPayload) + "\n\nJSON:")
                     }
                 },
@@ -205,8 +263,8 @@ public partial class PhoneOrderProcessJobService
             var result = JsonConvert.DeserializeObject<ComplaintLlmProductMatchResponse>(response ?? string.Empty);
 
             Log.Information(
-                "Complaint product LLM match result. Products={Products}, ResultCount={ResultCount}, Results={Results}",
-                products,
+                "Complaint product LLM match result. Items={Items}, ResultCount={ResultCount}, Results={Results}",
+                items.Select(i => new { i.ProductName, i.InvoiceNumbers, i.DeliveryDate }),
                 result?.Results?.Count ?? 0,
                 result?.Results);
 
@@ -214,7 +272,7 @@ public partial class PhoneOrderProcessJobService
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Complaint product LLM match failed. Products={Products}", products);
+            Log.Warning(ex, "Complaint product LLM match failed. Items={Items}", items.Select(i => new { i.ProductName, i.InvoiceNumbers, i.DeliveryDate }));
             return new List<ComplaintLlmProductMatchResult>();
         }
     }
@@ -395,6 +453,15 @@ public partial class PhoneOrderProcessJobService
 
         public DateTime? InvDate { get; set; }
 
+        public List<string> MaterialNames { get; set; } = new();
+    }
+
+    private sealed class ComplaintOrderInfo
+    {
+        public string CustomerId { get; set; }
+        public string QueryCustomerId { get; set; }
+        public string InvNumber { get; set; }
+        public DateTime? InvDate { get; set; }
         public List<string> MaterialNames { get; set; } = new();
     }
 
