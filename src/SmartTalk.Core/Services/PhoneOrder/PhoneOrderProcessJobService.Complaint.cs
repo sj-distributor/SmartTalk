@@ -129,15 +129,17 @@ public partial class PhoneOrderProcessJobService
             var llmResults = await MatchProductsByLlmAsync(unmatchedItems, customerOrderContexts, cancellationToken).ConfigureAwait(false);
             foreach (var llm in llmResults.Where(x => x.IsMatched && !string.IsNullOrWhiteSpace(x.CustomerId)))
             {
-                foreach (var r in results.Where(x => string.Equals(x.ProductName, llm.ProductName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    if (r.IsMatched) continue;
-                    r.CustomerId = llm.CustomerId;
-                    r.QueryCustomerId = llm.QueryCustomerId;
-                    r.IsMatched = llm.IsMatched;
-                    r.MatchedInvoiceNumber = llm.MatchedInvoiceNumbers?.FirstOrDefault();
-                    r.MatchReason = llm.Reason;
-                }
+                var r = results.FirstOrDefault(x =>
+                    string.Equals(x.ProductName, llm.ProductName, StringComparison.OrdinalIgnoreCase) &&
+                    !x.IsMatched);
+
+                if (r == null) continue;
+
+                r.CustomerId = llm.CustomerId;
+                r.QueryCustomerId = llm.QueryCustomerId;
+                r.IsMatched = true;
+                r.MatchedInvoiceNumber = llm.MatchedInvoiceNumbers?.FirstOrDefault();
+                r.MatchReason = llm.Reason;
             }
         }
 
@@ -218,13 +220,13 @@ public partial class PhoneOrderProcessJobService
                     {
                         Role = "system",
                         Content = new CompletionsStringContent(
-                            "你是一名订单商品匹配助手。请逐个判断每个投诉商品分别由哪个客户的哪张 invoice 配送。\n" +
-                            "【重要】对于每个投诉商品，在 results 数组中只输出一条记录，不要为同一个投诉商品输出多条结果。\n" +
+                            "你是一名订单商品匹配助手。请逐一判断每个投诉商品应由哪个客户的哪张 invoice 配送。\n" +
+                            "【重要】输入中可能有多个投诉商品，即使品名相同，只要日期或单号不同，就是不同的投诉记录，每条输入都必须有一条对应的输出结果，results 数组长度必须与投诉商品输入长度一致，不要合并或去重。\n" +
                             "【匹配策略】需要综合评估以下三个维度，权重依次递减：\n" +
                             "1. 送货日期（deliveryDate）：优先匹配相同或相近日期（±3天内）的 invoice。\n" +
                             "2. Invoice 单号：投诉中可能提供了单号，优先匹配订单号相同或高度相似的 invoice（允许格式差异如缺前导零、分隔符不同等）。\n" +
-                            "3. 商品名称（productName）：在满足前两项的候选 invoice 中，匹配商品名最接近的。允许繁简体、中英文名称、产地、部位（如鸡胸/鸡腿/鸡翼）、品牌、包装规格等差异。同品类且日期和单号接近即可判定为匹配成功。\n" +
-                            "只有三个维度综合评估后确实找不到任何关联（不同日期、无匹配单号、完全不同的品类），才设置 isMatched 为 false。\n" +
+                            "3. 商品名称（productName）：在满足前两项的候选 invoice 中，匹配商品名最接近的。允许繁简体、中英文名称、产地、部位（如鸡胸/鸡腿/鸡翼）、品牌、包装规格等差异。\n" +
+                            "只有三个维度综合评估后确实找不到任何关联，才设置 isMatched 为 false。\n" +
                             "reason 中注明匹配依据，例如「日期接近+单号匹配」「日期+品名模糊匹配」「单号模糊匹配+同品类」等。\n" +
                             "只返回 JSON，不要额外解释。\n" +
                             "{\n" +
