@@ -4,15 +4,19 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Domain.KnowledgeScenario;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Settings.Sales;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Messages.Commands.KnowledgeScenario;
+using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.KnowledgeScenario;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 using SmartTalk.Messages.Requests.KnowledgeScenario;
 
@@ -33,6 +37,8 @@ public interface IKnowledgeScenarioService : IScopedDependency
     Task<DeleteKnowledgeSceneResponse> DeleteKnowledgeSceneAsync(DeleteKnowledgeSceneCommand command, CancellationToken cancellationToken);
     
     Task<GetKnowledgeSceneFoldersResponse> GetKnowledgeSceneFoldersAsync(GetKnowledgeSceneFoldersRequest request, CancellationToken cancellationToken);
+
+    Task<GetKnowledgeSceneFolderTreeResponse> GetKnowledgeSceneFolderTreeAsync(GetKnowledgeSceneFolderTreeRequest request, CancellationToken cancellationToken);
 
     Task<GetKnowledgeScenesResponse> GetKnowledgeScenesAsync(GetKnowledgeScenesRequest request, CancellationToken cancellationToken);
 
@@ -55,6 +61,10 @@ public interface IKnowledgeScenarioService : IScopedDependency
     Task<UpdateKnowledgeSceneHistoryResponse> UpdateKnowledgeSceneHistoryAsync(UpdateKnowledgeSceneHistoryCommand command, CancellationToken cancellationToken);
 
     Task<GetAgentKnowledgeResponse> GetAgentKnowledgeAsync(GetAgentKnowledgeRequest request, CancellationToken cancellationToken);
+
+    Task<GetKnowledgeSceneLanguageMappingsResponse> GetKnowledgeSceneLanguageMappingsAsync(GetKnowledgeSceneLanguageMappingsRequest request, CancellationToken cancellationToken);
+
+    Task<SaveKnowledgeSceneLanguageMappingsResponse> SaveKnowledgeSceneLanguageMappingsAsync(SaveKnowledgeSceneLanguageMappingsCommand command, CancellationToken cancellationToken);
 }
 
 public class KnowledgeScenarioService : IKnowledgeScenarioService
@@ -65,6 +75,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
+    private readonly SalesSetting _salesSetting;
+    private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
 
     public KnowledgeScenarioService(
         IMapper mapper,
@@ -72,7 +84,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         IPosDataProvider posDataProvider,
         ISmartiesClient smartiesClient,
-        IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService)
+        IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
+        SalesSetting salesSetting,
+        ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _mapper = mapper;
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
@@ -80,6 +94,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         _posDataProvider = posDataProvider;
         _smartiesClient = smartiesClient;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
+        _salesSetting = salesSetting;
+        _backgroundJobClient = backgroundJobClient;
     }
 
     private static List<KnowledgeSceneItemDto> OrderSceneItems(IEnumerable<KnowledgeSceneItemDto> items)
@@ -267,6 +283,9 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (scene == null)
             throw new Exception($"DeleteKnowledgeScene Scene [{command.Id}] does not exist.");
 
+        var languageMappings = await _knowledgeScenarioDataProvider
+            .GetKnowledgeSceneLanguageMappingsAsync(sceneIds: [scene.Id], isActive: true, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var (_, histories) = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoriesAsync(sceneId: scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
         var historyItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneHistoryItemsAsync(histories.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
@@ -283,6 +302,12 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             sceneCompanies.Where(x => x.StoreId.HasValue).Select(x => x.StoreId!.Value).ToList(),
             relations.Select(x => x.Id).ToList(),
             knowledgeIds);
+
+        if (languageMappings.Count != 0)
+        {
+            languageMappings.ForEach(x => x.IsActive = false);
+            await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneLanguageMappingsAsync(languageMappings, false, cancellationToken).ConfigureAwait(false);
+        }
 
         if (relations.Count != 0)
             await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(relations, false, cancellationToken).ConfigureAwait(false);
@@ -304,6 +329,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         if (knowledgeIds.Count != 0)
             await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
 
+        EnqueueKnowledgeCleanupJob(languageMappings);
+
         Log.Information("DeleteKnowledgeSceneAsync completed. SceneId={@SceneId}", scene.Id);
 
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
@@ -313,6 +340,25 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         {
             Data = sceneDto
         };
+    }
+
+    private void EnqueueKnowledgeCleanupJob(List<KnowledgeSceneLanguageMapping> removedMappings)
+    {
+        var cleanupTargets = (removedMappings ?? [])
+            .Where(x => x.CompanyId > 0)
+            .GroupBy(x => x.CompanyId)
+            .Select(x => new CleanupAiSpeechAssistantKnowledgeByLanguageCommand
+            {
+                CompanyId = x.Key,
+                Languages = x.Select(y => y.Language).Distinct().ToList()
+            })
+            .ToList();
+
+        foreach (var command in cleanupTargets)
+        {
+            _backgroundJobClient.Enqueue<IAiSpeechAssistantProcessJobService>(
+                x => x.CleanupAiSpeechAssistantKnowledgeByLanguageAsync(command, CancellationToken.None));
+        }
     }
 
     private async Task<List<KnowledgeSceneItem>> AddKnowledgeSceneItemsInternalAsync(KnowledgeScene scene, List<KnowledgeSceneItemDto> items, bool checkExistingItems, CancellationToken cancellationToken)
@@ -409,6 +455,38 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         return new GetKnowledgeSceneFoldersResponse
         {
             Data = _mapper.Map<List<KnowledgeSceneFolderDto>>(folders)
+        };
+    }
+
+    public async Task<GetKnowledgeSceneFolderTreeResponse> GetKnowledgeSceneFolderTreeAsync(GetKnowledgeSceneFolderTreeRequest request, CancellationToken cancellationToken)
+    {
+        var folders = await _knowledgeScenarioDataProvider.GetKnowledgeSceneFoldersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var folderIds = folders.Select(x => x.Id).ToList();
+        var scenes = await _knowledgeScenarioDataProvider.GetKnowledgeScenesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        scenes = folderIds.Count == 0 ? scenes : scenes.Where(x => folderIds.Contains(x.FolderId)).ToList();
+        var data = folders.Select(folder =>
+        {
+            var folderScenes = scenes.Where(x => x.FolderId == folder.Id).Select(scene =>
+            {
+                var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
+                return sceneDto;
+            }).ToList();
+
+            return new KnowledgeSceneFolderTreeDto
+            {
+                Id = folder.Id,
+                Name = folder.Name,
+                CreatedAt = folder.CreatedAt,
+                UpdatedAt = folder.UpdatedAt,
+                Scenes = folderScenes
+            };
+        }).ToList();
+
+        Log.Information("GetKnowledgeSceneFolderTreeAsync completed. FolderCount={FolderCount}, SceneCount={SceneCount}", folders.Count, scenes.Count);
+
+        return new GetKnowledgeSceneFolderTreeResponse
+        {
+            Data = data
         };
     }
 
@@ -656,7 +734,8 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
             var relationsToAdd = knowledgeIdsToAdd.Select(knowledgeId => new AiSpeechAssistantKnowledgeSceneRelation
             {
                 KnowledgeId = knowledgeId,
-                SceneId = command.SceneId
+                SceneId = command.SceneId,
+                SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.Manual
             }).ToList();
 
             await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantKnowledgeSceneRelationsAsync(relationsToAdd, true, cancellationToken).ConfigureAwait(false);
@@ -1144,6 +1223,109 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         return new GetAgentKnowledgeResponse
         {
             Data = result
+        };
+    }
+
+    public async Task<GetKnowledgeSceneLanguageMappingsResponse> GetKnowledgeSceneLanguageMappingsAsync(
+        GetKnowledgeSceneLanguageMappingsRequest request, CancellationToken cancellationToken)
+    {
+        if (request.CompanyId <= 0)
+            throw new Exception("GetKnowledgeSceneLanguageMappings CompanyId is required.");
+
+        return new GetKnowledgeSceneLanguageMappingsResponse
+        {
+            Data = await BuildCompanyLanguageMappingsAsync(request.CompanyId, cancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    public async Task<SaveKnowledgeSceneLanguageMappingsResponse> SaveKnowledgeSceneLanguageMappingsAsync(
+        SaveKnowledgeSceneLanguageMappingsCommand command, CancellationToken cancellationToken)
+    {
+        if (command.CompanyId <= 0)
+            throw new Exception("SaveKnowledgeSceneLanguageMappings CompanyId is required.");
+
+        var items = (command.Mappings ?? [])
+            .Select(x => new SaveKnowledgeSceneLanguageMappingItemDto
+            {
+                Language = x.Language,
+                SceneId = x.SceneId
+            })
+            .GroupBy(x => x.Language)
+            .Select(x => x.Last())
+            .ToList();
+
+        var existingMappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: command.CompanyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var mappingsToDeactivate = existingMappings.ToList();
+
+        foreach (var mapping in mappingsToDeactivate)
+        {
+            mapping.IsActive = false;
+        }
+
+        if (mappingsToDeactivate.Count > 0)
+            await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneLanguageMappingsAsync(mappingsToDeactivate, false, cancellationToken).ConfigureAwait(false);
+
+        var mappingsToAdd = items
+            .Where(x => x.SceneId > 0)
+            .Select(x => new KnowledgeSceneLanguageMapping
+            {
+                CompanyId = command.CompanyId,
+                SceneId = x.SceneId,
+                Language = x.Language,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            })
+            .ToList();
+
+        if (mappingsToAdd.Count > 0)
+            await _knowledgeScenarioDataProvider.AddKnowledgeSceneLanguageMappingsAsync(mappingsToAdd, true, cancellationToken).ConfigureAwait(false);
+        else if (mappingsToDeactivate.Count > 0)
+            await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneLanguageMappingsAsync(mappingsToDeactivate, true, cancellationToken).ConfigureAwait(false);
+
+        var salesCompany = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
+        if (salesCompany != null && salesCompany.Id == command.CompanyId)
+        {
+            await _aiSpeechAssistantKnowledgePromptService.RefreshKnowledgeDetailsByCompanyIdAsync(command.CompanyId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new SaveKnowledgeSceneLanguageMappingsResponse
+        {
+            Data = await BuildCompanyLanguageMappingsAsync(command.CompanyId, cancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    private async Task<KnowledgeSceneAutoAddLanguageMappingsDto> BuildCompanyLanguageMappingsAsync(int companyId, CancellationToken cancellationToken)
+    {
+        var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: companyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var mappingLookup = mappings
+            .GroupBy(x => x.Language)
+            .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First());
+
+        var mappedSceneIds = mappingLookup.Values.Select(x => x.SceneId).Where(x => x > 0).Distinct().ToList();
+        var scenes = mappedSceneIds.Count == 0
+            ? new List<KnowledgeScene>()
+            : await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(mappedSceneIds, cancellationToken).ConfigureAwait(false);
+
+        var sceneNameLookup = scenes.ToDictionary(x => x.Id, x => x.Name);
+
+        return new KnowledgeSceneAutoAddLanguageMappingsDto
+        {
+            CompanyId = companyId,
+            Mappings = Enum.GetValues<AutoAddLanguage>()
+                .Select(language =>
+                {
+                    mappingLookup.TryGetValue(language, out var mapping);
+                    var hasValidScene = mapping != null && mapping.SceneId > 0 && sceneNameLookup.ContainsKey(mapping.SceneId);
+                    return new KnowledgeSceneLanguageMappingDto
+                    {
+                        MappingId = hasValidScene ? mapping?.Id : null,
+                        Language = language,
+                        SceneId = hasValidScene ? mapping?.SceneId : null,
+                        SceneName = hasValidScene ? sceneNameLookup[mapping.SceneId] : null
+                    };
+                })
+                .ToList()
         };
     }
 }

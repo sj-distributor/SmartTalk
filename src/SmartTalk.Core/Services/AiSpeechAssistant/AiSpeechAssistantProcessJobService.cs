@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
@@ -24,6 +25,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WebSocket;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -37,6 +39,10 @@ public interface IAiSpeechAssistantProcessJobService : IScopedDependency
     Task SyncAiSpeechAssistantLanguageAsync(SyncAiSpeechAssistantLanguageCommand command, CancellationToken cancellationToken);
 
     Task SyncAiSpeechAssistantKnowledgePromptAsync(SyncAiSpeechAssistantKnowledgePromptCommand command, CancellationToken cancellationToken);
+
+    Task SyncAiSpeechAssistantKnowledgeDetailAsync(SyncAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
+
+    Task CleanupAiSpeechAssistantKnowledgeByLanguageAsync(CleanupAiSpeechAssistantKnowledgeByLanguageCommand command, CancellationToken cancellationToken);
     
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
@@ -282,6 +288,64 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         await _speechAssistantDataProvider
             .UpdateAiSpeechAssistantKnowledgesAsync(updates, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SyncAiSpeechAssistantKnowledgeDetailAsync(SyncAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        var companyName = _salesSetting.CompanyName?.Trim();
+        if (string.IsNullOrWhiteSpace(companyName))
+        {
+            Log.Information("Skip syncing assistant knowledge details: Sales CompanyName is empty.");
+            return;
+        }
+
+        var company = await _posDataProvider.GetPosCompanyByNameAsync(companyName, cancellationToken).ConfigureAwait(false);
+        if (company == null)
+        {
+            Log.Information("Skip syncing assistant knowledge details: company not found: {CompanyName}", companyName);
+            return;
+        }
+
+        Log.Information("[Job] SyncAiSpeechAssistantKnowledgeDetail. CompanyId={CompanyId}", company.Id);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshKnowledgeDetailsByCompanyIdAsync(company.Id, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CleanupAiSpeechAssistantKnowledgeByLanguageAsync(CleanupAiSpeechAssistantKnowledgeByLanguageCommand command, CancellationToken cancellationToken)
+    {
+        var companyId = command.CompanyId;
+        var targetLanguages = (command.Languages ?? []).Distinct().ToHashSet();
+        if (companyId <= 0 || targetLanguages.Count == 0)
+            return;
+
+        var assistantKnowledges = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(companyId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var knowledgeIds = assistantKnowledges
+            .Where(x => x.SourceSystem == AgentSourceSystem.AiResource)
+            .Select(x => x.KnowledgeId)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+        if (knowledgeIds.Count == 0)
+            return;
+
+        var knowledges = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        var staleKnowledges = knowledges
+            .Where(x => Enum.TryParse<SmartTalk.Messages.Enums.KnowledgeScenario.AutoAddLanguage>(x.ModelLanguage, true, out var language) && targetLanguages.Contains(language))
+            .ToList();
+        if (staleKnowledges.Count == 0)
+            return;
+
+        var staleKnowledgeIds = staleKnowledges.Select(x => x.Id).ToList();
+        var details = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        await _speechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeDetailsAsync(details, false, cancellationToken).ConfigureAwait(false);
+
+        staleKnowledges.ForEach(x =>
+        {
+            x.Prompt = string.Empty;
+            x.ScenePrompt = string.Empty;
+        });
+
+        await _speechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(staleKnowledges, true, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool TryMergeNormalizedJson(int knowledgeId, string knowledgeJson, IEnumerable<string> copyKnowledgePoints, out string mergedJson)

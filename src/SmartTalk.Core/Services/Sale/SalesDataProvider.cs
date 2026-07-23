@@ -41,6 +41,8 @@ public interface ISalesDataProvider : IScopedDependency
     Task<PhoneOrderPushTask> GetRecordPushTaskByRecordIdAsync(int recordId, CancellationToken cancellationToken);
 
     Task<AiSpeechAssistantKnowledgeVariableCache> GetDeliveryInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
+
+    Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class SalesDataProvider : ISalesDataProvider
@@ -188,6 +190,27 @@ public class SalesDataProvider : ISalesDataProvider
         ];
     }
     
+    public async Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(run, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CrmSalesAutoSyncRun> GetLatestSuccessfulCrmSalesAutoSyncRunByModeAsync(
+        string mode, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+            return null;
+
+        return await _repository.Query<CrmSalesAutoSyncRun>()
+            .Where(x => x.Mode == mode && x.IsSuccess)
+            .OrderByDescending(x => x.CreatedDate)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private async Task UpsertPhoneScopedCacheAsync(
         string cacheKey,
         string phoneNumber,
