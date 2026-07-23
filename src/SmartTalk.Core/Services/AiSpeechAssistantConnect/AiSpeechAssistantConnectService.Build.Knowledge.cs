@@ -17,6 +17,7 @@ public partial class AiSpeechAssistantConnectService
     private async Task BuildKnowledgeAsync(CancellationToken cancellationToken)
     {
         await LoadAssistantInfoAsync(cancellationToken).ConfigureAwait(false);
+        ResolveCandidateCustomerIds();
         
         ResolveStaticPromptVariables();
         
@@ -184,6 +185,9 @@ public partial class AiSpeechAssistantConnectService
         var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
 
         if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return null;
+
+        if (_ctx.CandidateCustomerIds.Count > 1)
+            return " ";
 
         var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(_ctx.Assistant.Name, cancellationToken).ConfigureAwait(false);
         var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
