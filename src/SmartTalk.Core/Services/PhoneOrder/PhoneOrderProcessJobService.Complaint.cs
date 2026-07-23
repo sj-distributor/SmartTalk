@@ -106,10 +106,11 @@ public partial class PhoneOrderProcessJobService
         if (customerOrderContexts.Any(c => c.Orders.Count > 0))
         {
             var llmResults = await MatchProductsByLlmAsync(productNames, customerOrderContexts, cancellationToken).ConfigureAwait(false);
-            foreach (var llm in llmResults)
+            foreach (var llm in llmResults.Where(x => x.IsMatched && !string.IsNullOrWhiteSpace(x.CustomerId)))
             {
                 foreach (var r in results.Where(x => string.Equals(x.ProductName, llm.ProductName, StringComparison.OrdinalIgnoreCase)))
                 {
+                    if (r.IsMatched) continue;
                     r.CustomerId = llm.CustomerId;
                     r.QueryCustomerId = llm.QueryCustomerId;
                     r.IsMatched = llm.IsMatched;
@@ -170,8 +171,10 @@ public partial class PhoneOrderProcessJobService
                         Role = "system",
                         Content = new CompletionsStringContent(
                             "你是一名订单商品匹配助手。请逐个判断每个投诉商品分别由哪个客户的哪张 invoice 配送。\n" +
-                            "匹配时允许繁简体、常见中英文名称、产地、包装描述差异，但必须是同一种核心商品；品牌/规格如果明确冲突则不能匹配；不能因为都是大类商品就误判为同一商品。\n" +
-                            "对于每个投诉商品，最多匹配到一个客户的一张 invoice。如果无法确定归属，isMatched 设为 false。\n" +
+                            "【重要】对于每个投诉商品，在 results 数组中只输出一条记录，不要为同一个投诉商品输出多条结果。\n" +
+                            "【匹配策略】使用模糊匹配：从候选客户订单中找出与投诉商品名称最相似的商品，取相似度最高的客户和 invoice。\n" +
+                            "允许繁简体、中英文名称、产地、部位（如鸡胸/鸡腿/鸡翼）、品牌、包装规格等差异。同品类（如都是鸡肉类、都是牛肉类）或名称部分重合即可视为匹配成功，isMatched 为 true，reason 注明相似程度（如「模糊匹配：鸡胸→CHICKEN BREAST」「部位接近：鸡翼→CHICKEN WING」）。\n" +
+                            "如果候选订单中完全没有可关联的商品（不同物种、完全不同的品类，如投诉猪肉但订单只有海鲜），则 isMatched 为 false，customerId 和 queryCustomerId 留空。\n" +
                             "只返回 JSON，不要额外解释。\n" +
                             "{\n" +
                             "  \"results\": [\n" +
