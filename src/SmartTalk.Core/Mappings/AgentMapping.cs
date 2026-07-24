@@ -10,7 +10,9 @@ public class AgentMapping : Profile
     public AgentMapping()
     {
         CreateMap<Agent, AgentDto>();
+        CreateMap<AgentTransferCallConfig, AgentTransferCallConfigDto>().ReverseMap();
         CreateMap<UpdateAgentCommand, Agent>()
-            .ForMember(dest => dest.IsReceiveCall, opt => opt.MapFrom(src => src.IsReceivingCall));;
+            .ForMember(dest => dest.IsReceiveCall, opt => opt.MapFrom(src => src.IsReceivingCall))
+            .ForMember(dest => dest.TransferCallNumber, opt => opt.Ignore());
     }
 }

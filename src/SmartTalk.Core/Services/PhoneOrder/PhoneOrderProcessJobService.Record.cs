@@ -484,6 +484,7 @@ public partial class PhoneOrderProcessJobService
     {
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
+        var isAixvolinkRecord = string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase);
         var soldToIds = new List<string>(); 
         if (!string.IsNullOrEmpty(aiSpeechAssistant.Name))
              soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -491,6 +492,21 @@ public partial class PhoneOrderProcessJobService
         var historyItems = soldToIds.Count > 0
             ? await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken).ConfigureAwait(false)
             : [];
+
+        SalesCustomerMatchResult aixvolinkPreCustomerMatch = null;
+        if (isAixvolinkRecord)
+        {
+            aixvolinkPreCustomerMatch = await ResolveAixvolinkCustomerMatchAsync(record, string.Empty, cancellationToken).ConfigureAwait(false);
+            if (aixvolinkPreCustomerMatch.SoldToIds.Count > 0)
+            {
+                historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(aixvolinkPreCustomerMatch.SoldToIds, cancellationToken).ConfigureAwait(false);
+                Log.Information(
+                    "Preloaded AIXVOLINK customer history items before order extraction. RecordId={RecordId}, SoldToIds={SoldToIds}, HistoryItemCount={HistoryItemCount}",
+                    record.Id,
+                    aixvolinkPreCustomerMatch.SoldToIds,
+                    historyItems.Count);
+            }
+        }
 
         var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
@@ -500,11 +516,13 @@ public partial class PhoneOrderProcessJobService
 
         foreach (var storeOrder in extractedOrders)
         { 
-            var customerMatch = await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            var customerMatch = isAixvolinkRecord && aixvolinkPreCustomerMatch?.SoldToIds.Count > 0
+                ? aixvolinkPreCustomerMatch
+                : await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
             var soldToId = customerMatch.SoldToId;
             var matchedSoldToIds = customerMatch.SoldToIds.Count > 0
                 ? customerMatch.SoldToIds
-                : string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase)
+                : isAixvolinkRecord
                     ? []
                     : soldToIds;
 
@@ -805,12 +823,18 @@ public partial class PhoneOrderProcessJobService
             };
         }
 
-        var customerLookupPhoneNumbers = GetAixvolinkCustomerLookupNumbers(record);
-        var matched = await _salesCustomerMatchService
-            .MatchCustomerAsync(customerLookupPhoneNumbers[0], customerLookupPhoneNumbers[1], storeOrder.StoreName, customerLookupPhoneNumbers, cancellationToken)
-            .ConfigureAwait(false);
+        return await ResolveAixvolinkCustomerMatchAsync(record, storeOrder.StoreName, cancellationToken).ConfigureAwait(false);
+    }
 
-        return matched;
+    private async Task<SalesCustomerMatchResult> ResolveAixvolinkCustomerMatchAsync(
+        PhoneOrderRecord record,
+        string storeName,
+        CancellationToken cancellationToken)
+    {
+        var customerLookupPhoneNumbers = GetAixvolinkCustomerLookupNumbers(record);
+        return await _salesCustomerMatchService
+            .MatchCustomerAsync(customerLookupPhoneNumbers[0], customerLookupPhoneNumbers[1], storeName, customerLookupPhoneNumbers, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static List<string> GetAixvolinkCustomerLookupNumbers(PhoneOrderRecord record)
