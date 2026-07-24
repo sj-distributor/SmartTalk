@@ -495,9 +495,12 @@ public partial class PhoneOrderProcessJobService
 
         var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
+        var businessKeyCounters = new Dictionary<string, int>();
 
         foreach (var storeOrder in extractedOrders)
         { 
+            var businessKeySequence = GetNextPhoneOrderPushTaskBusinessKeySequence(storeOrder, businessKeyCounters);
+            var businessKey = BuildPhoneOrderPushTaskBusinessKey(storeOrder, businessKeySequence);
             var customerMatch = isAixvolinkRecord && aixvolinkPreCustomerMatch?.SoldToIds.Count > 0
                 ? aixvolinkPreCustomerMatch
                 : await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
@@ -516,7 +519,7 @@ public partial class PhoneOrderProcessJobService
 
             if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
             {
-                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, matchedSoldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
+                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, matchedSoldToIds, pacificZone, pacificNow, $"DELETE_{businessKey}", cancellationToken).ConfigureAwait(false);
                 continue;
             }
             
@@ -525,10 +528,31 @@ public partial class PhoneOrderProcessJobService
 
             var draftOrder = CreateDraftOrder(record, storeOrder, soldToId, matchedSoldToIds, customerMatch.SalesGroup, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
 
-            await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, cancellationToken).ConfigureAwait(false);
+            await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, businessKey, cancellationToken).ConfigureAwait(false);
         }
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static int GetNextPhoneOrderPushTaskBusinessKeySequence(ExtractedOrderDto storeOrder, Dictionary<string, int> counters)
+    {
+        var baseKey = BuildPhoneOrderPushTaskBusinessKeyBase(storeOrder);
+        counters.TryGetValue(baseKey, out var current);
+
+        var next = current + 1;
+        counters[baseKey] = next;
+
+        return next;
+    }
+
+    private static string BuildPhoneOrderPushTaskBusinessKey(ExtractedOrderDto storeOrder, int sequence)
+    {
+        return $"{BuildPhoneOrderPushTaskBusinessKeyBase(storeOrder)}_{sequence}";
+    }
+
+    private static string BuildPhoneOrderPushTaskBusinessKeyBase(ExtractedOrderDto storeOrder)
+    {
+        return $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}";
     }
 
     private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken) 
@@ -995,7 +1019,8 @@ public partial class PhoneOrderProcessJobService
         return result;
     }
 
-    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, TimeZoneInfo pacificZone, DateTime pacificNow, CancellationToken cancellationToken)
+    
+    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, TimeZoneInfo pacificZone, DateTime pacificNow, string businessKey, CancellationToken cancellationToken)
     {
         var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
         var req = new DeleteAiOrderRequestDto
@@ -1012,16 +1037,16 @@ public partial class PhoneOrderProcessJobService
             ParentRecordId = record.ParentRecordId,
             AssistantId = record.AssistantId ?? 0,
             TaskType = PhoneOrderPushTaskType.DeleteOrder,
-            BusinessKey = $"DELETE_{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            BusinessKey = businessKey,
             RequestJson = JsonSerializer.Serialize(req, ReadableJsonSerializerOptions),
             Status = PhoneOrderPushTaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
-        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderPushTaskIfNotExistsAsync(task, cancellationToken).ConfigureAwait(false);
     }
-
-    private async Task CreateGenerateOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
+    
+    private async Task CreateGenerateOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, GenerateAiOrdersRequestDto request, string businessKey, CancellationToken cancellationToken)
     {
         var task = new PhoneOrderPushTask
         {
@@ -1029,13 +1054,58 @@ public partial class PhoneOrderProcessJobService
             ParentRecordId = record.ParentRecordId,
             AssistantId = record.AssistantId ?? 0,
             TaskType = PhoneOrderPushTaskType.GenerateOrder,
-            BusinessKey = $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            BusinessKey = businessKey,
             RequestJson = JsonSerializer.Serialize(request, ReadableJsonSerializerOptions),
             Status = PhoneOrderPushTaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
+        await AddPhoneOrderPushTaskIfNotExistsAsync(task, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task AddPhoneOrderPushTaskIfNotExistsAsync(PhoneOrderPushTask task, CancellationToken cancellationToken)
+    {
+        var exists = await _salesDataProvider.PhoneOrderPushTaskExistsAsync(task.RecordId, task.BusinessKey, cancellationToken).ConfigureAwait(false);
+
+        if (exists)
+        {
+            Log.Information(
+                "PhoneOrderPushTask already exists, skip creating. RecordId={RecordId}, BusinessKey={BusinessKey}, TaskType={TaskType}",
+                task.RecordId,
+                task.BusinessKey,
+                task.TaskType);
+            return;
+        }
+
+        var legacyBusinessKey = GetLegacyPhoneOrderPushTaskBusinessKey(task.BusinessKey);
+        if (!string.IsNullOrEmpty(legacyBusinessKey))
+        {
+            var legacyExists = await _salesDataProvider.PhoneOrderPushTaskExistsAsync(task.RecordId, legacyBusinessKey, cancellationToken).ConfigureAwait(false);
+
+            if (legacyExists)
+            {
+                Log.Information(
+                    "Legacy PhoneOrderPushTask already exists, skip creating sequenced task. RecordId={RecordId}, BusinessKey={BusinessKey}, LegacyBusinessKey={LegacyBusinessKey}, TaskType={TaskType}",
+                    task.RecordId,
+                    task.BusinessKey,
+                    legacyBusinessKey,
+                    task.TaskType);
+                return;
+            }
+        }
+
         await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string GetLegacyPhoneOrderPushTaskBusinessKey(string businessKey)
+    {
+        var sequenceSeparatorIndex = businessKey.LastIndexOf('_');
+        if (sequenceSeparatorIndex < 0) return null;
+
+        var sequence = businessKey[(sequenceSeparatorIndex + 1)..];
+        if (sequence != "1") return null;
+
+        return businessKey[..sequenceSeparatorIndex];
     }
 
     private async Task RefineOrderByAiAsync(ExtractedOrderDto storeOrder, string soldToId, CancellationToken cancellationToken)
