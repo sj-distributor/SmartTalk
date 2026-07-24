@@ -27,6 +27,8 @@ public interface ISalesDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeVariableCache> GetCustomerInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
     
     Task AddPhoneOrderPushTaskAsync(PhoneOrderPushTask task, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<bool> PhoneOrderPushTaskExistsAsync(int recordId, string businessKey, CancellationToken cancellationToken = default);
     
     Task MarkSendingAsync(int taskId, bool forceSave, CancellationToken cancellationToken = default);
 
@@ -248,6 +250,13 @@ public class SalesDataProvider : ISalesDataProvider
 
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> PhoneOrderPushTaskExistsAsync(int recordId, string businessKey, CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<PhoneOrderPushTask>()
+            .AnyAsync(t => t.RecordId == recordId && t.BusinessKey == businessKey, cancellationToken)
+            .ConfigureAwait(false);
     }
     
     public async Task MarkSendingAsync(int taskId, bool forceSave = true, CancellationToken cancellationToken = default)
