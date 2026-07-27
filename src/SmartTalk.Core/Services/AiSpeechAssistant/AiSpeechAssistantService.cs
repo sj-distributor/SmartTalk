@@ -86,7 +86,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly IAgentDataProvider _agentDataProvider;
     private readonly IAttachmentService _attachmentService;
     private readonly ISalesDataProvider _salesDataProvider;
-    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
     private readonly ISpeechToTextService _speechToTextService;
     private readonly IFileTextExtractor _fileTextExtractor;
     private readonly WorkWeChatKeySetting _workWeChatKeySetting;
@@ -125,7 +124,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IAgentDataProvider agentDataProvider,
         IAttachmentService attachmentService,
         ISalesDataProvider salesDataProvider,
-        ISalesCustomerMatchService salesCustomerMatchService,
         ISpeechToTextService speechToTextService,
         IFileTextExtractor fileTextExtractor,
         WorkWeChatKeySetting workWeChatKeySetting,
@@ -159,7 +157,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _httpClientFactory = httpClientFactory;
         _attachmentService = attachmentService;
         _salesDataProvider = salesDataProvider;
-        _salesCustomerMatchService = salesCustomerMatchService;
         _fileTextExtractor = fileTextExtractor;
         _speechToTextService = speechToTextService;
         _workWeChatKeySetting = workWeChatKeySetting;
@@ -275,8 +272,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{current_time}", currentTime)
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
-
-        var candidateCustomerIds = SplitAssistantCustomerIds(assistant.Name);
                 
         if (numberId.HasValue && finalPrompt.Contains("#{greeting}"))
         {
@@ -288,11 +283,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
-            if (candidateCustomerIds.Count > 1)
-            {
-                finalPrompt = finalPrompt.Replace("#{customer_items}", " ");
-            }
-            else if (!string.IsNullOrWhiteSpace(assistant.Name))
+            if (!string.IsNullOrWhiteSpace(assistant.Name))
             {
                 var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(assistant.Name, cancellationToken).ConfigureAwait(false);
 
@@ -329,7 +320,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         Log.Information($"The final prompt: {_aiSpeechAssistantStreamContext.LastPrompt}");
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-        _aiSpeechAssistantStreamContext.CandidateCustomerIds = candidateCustomerIds;
     }
     
     private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)
@@ -805,10 +795,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                                         case OpenAiToolConstants.ConfirmPickupTime:
                                             await ProcessRecordOrderPickupTimeAsync(outputElement, cancellationToken).ConfigureAwait(false);
                                             break;
-
-                                        case OpenAiToolConstants.QueryCustomerItemsByStoreName:
-                                            await ProcessQueryCustomerItemsByStoreNameAsync(outputElement, cancellationToken).ConfigureAwait(false);
-                                            break;
                                         
                                         case OpenAiToolConstants.RepeatOrder:
                                         case OpenAiToolConstants.SatisfyOrder:
@@ -1282,8 +1268,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private async Task<List<(AiSpeechAssistantSessionConfigType Type, object Config)>> InitialSessionConfigAsync(Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken = default)
     {
         var functions = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
-
-        EnsureCustomerItemsTool(functions, assistant);
 
         return functions.Count == 0 ? [] : functions.Where(x => !string.IsNullOrWhiteSpace(x.Content)).Select(x => (x.Type, JsonConvert.DeserializeObject<object>(x.Content))).ToList();
     }
