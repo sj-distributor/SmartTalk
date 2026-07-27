@@ -42,6 +42,13 @@ public class RealtimeAiFunctionCallResult
     public string Output { get; set; }
 
     /// <summary>
+    /// When true, sends the function output to the provider without creating a
+    /// follow-up AI response. Use this for silent context prefetches whose result
+    /// should remain available in the current conversation for a later user turn.
+    /// </summary>
+    public bool SuppressResponseAfterOutput { get; set; }
+
+    /// <summary>
     /// When true, sends response.create even if Output is empty (no function_call_output sent).
     /// Used for scenarios like transfer calls where the AI should speak without explicit output text.
     /// </summary>

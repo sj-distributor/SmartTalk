@@ -453,6 +453,7 @@ public partial class RealtimeAiService
         if (_ctx.Options.OnFunctionCallAsync == null) return;
 
         var shouldTriggerResponse = false;
+        var hasOutputRequiringResponse = false;
         var replies = new List<(RealtimeAiWssFunctionCallData FunctionCall, string Output)>();
 
         foreach (var functionCall in functionCalls)
@@ -461,14 +462,19 @@ public partial class RealtimeAiService
 
             var result = await _ctx.Options.OnFunctionCallAsync(functionCall, _ctx.SessionActions).ConfigureAwait(false);
 
-            if (!string.IsNullOrEmpty(result?.Output)) replies.Add((functionCall, result.Output));
+            if (!string.IsNullOrEmpty(result?.Output))
+            {
+                replies.Add((functionCall, result.Output));
+                hasOutputRequiringResponse |= !result.SuppressResponseAfterOutput;
+            }
+
             if (result?.ShouldTriggerResponse == true) shouldTriggerResponse = true;
         }
 
         foreach (var (functionCall, output) in replies)
             await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
 
-        if (replies.Count > 0 || shouldTriggerResponse)
+        if (hasOutputRequiringResponse || shouldTriggerResponse)
             await QueueOrTriggerProviderResponseAsync("function call").ConfigureAwait(false);
     }
 

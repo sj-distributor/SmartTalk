@@ -83,6 +83,11 @@ public class RealtimeAiSessionActions
     public Func<string, Task> SendTextToProviderAsync { get; init; }
 
     /// <summary>
+    /// Replace the provider session instructions without creating a response.
+    /// </summary>
+    public Func<string, Task> UpdateSessionInstructionsAsync { get; init; }
+
+    /// <summary>
     /// Suspend forwarding client audio to the AI provider.
     /// Use when the consumer needs exclusive control of the audio channel
     /// (e.g. playing a pre-recorded message to the client without the provider hearing user noise).

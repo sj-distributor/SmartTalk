@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.RealtimeAi;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
@@ -10,6 +11,7 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task<RealtimeAiFunctionCallResult> ProcessQueryCustomerItemsByStoreNameAsync(
         RealtimeAiWssFunctionCallData functionCallData,
+        RealtimeAiSessionActions actions,
         CancellationToken cancellationToken)
     {
         var args = ParseQueryCustomerItemsArguments(functionCallData.ArgumentsJson);
@@ -27,22 +29,30 @@ public partial class AiSpeechAssistantConnectService
             .MatchStoreNameInCustomerScopeAsync(_ctx.Assistant?.Name, args.StoreName, cancellationToken)
             .ConfigureAwait(false);
 
-        _ctx.MatchedCustomerIds = match.SoldToIds;
-
         if (match.SoldToIds.Count == 0)
         {
             Log.Information(
                 "[AiAssistant] Store name did not match assistant customer scope. AssistantId: {AssistantId}, StoreName: {StoreName}, AssistantCustomerIds: {AssistantCustomerIds}, CrmCustomerIds: {CrmCustomerIds}",
                 _ctx.Assistant?.Id, args.StoreName, _ctx.CandidateCustomerIds, match.CrmMatchedSoldToIds);
 
-            return new RealtimeAiFunctionCallResult
-            {
-                Output = "Reply in the guest's language: I could not match that store name to the stores linked to this call. Please ask the customer for another store name, address, phone number, or contact name before answering product stock or warehouse questions."
-            };
+            return BuildStoreConfirmationRequiredResult(
+                "Reply in the guest's language: I could not match that store name to the stores linked to this call. Please ask the customer for the complete or more accurate store name before checking product information.");
         }
 
+        if (match.SoldToIds.Count > 1)
+        {
+            Log.Information(
+                "[AiAssistant] Store name matched multiple assistant customer ids. AssistantId: {AssistantId}, StoreName: {StoreName}, MatchedCustomerIds: {MatchedCustomerIds}",
+                _ctx.Assistant?.Id, args.StoreName, match.SoldToIds);
+
+            return BuildStoreConfirmationRequiredResult(
+                "Reply in the guest's language: I found more than one store linked to that name. Please ask the customer for the complete or more specific store name before checking product information.");
+        }
+
+        _ctx.MatchedCustomerIds = [match.SoldToId];
+
         var caches = await _salesDataProvider
-            .GetCustomerItemsCacheBySoldToIdsAsync(match.SoldToIds, cancellationToken)
+            .GetCustomerItemsCacheBySoldToIdsAsync([match.SoldToId], cancellationToken)
             .ConfigureAwait(false);
 
         var itemLines = caches
@@ -60,24 +70,53 @@ public partial class AiSpeechAssistantConnectService
 
         if (itemLines.Count == 0)
         {
-            return new RealtimeAiFunctionCallResult
-            {
-                Output = $"Matched customer IDs for store \"{args.StoreName}\": {string.Join(", ", match.SoldToIds)}.\nNo cached HiFood product information was found for these customer IDs. Reply in the guest's language and explain that no product data is available for this store right now."
-            };
+            var promptUpdated = await UpdateCustomerItemsPromptAsync(
+                    $"No cached HiFood product information is available for store \"{args.StoreName}\".",
+                    actions)
+                .ConfigureAwait(false);
+
+            return BuildCustomerItemsPromptUpdatedResult(args.PrefetchOnly, promptUpdated);
         }
 
+        var customerItems = string.Join(Environment.NewLine, itemLines);
+        var didUpdatePrompt = await UpdateCustomerItemsPromptAsync(customerItems, actions).ConfigureAwait(false);
+
+        return BuildCustomerItemsPromptUpdatedResult(args.PrefetchOnly, didUpdatePrompt);
+    }
+
+    private async Task<bool> UpdateCustomerItemsPromptAsync(string customerItems, RealtimeAiSessionActions actions)
+    {
+        var updatedPrompt = ReplaceCustomerItemsPromptMarker(customerItems);
+        if (updatedPrompt == null)
+        {
+            Log.Warning(
+                "[AiAssistant] Customer items prompt update skipped because no prompt template exists. AssistantId: {AssistantId}, CallSid: {CallSid}",
+                _ctx.Assistant?.Id, _ctx.CallSid);
+            return false;
+        }
+
+        await actions.UpdateSessionInstructionsAsync(BuildSessionPrompt()).ConfigureAwait(false);
+        Log.Information(
+            "[AiAssistant] Customer items prompt updated in realtime session. AssistantId: {AssistantId}, CallSid: {CallSid}, MatchedCustomerIds: {MatchedCustomerIds}, CustomerItemsLength: {CustomerItemsLength}",
+            _ctx.Assistant?.Id, _ctx.CallSid, _ctx.MatchedCustomerIds, _ctx.CustomerItemsPromptValue?.Length ?? 0);
+        return true;
+    }
+
+    private static RealtimeAiFunctionCallResult BuildCustomerItemsPromptUpdatedResult(bool prefetchOnly, bool promptUpdated)
+    {
         return new RealtimeAiFunctionCallResult
         {
-            Output =
-                $"Store name: {args.StoreName}\n" +
-                $"Customer IDs matched within this assistant: {string.Join(", ", match.SoldToIds)}\n" +
-                $"Customer IDs returned by CRM for this store name: {string.Join(", ", match.CrmMatchedSoldToIds)}\n" +
-                $"Requested product name or alias: {args.ProductName ?? string.Empty}\n" +
-                $"HiFood product information scoped to the matched customer IDs, limited to {MaxStoreScopedCustomerItemLines} lines:\n" +
-                string.Join(Environment.NewLine, itemLines) +
-                "\n\nReply in the guest's language. Use only the scoped product information above. Do not mix in products from other customer IDs."
+            Output = promptUpdated
+                ? "Customer item knowledge for the confirmed store has been updated in the session instructions."
+                : "Customer item knowledge could not be updated because this assistant has no customer_items knowledge placeholder.",
+            SuppressResponseAfterOutput = prefetchOnly && promptUpdated
         };
     }
+
+    private static RealtimeAiFunctionCallResult BuildStoreConfirmationRequiredResult(string output) => new()
+    {
+        Output = output
+    };
 
     private static QueryCustomerItemsByStoreNameArguments ParseQueryCustomerItemsArguments(string argumentsJson)
     {
@@ -101,5 +140,8 @@ public partial class AiSpeechAssistantConnectService
 
         [JsonProperty("product_name")]
         public string ProductName { get; set; }
+
+        [JsonProperty("prefetch_only")]
+        public bool PrefetchOnly { get; set; }
     }
 }

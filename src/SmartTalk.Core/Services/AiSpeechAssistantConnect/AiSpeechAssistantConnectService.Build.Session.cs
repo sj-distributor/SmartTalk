@@ -1,6 +1,8 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using SmartTalk.Core.Constants;
+using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
 using SmartTalk.Core.Services.AiSpeechAssistant;
@@ -14,9 +16,22 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
+    private const string CustomerItemsToolInstructionHeader = "Realtime tool rule for query_customer_items_by_store_name:";
+    private const string CustomerItemsToolDescription =
+        "Confirm a store name in a multi-store call and load that store's cached HiFood customer items into the current session knowledge.";
+
+    private const string CustomerItemsToolInstructions =
+        CustomerItemsToolInstructionHeader + "\n" +
+        "- When the guest merely mentions or corrects a store, restaurant, or shop name, immediately call query_customer_items_by_store_name with store_name set to the name exactly as heard and prefetch_only set to true. This silently replaces the customer-items knowledge placeholder for later in the current call; do not give a spoken response after that tool call.\n" +
+        "- If the guest asks a product, stock, availability, warehouse-goods, or orderable-goods question while providing or changing the store name in the same turn, call the tool with prefetch_only set to false so you can answer after it updates the knowledge.\n" +
+        "- After a store has been confirmed, answer later product, stock, availability, warehouse-goods, or orderable-goods questions only from the current customer-items knowledge. Do not call this tool again unless the guest provides or corrects a different store name.\n" +
+        "- If no store has been confirmed and the guest asks about HiFood product information, ask for the store, restaurant, or shop name first.\n" +
+        "- Never use product, stock, availability, warehouse-goods, or orderable-goods information from memory or another store.";
+
     private RealtimeSessionOptions BuildSessionOptions()
     {
         var assistant = _ctx.Assistant;
+        var prompt = BuildSessionPrompt();
 
         return new RealtimeSessionOptions
         {
@@ -31,10 +46,10 @@ public partial class AiSpeechAssistantConnectService
                 Voice = assistant.ModelVoice ?? "alloy",
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
-                Prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt,   // 代客致电: 有 instruction 则用作本通指令 (non-breaking)
+                Prompt = prompt,   // 代客致电: 有 instruction 则用作本通指令 (non-breaking)
                 Tools = _ctx.FunctionCalls
                     .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
-                    .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
+                    .Select(DeserializeSessionToolContent)
                     .ToList(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
                 VendorOptions = new OpenAiRealtimeModelOptions
@@ -65,6 +80,63 @@ public partial class AiSpeechAssistantConnectService
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
             OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };
+    }
+
+    private string BuildSessionPrompt()
+    {
+        var prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt;
+
+        if (!string.IsNullOrWhiteSpace(_ctx.Instruction) &&
+            !string.IsNullOrWhiteSpace(_ctx.CustomerItemsPromptValue))
+        {
+            prompt = prompt.TrimEnd() +
+                "\n\nCustomer item knowledge for the currently confirmed store:\n" +
+                _ctx.CustomerItemsPromptValue;
+        }
+
+        return AppendCustomerItemsToolInstructions(prompt, _ctx.FunctionCalls);
+    }
+
+    public static string AppendCustomerItemsToolInstructions(
+        string prompt,
+        IEnumerable<AiSpeechAssistantFunctionCall> functionCalls)
+    {
+        if (!HasCustomerItemsTool(functionCalls)) return prompt;
+        if (prompt?.Contains(CustomerItemsToolInstructionHeader, StringComparison.OrdinalIgnoreCase) == true) return prompt;
+
+        return string.IsNullOrWhiteSpace(prompt)
+            ? CustomerItemsToolInstructions
+            : prompt.TrimEnd() + "\n\n" + CustomerItemsToolInstructions;
+    }
+
+    private static bool HasCustomerItemsTool(IEnumerable<AiSpeechAssistantFunctionCall> functionCalls)
+    {
+        return functionCalls?.Any(x =>
+            x.Type == AiSpeechAssistantSessionConfigType.Tool &&
+            x.Name == OpenAiToolConstants.QueryCustomerItemsByStoreName &&
+            x.IsActive) == true;
+    }
+
+    private static object DeserializeSessionToolContent(AiSpeechAssistantFunctionCall functionCall)
+    {
+        var content = JsonConvert.DeserializeObject<object>(functionCall.Content);
+
+        if (functionCall.Name != OpenAiToolConstants.QueryCustomerItemsByStoreName || content is not JObject tool)
+            return content;
+
+        tool["description"] = CustomerItemsToolDescription;
+
+        var properties = tool["parameters"]?["properties"] as JObject;
+        if (properties == null || properties["prefetch_only"] != null)
+            return tool;
+
+        properties["prefetch_only"] = JObject.FromObject(new
+        {
+            type = "boolean",
+            description = "Set true only when the guest merely provides or corrects the store name and is not asking a product, stock, availability, warehouse, or orderable-goods question. The matching customer item cache replaces the session knowledge placeholder silently for a later guest question."
+        });
+
+        return tool;
     }
 
     private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)

@@ -181,6 +181,18 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         _ => new { type = "audio/pcmu" }
     };
 
+    public string BuildSessionInstructionsUpdateMessage(string instructions)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            type = "session.update",
+            session = new
+            {
+                instructions
+            }
+        });
+    }
+
     public string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData)
     {
         object message;

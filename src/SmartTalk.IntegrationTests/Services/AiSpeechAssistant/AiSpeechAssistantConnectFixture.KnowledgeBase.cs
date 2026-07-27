@@ -294,32 +294,8 @@ public partial class AiSpeechAssistantConnectFixture
     }
 
     [Fact]
-    public async Task ShouldResolveCrossTokenCascade_GreetingContainingCustomerItemsToken_NestedTokenAlsoResolved()
+    public async Task ShouldResolveCustomerItemsAtSessionStart_WhenSingleStoreGreetingContainsToken()
     {
-        // ── Characterization test for the cross-token cascade invariant ──────────
-        //
-        // The original BuildKnowledgeAsync ran each ResolveX sequentially:
-        //   ResolveGreeting injects greeting text → mutates _ctx.Prompt
-        //   ResolveCustomerItems then re-reads _ctx.Prompt and processes any tokens
-        //   that the greeting injection introduced.
-        //
-        // This test pins that emergent behaviour: an operator who configures a
-        // SaleAutoCallNumber greeting containing `#{customer_items}` expects the
-        // customer items to actually appear in the final prompt, NOT a raw
-        // `#{customer_items}` literal that the LLM would treat as broken markup.
-        //
-        // Any refactor that pre-collects token-presence checks (e.g. a hypothetical
-        // "all fetches first, then all applies" rearrangement) would break this
-        // cascade because the customer-items token-presence check would run against
-        // the pre-greeting prompt and find no token — the greeting injection later
-        // would then leak the raw `#{customer_items}` literal.
-        //
-        // The Resolve order in BuildKnowledgeAsync is: Greeting → CustomerItems →
-        // MenuItems → CustomerInfo → POS → Delivery. Cascade only chains FORWARDS
-        // in that order — a greeting can inject any downstream token; CustomerInfo
-        // cannot inject `#{greeting}` (Greeting already ran). This test exercises
-        // the most-reachable cascade: Greeting → CustomerItems.
-
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
             var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
@@ -346,11 +322,7 @@ public partial class AiSpeechAssistantConnectFixture
                 Version = "1.0"
             });
 
-            // Customer-items cache that the cascade should reach. Distinct literals
-            // so the assertion can confirm the cascade actually resolved the token
-            // (not just that the raw literal happens to be absent for some other reason).
-            // The cache row is keyed by the fixed "customer_items" CacheKey + the
-            // assistant Name in Filter — see SalesDataProvider.CustomerItemsCacheKey.
+            // A single-store assistant resolves customer items at session start.
             await repository.InsertAsync(new Core.Domain.Sales.AiSpeechAssistantKnowledgeVariableCache
             {
                 CacheKey = "customer_items",
@@ -359,8 +331,7 @@ public partial class AiSpeechAssistantConnectFixture
             });
         });
 
-        // Smarties returns a greeting that EMBEDS the downstream token literal.
-        // The original code's cascade then processes that token when ResolveCustomerItems runs.
+        // Smarties returns a greeting that embeds the customer-items token.
         var smartiesMock = Substitute.For<ISmartiesClient>();
         smartiesMock.GetSaleAutoCallNumberAsync(Arg.Any<GetSaleAutoCallNumberRequest>(), Arg.Any<CancellationToken>())
             .Returns(new GetSaleAutoCallNumberResponse
@@ -409,12 +380,9 @@ public partial class AiSpeechAssistantConnectFixture
         // Greeting was injected
         sessionUpdate.ShouldContain("Welcome!");
 
-        // CASCADE invariant: the downstream token embedded in the greeting MUST
-        // have been resolved. The raw `#{customer_items}` literal MUST NOT remain.
+        // The raw token must not leak to the LLM.
         sessionUpdate.ShouldNotContain("#{customer_items}");
 
-        // The customer-items cache value MUST appear in the final prompt — the
-        // proof that the cascade actually fetched and substituted, not just stripped.
         sessionUpdate.ShouldContain("CASCADE_MARKER_PIZZA_LARGE");
     }
 

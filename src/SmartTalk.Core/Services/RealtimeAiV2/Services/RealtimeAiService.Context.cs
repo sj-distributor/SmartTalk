@@ -48,6 +48,7 @@ public partial class RealtimeAiService
         {
             SendAudioToClientAsync = SendAudioToClientAsync,
             SendTextToProviderAsync = SendTextToProviderAsync,
+            UpdateSessionInstructionsAsync = UpdateSessionInstructionsAsync,
             SuspendClientAudioToProvider = () => _ctx.IsClientAudioToProviderSuspended = true,
             ResumeClientAudioToProvider = () => _ctx.IsClientAudioToProviderSuspended = false,
             GetRecordedAudioSnapshotAsync = GetRecordedAudioSnapshotAsync

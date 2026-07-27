@@ -92,7 +92,7 @@ public partial class AiSpeechAssistantService
                 "[AiAssistant] Store name did not match assistant customer scope. AssistantId: {AssistantId}, StoreName: {StoreName}, AssistantCustomerIds: {AssistantCustomerIds}, CrmCustomerIds: {CrmCustomerIds}",
                 _aiSpeechAssistantStreamContext.Assistant?.Id, args.StoreName, _aiSpeechAssistantStreamContext.CandidateCustomerIds, match.CrmMatchedSoldToIds);
 
-            return "Reply in the guest's language: I could not match that store name to the stores linked to this call. Please ask the customer for another store name, address, phone number, or contact name before answering product stock or warehouse questions.";
+            return "Reply in the guest's language: I could not match that store name to the stores linked to this call. Please ask the customer for the complete or more accurate store name before answering product stock or warehouse questions.";
         }
 
         var caches = await _salesDataProvider

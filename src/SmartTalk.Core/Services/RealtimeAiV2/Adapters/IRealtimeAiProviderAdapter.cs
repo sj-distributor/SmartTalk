@@ -19,6 +19,12 @@ public interface IRealtimeAiProviderAdapter : IScopedDependency
     // outputMode is decided by the engine (OutputModeNegotiator). A text-capable adapter MUST honor it
     // and emit the matching modality; it MUST NOT infer the mode from options.TtsConfig.
     object BuildSessionConfig(RealtimeSessionOptions options, RealtimeAiOutputMode outputMode, RealtimeAiAudioCodec clientCodec);
+
+    /// <summary>
+    /// Builds an in-session instructions update. Returns null when the provider
+    /// cannot update session instructions after setup.
+    /// </summary>
+    string BuildSessionInstructionsUpdateMessage(string instructions);
     
     string BuildAudioAppendMessage(RealtimeAiWssAudioData audioData);
     
