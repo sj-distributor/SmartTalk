@@ -1,5 +1,4 @@
 using Google.Cloud.Translation.V2;
-using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
@@ -10,7 +9,6 @@ using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Security;
 using SmartTalk.Core.Services.SpeechMatics;
 using SmartTalk.Core.Services.STT;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.SpeechMatics;
 using SmartTalk.Messages.Enums.STT;
@@ -19,7 +17,7 @@ namespace SmartTalk.Core.Services.AiKids;
 
 public interface IAiKidRealtimeProcessJobService : IScopedDependency
 {
-    Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, PhoneOrderRecordType orderRecordType, AiSpeechAssistantComplaintInfoDto complaintInfo = null, CancellationToken cancellationToken = default);
+    Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
 
 public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
@@ -53,7 +51,7 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, PhoneOrderRecordType orderRecordType, AiSpeechAssistantComplaintInfoDto complaintInfo = null, CancellationToken cancellationToken = default)
+    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         Log.Information("RecordingRealtimeAiAsync recording url: {recordingUrl}", recordingUrl);
         
@@ -75,12 +73,6 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
         var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
         
         var record = new PhoneOrderRecord { SessionId = sessionId, AgentId = agent?.Id ?? 0, TranscriptionText = transcription, Url = recordingUrl, Language = SelectLanguageEnum(detection.Language), CreatedDate = DateTimeOffset.Now, Status = PhoneOrderRecordStatus.Recieved, OrderRecordType = orderRecordType };
-
-        if (complaintInfo != null)
-        {
-            record.Remark = JsonConvert.SerializeObject(complaintInfo);
-            Log.Information("Persisted real-time complaint info for AiKid record. SessionId={SessionId}", sessionId);
-        }
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
         

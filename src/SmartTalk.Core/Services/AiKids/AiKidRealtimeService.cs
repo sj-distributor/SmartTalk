@@ -79,7 +79,7 @@ public class AiKidRealtimeService : IAiKidRealtimeService
                 if (!string.IsNullOrEmpty(fileUrl) && assistant.Id != 0)
                 {
                     _backgroundJobClient.Enqueue<IAiKidRealtimeProcessJobService>(x =>
-                        x.RecordingRealtimeAiAsync(fileUrl, assistant.Id, sessionId, orderRecordType, null, CancellationToken.None));
+                        x.RecordingRealtimeAiAsync(fileUrl, assistant.Id, sessionId, orderRecordType, CancellationToken.None));
                 }
 
                 return Task.CompletedTask;
