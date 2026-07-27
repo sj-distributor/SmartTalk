@@ -51,7 +51,7 @@ public class AiKidRealtimeProcessJobService : IAiKidRealtimeProcessJobService
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
     }
 
-    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
+    public async Task RecordingRealtimeAiAsync(string recordingUrl, int assistantId, string sessionId,  PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken)
     {
         Log.Information("RecordingRealtimeAiAsync recording url: {recordingUrl}", recordingUrl);
         
