@@ -70,6 +70,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             CancellationToken.None);
 
         var capability = response.Data.Capabilities.ShouldHaveSingleItem();
+        response.Data.CanConfigure.ShouldBeTrue();
         capability.KnowledgeId.ShouldBe(40);
         capability.AssistantId.ShouldBe(30);
         capability.AgentId.ShouldBe(20);
@@ -132,6 +133,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             CancellationToken.None);
 
         var capability = response.Data.Capabilities.ShouldHaveSingleItem();
+        response.Data.CanConfigure.ShouldBeTrue();
         capability.KnowledgeId.ShouldBe(40);
         capability.AssistantId.ShouldBe(30);
         capability.AgentId.ShouldBe(20);
@@ -140,6 +142,41 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
         capability.HifoodDataEnabled.ShouldBeTrue();
         capability.RepeatOrderEnabled.ShouldBeTrue();
         capability.OrderPushHifoodEnabled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task GetKnowledgeCapabilities_WhenCompanyIsNotHifoodCapabilityCompany_ReturnsCannotConfigure()
+    {
+        var harness = CapabilityHarness.Create();
+        var agent = new Agent { Id = 20, Name = "Sales", Type = AgentType.Sales, RelateId = 300 };
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 30,
+            AgentId = 20,
+            Name = "Alice",
+            IsDisplay = true,
+            ManualRecordWholeAudio = true,
+            IsAllowOrderPush = true,
+            IsAutoGenerateOrder = true,
+            ModelProvider = RealtimeAiProvider.OpenAi
+        };
+        var knowledge = new AiSpeechAssistantKnowledge
+        {
+            Id = 40,
+            AssistantId = 30,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+
+        harness.SetupCapabilityGraph(agent, assistant, knowledge, companyId: 2);
+        harness.SalesDataProvider.GetAllSalesAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Sales> { new() { Id = 300, Name = "Alice", Type = SalesCallType.CallIn } });
+
+        var response = await harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
+            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10, AgentId = 20 },
+            CancellationToken.None);
+
+        response.Data.CanConfigure.ShouldBeFalse();
+        response.Data.Capabilities.ShouldHaveSingleItem().OrderPushHifoodEnabled.ShouldBeTrue();
     }
 
     [Fact]
@@ -283,7 +320,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 Arg.Any<CancellationToken>())
             .Returns([agent]);
         harness.PosDataProvider.GetPosStoreByAgentIdAsync(agent.Id, Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult<CompanyStore>(null!));
+            .Returns(new CompanyStore { Id = 10, CompanyId = 2 });
         harness.AiSpeechAssistantDataProvider.GetAgentAssistantsAsync(
                 Arg.Is<List<int>>(x => x.SequenceEqual(new[] { agent.Id })),
                 null,
@@ -348,6 +385,8 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 !calls[0].IsActive),
             true,
             Arg.Any<CancellationToken>());
+        await harness.AgentDataProvider.DidNotReceive()
+            .UpdateAgentsAsync(Arg.Any<List<Agent>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -530,6 +569,59 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task UpdateKnowledgeCapabilities_WhenCompanyIsNotHifoodCapabilityCompany_Throws()
+    {
+        var harness = CapabilityHarness.Create();
+        var agent = new Agent { Id = 20, Name = "Agent", Type = AgentType.Agent, RelateId = 30 };
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 30,
+            AgentId = 20,
+            Name = "Alice",
+            IsDisplay = true,
+            ManualRecordWholeAudio = false,
+            ModelLanguage = "En",
+            ModelProvider = RealtimeAiProvider.OpenAi
+        };
+        var knowledge = new AiSpeechAssistantKnowledge
+        {
+            Id = 40,
+            AssistantId = 30,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+
+        harness.SetupCapabilityGraph(agent, assistant, knowledge, companyId: 2);
+
+        var exception = await Should.ThrowAsync<InvalidOperationException>(() =>
+            harness.Sut.UpdateAiSpeechAssistantKnowledgeCapabilitiesAsync(
+                new UpdateAiSpeechAssistantKnowledgeCapabilitiesCommand
+                {
+                    StoreId = 10,
+                    Items =
+                    [
+                        new UpdateAiSpeechAssistantKnowledgeCapabilityDto
+                        {
+                            AssistantId = 30,
+                            HifoodDataEnabled = true,
+                            RepeatOrderEnabled = true,
+                            OrderPushHifoodEnabled = true
+                        }
+                    ]
+                },
+                CancellationToken.None));
+
+        exception.Message.ShouldBe("Only company 4 can configure Hifood capabilities.");
+        assistant.ManualRecordWholeAudio.ShouldBeFalse();
+        await harness.AgentDataProvider.DidNotReceive()
+            .UpdateAgentsAsync(Arg.Any<List<Agent>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await harness.AiSpeechAssistantDataProvider.DidNotReceive()
+            .UpdateAiSpeechAssistantsAsync(
+                Arg.Any<List<Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>());
+    }
+
     private sealed class CapabilityHarness
     {
         private const int CurrentUserId = 9;
@@ -631,16 +723,25 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
             Agent agent,
             Core.Domain.AISpeechAssistant.AiSpeechAssistant assistant,
             AiSpeechAssistantKnowledge knowledge,
-            bool isLink = true)
+            bool isLink = true,
+            int companyId = 4)
         {
-            SetupCapabilityGraphs(isLink, (agent, assistant, knowledge));
+            SetupCapabilityGraphs(isLink, companyId, (agent, assistant, knowledge));
         }
 
         public void SetupCapabilityGraphs(
             bool isLink,
             params (Agent Agent, Core.Domain.AISpeechAssistant.AiSpeechAssistant Assistant, AiSpeechAssistantKnowledge Knowledge)[] records)
         {
-            SetupStore(new CompanyStore { Id = 10, IsLink = isLink });
+            SetupCapabilityGraphs(isLink, 4, records);
+        }
+
+        public void SetupCapabilityGraphs(
+            bool isLink,
+            int companyId,
+            params (Agent Agent, Core.Domain.AISpeechAssistant.AiSpeechAssistant Assistant, AiSpeechAssistantKnowledge Knowledge)[] records)
+        {
+            SetupStore(new CompanyStore { Id = 10, CompanyId = companyId, IsLink = isLink });
             var agentIds = records.Select(x => x.Agent.Id).Distinct().ToList();
             var assistantIds = records.Select(x => x.Assistant.Id).Distinct().ToList();
 
