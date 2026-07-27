@@ -26,7 +26,8 @@ public partial class AiSpeechAssistantConnectService
 
         return new RealtimeAiFunctionCallResult
         {
-            Output = AiSpeechAssistantComplaintInfoHelper.BuildFunctionOutput(_ctx.ComplaintInfo)
+            Output = AiSpeechAssistantComplaintInfoHelper.BuildFunctionOutput(_ctx.ComplaintInfo),
+            ShouldTriggerResponse = true
         };
     }
 }

@@ -34,7 +34,7 @@ public partial class PhoneOrderProcessJobService
 
     private async Task<List<ComplaintExtractionItem>> ExtractComplaintItemsAsync(string reportText, CancellationToken cancellationToken)
     {
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
 
         try
@@ -357,7 +357,7 @@ public partial class PhoneOrderProcessJobService
 
         for (var g = 0; g < grouped.Count; g++)
         {
-            var group = grouped.ToList()[g];
+            var group = grouped[g];
             var first = group.First();
             var customerLabel = BuildCustomerIdLabel(first.CustomerId, first.QueryCustomerId);
 
@@ -369,7 +369,8 @@ public partial class PhoneOrderProcessJobService
             var complaintIndex = 1;
             foreach (var match in group)
             {
-                var item = items.FirstOrDefault(i => string.Equals(i.ProductName, match.ProductName, StringComparison.OrdinalIgnoreCase));
+                var matchIndex = matchResults.IndexOf(match);
+                var item = matchIndex >= 0 ? items[matchIndex] : null;
 
                 builder.AppendLine($"  ─ 投诉单 {complaintIndex++}");
                 builder.AppendLine($"    Invoice单号:{(match.IsMatched && !string.IsNullOrWhiteSpace(match.MatchedInvoiceNumber) ? match.MatchedInvoiceNumber : "暫無")}");

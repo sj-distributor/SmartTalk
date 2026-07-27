@@ -946,13 +946,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         AiSpeechAssistantComplaintInfoDto incoming = null;
 
+        var argumentsString = jsonDocument.GetProperty("arguments").ToString();
+
         try
         {
-            incoming = JsonConvert.DeserializeObject<AiSpeechAssistantComplaintInfoDto>(jsonDocument.GetProperty("arguments").ToString());
+            incoming = JsonConvert.DeserializeObject<AiSpeechAssistantComplaintInfoDto>(argumentsString);
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Deserialize complaint info failed. Arguments: {Arguments}", jsonDocument.GetProperty("arguments").ToString());
+            Log.Warning(ex, "Deserialize complaint info failed. Arguments: {Arguments}", argumentsString);
         }
 
         _aiSpeechAssistantStreamContext.ComplaintInfo = AiSpeechAssistantComplaintInfoHelper.Merge(_aiSpeechAssistantStreamContext.ComplaintInfo, incoming);

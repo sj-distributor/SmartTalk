@@ -176,6 +176,8 @@ public partial class PhoneOrderProcessJobService
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
+        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
         if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
         {
             var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
@@ -183,8 +185,6 @@ public partial class PhoneOrderProcessJobService
             if (!string.IsNullOrWhiteSpace(complaintSection))
                 record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
         }
-
-        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         
         var reports = new List<PhoneOrderRecordReport>();
 
