@@ -634,11 +634,13 @@ public partial class AiResourceSyncService : IAiResourceSyncService
         return assistant;
     }
 
-    private async Task AttachSceneToAssistantKnowledgeAsync(
-        int assistantId, string language, IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup, 
-        AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
+    private async Task AttachSceneToKnowledgeAsync(
+        AiSpeechAssistantKnowledge knowledge, string language, IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var scene = ResolveSourceScene(sourceSceneLookup, language);
+        Log.Information(
+            "Knowledge scene sync. KnowledgeId={KnowledgeId}, AssistantId={AssistantId}, Customers={CustomerIds}, Language={Language}, ResolvedSceneId={ResolvedSceneId}",
+            knowledge.Id, knowledge.AssistantId, string.Join("/", customerIds), language ?? "英文", scene?.Id);
 
         if (scene == null)
         {
@@ -655,11 +657,6 @@ public partial class AiResourceSyncService : IAiResourceSyncService
             stats.Warnings.Add($"Scene [{scene.Id}] has no items for customer [{string.Join("/", customerIds)}] language [{language ?? "英文"}].");
             return;
         }
-
-        var knowledge = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (knowledge == null)
-            return;
 
         var existingRelations = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantKnowledgeSceneRelationsAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
@@ -693,18 +690,37 @@ public partial class AiResourceSyncService : IAiResourceSyncService
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync([knowledge.Id], cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task AttachSceneToAssistantKnowledgeAsync(
+        int assistantId, string language, IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup,
+        AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
+    {
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (knowledge == null)
+            return;
+
+        await AttachSceneToKnowledgeAsync(knowledge, language, customerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task EnsureAssistantKnowledgeLanguageAndSceneAsync(
         int assistantId, string language, IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var normalizedLanguage = CrmToAutoAddLanguageConverter.NormalizeToken(language);
-        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
-        if (assistant != null && !string.Equals(assistant.ModelLanguage ?? string.Empty, normalizedLanguage, StringComparison.Ordinal))
+        var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (knowledge == null)
+            return;
+
+        Log.Information(
+            "Knowledge language sync. KnowledgeId={KnowledgeId}, AssistantId={AssistantId}, Customers={CustomerIds}, ExistingLanguage={ExistingLanguage}, TargetLanguage={TargetLanguage}",
+            knowledge.Id, assistantId, string.Join("/", customerIds), knowledge.ModelLanguage ?? string.Empty, normalizedLanguage);
+
+        if (!string.Equals(knowledge.ModelLanguage ?? string.Empty, normalizedLanguage, StringComparison.Ordinal))
         {
-            assistant.ModelLanguage = normalizedLanguage;
-            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], true, cancellationToken).ConfigureAwait(false);
+      
+            knowledge.ModelLanguage = normalizedLanguage;
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], true, cancellationToken).ConfigureAwait(false);
         }
 
-        await AttachSceneToAssistantKnowledgeAsync(assistantId, normalizedLanguage, customerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
+        await AttachSceneToKnowledgeAsync(knowledge, knowledge.ModelLanguage, customerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ResolveMergedCustomerAssistantAsync(

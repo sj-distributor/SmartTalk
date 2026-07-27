@@ -22,7 +22,11 @@ public static class CrmToAutoAddLanguageConverter
         if (string.IsNullOrWhiteSpace(rawLanguage))
             return false;
 
-        return AliasLookup.TryGetValue(rawLanguage.Trim(), out language);
+        var token = rawLanguage.Trim();
+        if (AliasLookup.TryGetValue(token, out language))
+            return true;
+
+        return Enum.TryParse(token, true, out language);
     }
 
     public static string NormalizeToken(string rawLanguage)
