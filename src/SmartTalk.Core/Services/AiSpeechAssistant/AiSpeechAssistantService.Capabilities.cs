@@ -28,6 +28,8 @@ public partial interface IAiSpeechAssistantService
 
 public partial class AiSpeechAssistantService
 {
+    private const int HifoodCapabilityCompanyId = 4;
+
     public async Task<GetAiSpeechAssistantKnowledgeCapabilitiesResponse> GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
         GetAiSpeechAssistantKnowledgeCapabilitiesRequest request,
         CancellationToken cancellationToken)
@@ -52,6 +54,9 @@ public partial class AiSpeechAssistantService
 
         if (!context.CanConfigure)
             throw new InvalidOperationException("The store is not linked to Hifood/CRM.");
+
+        if (!CanConfigureHifoodCapabilities(context.Store) && HasKnowledgeCapabilityConfiguration(command.Items))
+            throw new InvalidOperationException("Only company 4 can configure Hifood capabilities.");
 
         foreach (var item in command.Items)
         {
@@ -79,11 +84,13 @@ public partial class AiSpeechAssistantService
         CancellationToken cancellationToken)
     {
         var context = await LoadKnowledgeCapabilityContextAsync(storeId, cancellationToken).ConfigureAwait(false);
+        var canConfigure = CanConfigureHifoodCapabilities(context.Store);
 
         if (!context.CanConfigure)
         {
             return new GetAiSpeechAssistantKnowledgeCapabilitiesResponseData
             {
+                CanConfigure = canConfigure,
                 Capabilities = []
             };
         }
@@ -96,6 +103,7 @@ public partial class AiSpeechAssistantService
         {
             return new GetAiSpeechAssistantKnowledgeCapabilitiesResponseData
             {
+                CanConfigure = canConfigure,
                 Capabilities = []
             };
         }
@@ -122,6 +130,7 @@ public partial class AiSpeechAssistantService
 
         return new GetAiSpeechAssistantKnowledgeCapabilitiesResponseData
         {
+            CanConfigure = canConfigure,
             Capabilities = capabilities
                 .OrderBy(x => x.AssistantName)
                 .ThenBy(x => x.KnowledgeId)
@@ -318,6 +327,7 @@ public partial class AiSpeechAssistantService
 
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
         if (store == null) return;
+        if (!CanConfigureHifoodCapabilities(store)) return;
 
         var record = new KnowledgeCapabilityRecord
         {
@@ -372,6 +382,19 @@ public partial class AiSpeechAssistantService
 
         if (shouldUpdateAssistant)
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([record.Assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool CanConfigureHifoodCapabilities(CompanyStore store)
+    {
+        return store?.CompanyId == HifoodCapabilityCompanyId;
+    }
+
+    private static bool HasKnowledgeCapabilityConfiguration(List<UpdateAiSpeechAssistantKnowledgeCapabilityDto> items)
+    {
+        return items?.Any(x =>
+            x.HifoodDataEnabled.HasValue ||
+            x.RepeatOrderEnabled.HasValue ||
+            x.OrderPushHifoodEnabled.HasValue) == true;
     }
 
     private async Task ApplyHifoodDataCapabilityAsync(
