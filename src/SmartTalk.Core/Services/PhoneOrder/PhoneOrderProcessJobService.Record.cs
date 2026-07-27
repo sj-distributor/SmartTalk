@@ -168,22 +168,29 @@ public partial class PhoneOrderProcessJobService
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
-    
+
         var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
         record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
         record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
-        
-        if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
-        {
-            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
-
-            if (!string.IsNullOrWhiteSpace(complaintSection))
-                record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
-        }
 
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
 
+        if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
+        {
+            try
+            {
+                var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(complaintSection))
+                    record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Complaint feedback analysis failed for record {RecordId}. The record will be processed without complaint analysis.", record.Id);
+            }
+        }
+        
         var reports = new List<PhoneOrderRecordReport>();
 
         reports.Add(new PhoneOrderRecordReport

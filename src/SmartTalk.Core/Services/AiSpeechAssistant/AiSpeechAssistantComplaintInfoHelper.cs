@@ -12,10 +12,11 @@ public static class AiSpeechAssistantComplaintInfoHelper
     {
         if (!HasCollectComplaintInfoTool(toolNames)) return prompt;
 
-        prompt ??= string.Empty;
-        if (prompt.Contains(PromptInstructionMarker, StringComparison.OrdinalIgnoreCase)) return prompt;
+        if (prompt != null && prompt.Contains(PromptInstructionMarker, StringComparison.OrdinalIgnoreCase)) return prompt;
 
-        return $"{prompt}{Environment.NewLine}{Environment.NewLine}" +
+        var separator = string.IsNullOrEmpty(prompt) ? string.Empty : $"{Environment.NewLine}{Environment.NewLine}";
+
+        return $"{prompt}{separator}" +
                $"{PromptInstructionMarker}{Environment.NewLine}" +
                "For goods accident, return, missing goods, damaged goods, wrong item, quality issue, or other complaint scenarios, keep using the knowledge-base wording. " +
                $"After each customer answer, call the `{OpenAiToolConstants.CollectComplaintInfo}` tool with the complaint fields already mentioned by the customer. " +

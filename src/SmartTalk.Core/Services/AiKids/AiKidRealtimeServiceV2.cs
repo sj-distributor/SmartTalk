@@ -79,7 +79,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         var greetings = assistant.Knowledge?.Greetings;
         var orderRecordType = command.OrderRecordType;
         var assistantId = assistant.Id;
-        var complaintInfo = new AiSpeechAssistantComplaintInfoDto();
 
         var options = new RealtimeSessionOptions
         {
@@ -187,9 +186,6 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         var functionCalls = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantFunctionCallByAssistantIdsAsync(
                 [assistant.Id], assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
-
-        resolvedPrompt = AiSpeechAssistantComplaintInfoHelper.AppendPromptInstructionIfEnabled(
-            resolvedPrompt, functionCalls.Select(x => x.Name));
 
         var configs = functionCalls
             .Where(x => !string.IsNullOrWhiteSpace(x.Content))

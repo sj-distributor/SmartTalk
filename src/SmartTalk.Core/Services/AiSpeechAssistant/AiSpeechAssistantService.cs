@@ -1001,16 +1001,28 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         AiSpeechAssistantComplaintInfoDto incoming = null;
 
+        if (!jsonDocument.TryGetProperty("arguments", out var argumentsElement))
+        {
+            Log.Warning("ProcessCollectComplaintInfoAsync called without 'arguments' property.");
+            return;
+        }
+
+        var argumentsString = argumentsElement.ToString();
+
         try
         {
-            incoming = JsonConvert.DeserializeObject<AiSpeechAssistantComplaintInfoDto>(jsonDocument.GetProperty("arguments").ToString());
+            incoming = JsonConvert.DeserializeObject<AiSpeechAssistantComplaintInfoDto>(argumentsString);
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Deserialize complaint info failed. Arguments: {Arguments}", jsonDocument.GetProperty("arguments").ToString());
+            Log.Warning(ex, "Deserialize complaint info failed. Arguments: {Arguments}", argumentsString);
         }
 
         _aiSpeechAssistantStreamContext.ComplaintInfo = AiSpeechAssistantComplaintInfoHelper.Merge(_aiSpeechAssistantStreamContext.ComplaintInfo, incoming);
+
+        var callId = jsonDocument.TryGetProperty("call_id", out var callIdElement)
+            ? callIdElement.GetString()
+            : string.Empty;
 
         var recordSuccess = new
         {
@@ -1018,7 +1030,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             item = new
             {
                 type = "function_call_output",
-                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                call_id = callId,
                 output = AiSpeechAssistantComplaintInfoHelper.BuildFunctionOutput(_aiSpeechAssistantStreamContext.ComplaintInfo)
             }
         };

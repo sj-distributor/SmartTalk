@@ -34,7 +34,7 @@ public partial class PhoneOrderProcessJobService
 
     private async Task<List<ComplaintExtractionItem>> ExtractComplaintItemsAsync(string reportText, CancellationToken cancellationToken)
     {
-        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
 
         try
@@ -76,13 +76,13 @@ public partial class PhoneOrderProcessJobService
                 ResponseFormat = new() { Type = "json_object" }
             }, cancellationToken).ConfigureAwait(false);
 
-            var response = completionResult.Data.Response?.Trim();
+            var response = completionResult?.Data?.Response?.Trim();
             var result = JsonConvert.DeserializeObject<ComplaintExtractionResult>(response ?? string.Empty);
             return result?.Items ?? new List<ComplaintExtractionItem>();
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Extract complaint items failed.");
+            Log.Warning(ex, "Extract complaint items failed. ReportText length: {Length}", reportText?.Length ?? 0);
             return new List<ComplaintExtractionItem>();
         }
     }
@@ -119,27 +119,26 @@ public partial class PhoneOrderProcessJobService
 
         TryMatchByInvoiceNumber(items, results, allOrderInfos);
 
-        var unmatchedItems = items
+        var unmatchedWithIndex = items
             .Zip(results, (item, result) => new { item, result })
+            .Select((x, i) => new { x.item, x.result, OriginalIndex = i })
             .Where(x => !x.result.IsMatched)
-            .Select(x => x.item)
             .ToList();
 
-        if (unmatchedItems.Count > 0)
+        if (unmatchedWithIndex.Count > 0)
         {
-            var llmResults = await MatchProductsByLlmAsync(unmatchedItems, customerOrderContexts, cancellationToken).ConfigureAwait(false);
-            foreach (var llm in llmResults.Where(x => x.IsMatched && !string.IsNullOrWhiteSpace(x.CustomerId)))
+            var llmResults = await MatchProductsByLlmAsync(unmatchedWithIndex.Select(x => x.item).ToList(), customerOrderContexts, cancellationToken).ConfigureAwait(false);
+
+            for (var i = 0; i < llmResults.Count && i < unmatchedWithIndex.Count; i++)
             {
-                var r = results.FirstOrDefault(x =>
-                    string.Equals(x.ProductName, llm.ProductName, StringComparison.OrdinalIgnoreCase) &&
-                    !x.IsMatched);
+                var llm = llmResults[i];
+                if (!llm.IsMatched || string.IsNullOrWhiteSpace(llm.CustomerId)) continue;
 
-                if (r == null) continue;
-
+                var r = results[unmatchedWithIndex[i].OriginalIndex];
                 r.CustomerId = llm.CustomerId;
                 r.QueryCustomerId = llm.QueryCustomerId;
                 r.IsMatched = true;
-                r.MatchedInvoiceNumber = llm.MatchedInvoiceNumbers?.FirstOrDefault();
+                r.MatchedInvoiceNumber = string.Join("、", llm.MatchedInvoiceNumbers ?? []);
                 r.MatchReason = llm.Reason;
             }
         }
@@ -159,8 +158,15 @@ public partial class PhoneOrderProcessJobService
 
             foreach (var invoiceNo in item.InvoiceNumbers)
             {
-                var match = allOrders.FirstOrDefault(o =>
-                    string.Equals(o.InvNumber, invoiceNo, StringComparison.OrdinalIgnoreCase));
+                var matches = allOrders
+                    .Where(o => string.Equals(o.InvNumber, invoiceNo, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (matches.Count == 0) continue;
+
+                var match = matches.Count == 1
+                    ? matches[0]
+                    : ResolveDuplicateInvoiceMatch(matches, item, invoiceNo);
 
                 if (match == null) continue;
 
@@ -172,6 +178,35 @@ public partial class PhoneOrderProcessJobService
                 break;
             }
         }
+    }
+
+    private static ComplaintOrderInfo ResolveDuplicateInvoiceMatch(
+        List<ComplaintOrderInfo> matches,
+        ComplaintExtractionItem item,
+        string invoiceNo)
+    {
+        if (DateTime.TryParse(item.DeliveryDate, out var deliveryDate))
+        {
+            var best = matches
+                .OrderBy(m => m.InvDate.HasValue ? Math.Abs((m.InvDate.Value - deliveryDate).TotalDays) : int.MaxValue)
+                .First();
+
+            Log.Warning(
+                "Duplicate invoice {InvoiceNo} found in {MatchCount} customers. Resolved by date proximity (deliveryDate={DeliveryDate}). " +
+                "Customers: {CustomerIds}",
+                invoiceNo, matches.Count, item.DeliveryDate,
+                matches.Select(m => new { m.CustomerId, m.InvDate }));
+
+            return best;
+        }
+
+        Log.Warning(
+            "Duplicate invoice {InvoiceNo} found in {MatchCount} customers. No delivery date to disambiguate, using first match. " +
+            "Customers: {CustomerIds}",
+            invoiceNo, matches.Count,
+            matches.Select(m => new { m.CustomerId, m.InvDate }));
+
+        return matches.First();
     }
 
     private async Task<List<ComplaintCustomerInvoiceOrderContext>> BuildCustomerComplaintInvoiceOrderContextsAsync(
@@ -262,7 +297,7 @@ public partial class PhoneOrderProcessJobService
                 ResponseFormat = new() { Type = "json_object" }
             }, cancellationToken).ConfigureAwait(false);
 
-            var response = completionResult.Data.Response?.Trim();
+            var response = completionResult?.Data?.Response?.Trim();
             var result = JsonConvert.DeserializeObject<ComplaintLlmProductMatchResponse>(response ?? string.Empty);
 
             Log.Information(
@@ -357,7 +392,7 @@ public partial class PhoneOrderProcessJobService
 
         for (var g = 0; g < grouped.Count; g++)
         {
-            var group = grouped.ToList()[g];
+            var group = grouped[g];
             var first = group.First();
             var customerLabel = BuildCustomerIdLabel(first.CustomerId, first.QueryCustomerId);
 
@@ -369,7 +404,8 @@ public partial class PhoneOrderProcessJobService
             var complaintIndex = 1;
             foreach (var match in group)
             {
-                var item = items.FirstOrDefault(i => string.Equals(i.ProductName, match.ProductName, StringComparison.OrdinalIgnoreCase));
+                var matchIndex = matchResults.IndexOf(match);
+                var item = matchIndex >= 0 ? items[matchIndex] : null;
 
                 builder.AppendLine($"  ─ 投诉单 {complaintIndex++}");
                 builder.AppendLine($"    Invoice单号:{(match.IsMatched && !string.IsNullOrWhiteSpace(match.MatchedInvoiceNumber) ? match.MatchedInvoiceNumber : "暫無")}");
