@@ -28,8 +28,6 @@ public partial interface IAiSpeechAssistantService
 
 public partial class AiSpeechAssistantService
 {
-    private const int HifoodCapabilityCompanyId = 4;
-
     public async Task<GetAiSpeechAssistantKnowledgeCapabilitiesResponse> GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
         GetAiSpeechAssistantKnowledgeCapabilitiesRequest request,
         CancellationToken cancellationToken)
@@ -56,7 +54,7 @@ public partial class AiSpeechAssistantService
             throw new InvalidOperationException("The store is not linked to Hifood/CRM.");
 
         if (!CanConfigureHifoodCapabilities(context.Store) && HasKnowledgeCapabilityConfiguration(command.Items))
-            throw new InvalidOperationException("Only company 4 can configure Hifood capabilities.");
+            throw new InvalidOperationException("The company is not allowed to configure Hifood capabilities.");
 
         foreach (var item in command.Items)
         {
@@ -384,9 +382,9 @@ public partial class AiSpeechAssistantService
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([record.Assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private static bool CanConfigureHifoodCapabilities(CompanyStore store)
+    private bool CanConfigureHifoodCapabilities(CompanyStore store)
     {
-        return store?.CompanyId == HifoodCapabilityCompanyId;
+        return store != null && _aiSpeechAssistantSettings.CanConfigureHifoodCapabilities(store.CompanyId);
     }
 
     private static bool HasKnowledgeCapabilityConfiguration(List<UpdateAiSpeechAssistantKnowledgeCapabilityDto> items)
