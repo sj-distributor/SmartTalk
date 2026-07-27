@@ -180,10 +180,17 @@ public partial class PhoneOrderProcessJobService
 
         if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
         {
-            var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
 
-            if (!string.IsNullOrWhiteSpace(complaintSection))
-                record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
+                if (!string.IsNullOrWhiteSpace(complaintSection))
+                    record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Complaint feedback analysis failed for record {RecordId}. The record will be processed without complaint analysis.", record.Id);
+            }
         }
         
         var reports = new List<PhoneOrderRecordReport>();

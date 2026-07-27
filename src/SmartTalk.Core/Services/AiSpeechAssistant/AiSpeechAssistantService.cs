@@ -946,7 +946,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     {
         AiSpeechAssistantComplaintInfoDto incoming = null;
 
-        var argumentsString = jsonDocument.GetProperty("arguments").ToString();
+        if (!jsonDocument.TryGetProperty("arguments", out var argumentsElement))
+        {
+            Log.Warning("ProcessCollectComplaintInfoAsync called without 'arguments' property.");
+            return;
+        }
+
+        var argumentsString = argumentsElement.ToString();
 
         try
         {
@@ -959,13 +965,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         _aiSpeechAssistantStreamContext.ComplaintInfo = AiSpeechAssistantComplaintInfoHelper.Merge(_aiSpeechAssistantStreamContext.ComplaintInfo, incoming);
 
+        var callId = jsonDocument.TryGetProperty("call_id", out var callIdElement)
+            ? callIdElement.GetString()
+            : string.Empty;
+
         var recordSuccess = new
         {
             type = "conversation.item.create",
             item = new
             {
                 type = "function_call_output",
-                call_id = jsonDocument.GetProperty("call_id").GetString(),
+                call_id = callId,
                 output = AiSpeechAssistantComplaintInfoHelper.BuildFunctionOutput(_aiSpeechAssistantStreamContext.ComplaintInfo)
             }
         };

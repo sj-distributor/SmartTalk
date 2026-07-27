@@ -132,7 +132,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                 if (!string.IsNullOrEmpty(audio?.Attachment?.FileUrl) && assistantId != 0)
                 {
                     _backgroundJobClient.Enqueue<IAiKidRealtimeProcessJobService>(x =>
-                        x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, assistantId, sessionId, orderRecordType, CancellationToken.None));
+                        x.RecordingRealtimeAiAsync(audio.Attachment.FileUrl, assistantId, sessionId, orderRecordType, complaintInfo, CancellationToken.None));
                 }
             },
             OnTranscriptionsCompletedAsync = async (sessionId, transcriptions) =>
