@@ -26,6 +26,7 @@ using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Services.Twilio;
+using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Settings.WorkWeChat;
@@ -177,6 +178,35 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
 
         response.Data.CanConfigure.ShouldBeFalse();
         response.Data.Capabilities.ShouldHaveSingleItem().OrderPushHifoodEnabled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task GetKnowledgeCapabilities_WhenCompanyIsConfigured_ReturnsCanConfigure()
+    {
+        var harness = CapabilityHarness.Create(hifoodCapabilityCompanyIds: "2");
+        var agent = new Agent { Id = 20, Name = "Sales", Type = AgentType.Sales, RelateId = 300 };
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+        {
+            Id = 30,
+            AgentId = 20,
+            Name = "Alice",
+            IsDisplay = true,
+            ModelProvider = RealtimeAiProvider.OpenAi
+        };
+        var knowledge = new AiSpeechAssistantKnowledge
+        {
+            Id = 40,
+            AssistantId = 30,
+            CreatedDate = DateTimeOffset.UtcNow
+        };
+
+        harness.SetupCapabilityGraph(agent, assistant, knowledge, companyId: 2);
+
+        var response = await harness.Sut.GetAiSpeechAssistantKnowledgeCapabilitiesAsync(
+            new GetAiSpeechAssistantKnowledgeCapabilitiesRequest { StoreId = 10, AgentId = 20 },
+            CancellationToken.None);
+
+        response.Data.CanConfigure.ShouldBeTrue();
     }
 
     [Fact]
@@ -611,7 +641,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 },
                 CancellationToken.None));
 
-        exception.Message.ShouldBe("Only company 4 can configure Hifood capabilities.");
+        exception.Message.ShouldBe("The company is not allowed to configure Hifood capabilities.");
         assistant.ManualRecordWholeAudio.ShouldBeFalse();
         await harness.AgentDataProvider.DidNotReceive()
             .UpdateAgentsAsync(Arg.Any<List<Agent>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
@@ -638,7 +668,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
 
         public ISalesDataProvider SalesDataProvider { get; private set; } = null!;
 
-        public static CapabilityHarness Create(List<StoreUser>? storeUsers = null)
+        public static CapabilityHarness Create(List<StoreUser>? storeUsers = null, string hifoodCapabilityCompanyIds = "4")
         {
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -647,7 +677,8 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 ["OpenAi:ApiKey"] = "test",
                 ["OpenAi:Organization"] = "test",
                 ["ZhiPuAi:ApiKey"] = "test",
-                ["WorkWeChat:Key"] = "test"
+                ["WorkWeChat:Key"] = "test",
+                ["AiSpeechAssistant:HifoodCapabilityCompanyIds"] = hifoodCapabilityCompanyIds
             }).Build();
 
             var currentUser = Substitute.For<ICurrentUser>();
@@ -696,6 +727,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 Substitute.For<ISmartTalkBackgroundJobClient>(),
                 Substitute.For<ITwilioService>(),
                 harness.AiSpeechAssistantDataProvider,
+                new AiSpeechAssistantSettings(configuration),
                 Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
                 Substitute.For<IKnowledgeScenarioDataProvider>());
 
