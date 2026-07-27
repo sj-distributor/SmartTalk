@@ -26,6 +26,7 @@ using SmartTalk.Messages.Dto.AiResourceSync;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
@@ -68,6 +69,41 @@ public class AiResourceSyncServiceTests
 
         await processJobService.Received(1).RefreshCrmCustomerContactPhoneMapsAsync(
             Arg.Any<SchedulingRefreshCrmCustomerContactPhoneMapCommand>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SendNotifyAsync_ManualSuccess_ShouldNotSendMessage()
+    {
+        var weChatClient = Substitute.For<IWeChatClient>();
+        var sut = CreateSut(weChatClient: weChatClient);
+
+        await sut.SendNotifyAsync(isSuccess: true, isManual: true, CancellationToken.None);
+
+        await weChatClient.DidNotReceive().SendWorkWechatRobotMessagesAsync(
+            Arg.Any<string>(),
+            Arg.Any<SendWorkWechatGroupRobotMessageDto>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SendNotifyAsync_ManualFailure_ShouldSendMessage()
+    {
+        var weChatClient = Substitute.For<IWeChatClient>();
+        weChatClient.SendWorkWechatRobotMessagesAsync(
+                Arg.Any<string>(),
+                Arg.Any<SendWorkWechatGroupRobotMessageDto>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new WorkWeChatResponseDto());
+        var sut = CreateSut(weChatClient: weChatClient);
+
+        await sut.SendNotifyAsync(isSuccess: false, isManual: true, CancellationToken.None);
+
+        await weChatClient.Received(1).SendWorkWechatRobotMessagesAsync(
+            Arg.Any<string>(),
+            Arg.Is<SendWorkWechatGroupRobotMessageDto>(x =>
+                x.MsgType == "text" &&
+                x.Text.Content.Contains("SMT Sales Manual Create: Failed")),
             Arg.Any<CancellationToken>());
     }
 
@@ -727,7 +763,7 @@ public class AiResourceSyncServiceTests
                 x.Count == 1 && x[0].AgentId == 201 && x[0].AssistantId == 900),
             true,
             Arg.Any<CancellationToken>());
-        await aiSpeechAssistantDataProvider.Received(1).UpdateAiSpeechAssistantsAsync(
+        await aiSpeechAssistantDataProvider.Received().UpdateAiSpeechAssistantsAsync(
             Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(x =>
                 x.Count == 1 && x[0].Id == 900 && x[0].AgentId == 201),
             true,
@@ -1044,7 +1080,8 @@ public class AiResourceSyncServiceTests
         IKnowledgeScenarioDataProvider? knowledgeScenarioDataProvider = null,
         ISalesDataProvider? salesDataProvider = null,
         IRedisSafeRunner? redisSafeRunner = null,
-        ISmartTalkBackgroundJobClient? backgroundJobClient = null)
+        ISmartTalkBackgroundJobClient? backgroundJobClient = null,
+        IWeChatClient? weChatClient = null)
     {
         var redisRunner = redisSafeRunner ?? Substitute.For<IRedisSafeRunner>();
         redisRunner.ExecuteWithLockAsync(
@@ -1081,7 +1118,7 @@ public class AiResourceSyncServiceTests
             aiSpeechAssistantKnowledgePromptService ?? Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
             knowledgeScenarioDataProvider ?? Substitute.For<IKnowledgeScenarioDataProvider>(),
             salesDataProvider ?? Substitute.For<ISalesDataProvider>(),
-            Substitute.For<IWeChatClient>(),
+            weChatClient ?? Substitute.For<IWeChatClient>(),
             redisRunner,
             backgroundJobClient ?? Substitute.For<ISmartTalkBackgroundJobClient>(),
             new SalesSettingBuilder().Build(),
@@ -1107,9 +1144,9 @@ public class AiResourceSyncServiceTests
         {
             return new AiResourceSyncSetting(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["SalesAutoCreate:NotifyRobotUrl"] = "https://example.com/robot",
-                ["SalesAutoCreate:DefaultAssistantGreetings"] = "Hello",
-                ["SalesAutoCreate:ServiceProviderId"] = "123"
+                ["AiResourceSync:NotifyRobotUrl"] = "https://example.com/robot",
+                ["AiResourceSync:DefaultAssistantGreetings"] = "Hello",
+                ["AiResourceSync:ServiceProviderId"] = "123"
             }).Build());
         }
     }

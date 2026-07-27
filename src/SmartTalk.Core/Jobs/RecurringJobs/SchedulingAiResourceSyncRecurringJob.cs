@@ -8,12 +8,12 @@ using SmartTalk.Messages.Commands.Sales;
 
 namespace SmartTalk.Core.Jobs.RecurringJobs;
 
-public class SchedulingSyncCrmSalesAutoCreateRecurringJob : IRecurringJob
+public class SchedulingAiResourceSyncRecurringJob : IRecurringJob
 {
     private readonly IMediator _mediator;
     private readonly SchedulingAiResourceSyncRecurringJobCronExpression _setting;
 
-    public SchedulingSyncCrmSalesAutoCreateRecurringJob(IMediator mediator, SchedulingAiResourceSyncRecurringJobCronExpression setting)
+    public SchedulingAiResourceSyncRecurringJob(IMediator mediator, SchedulingAiResourceSyncRecurringJobCronExpression setting)
     {
         _mediator = mediator;
         _setting = setting;
@@ -24,7 +24,7 @@ public class SchedulingSyncCrmSalesAutoCreateRecurringJob : IRecurringJob
         await _mediator.SendAsync(new SchedulingAiResourceSyncCommand()).ConfigureAwait(false);
     }
 
-    public string JobId => nameof(SchedulingSyncCrmSalesAutoCreateRecurringJob);
+    public string JobId => nameof(SchedulingAiResourceSyncRecurringJob);
 
     public string CronExpression => string.IsNullOrWhiteSpace(_setting.Value) ? Cron.Never() : _setting.Value;
 

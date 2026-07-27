@@ -657,14 +657,12 @@ public partial class AiResourceSyncService : IAiResourceSyncService
         }
 
         var knowledge = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+            .GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (knowledge == null)
             return;
 
         var existingRelations = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantKnowledgeSceneRelationsAsync(knowledge.Id, cancellationToken)
-            .ConfigureAwait(false);
+            .GetAiSpeechAssistantKnowledgeSceneRelationsAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
 
         var obsoleteCrmRelations = existingRelations
             .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync && x.SceneId != scene.Id)
@@ -672,9 +670,7 @@ public partial class AiResourceSyncService : IAiResourceSyncService
 
         if (obsoleteCrmRelations.Count > 0)
         {
-            await _aiSpeechAssistantDataProvider
-                .DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(obsoleteCrmRelations, true, cancellationToken)
-                .ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(obsoleteCrmRelations, true, cancellationToken).ConfigureAwait(false);
         }
 
         if (existingRelations.All(x => x.SceneId != scene.Id))
@@ -695,6 +691,20 @@ public partial class AiResourceSyncService : IAiResourceSyncService
         }
 
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync([knowledge.Id], cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsureAssistantKnowledgeLanguageAndSceneAsync(
+        int assistantId, string language, IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
+    {
+        var normalizedLanguage = CrmToAutoAddLanguageConverter.NormalizeToken(language);
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
+        if (assistant != null && !string.Equals(assistant.ModelLanguage ?? string.Empty, normalizedLanguage, StringComparison.Ordinal))
+        {
+            assistant.ModelLanguage = normalizedLanguage;
+            await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], true, cancellationToken).ConfigureAwait(false);
+        }
+
+        await AttachSceneToAssistantKnowledgeAsync(assistantId, normalizedLanguage, customerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ResolveMergedCustomerAssistantAsync(
@@ -722,6 +732,9 @@ public partial class AiResourceSyncService : IAiResourceSyncService
                 exactMatch.AgentId = salesAgentId;
                 stats.TransferredAssistantCount++;
             }
+
+            await EnsureAssistantKnowledgeLanguageAndSceneAsync(
+                exactMatch.AssistantId, mergedGroup.Language, mergedGroup.CustomerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
             
             return;
         }
@@ -757,6 +770,9 @@ public partial class AiResourceSyncService : IAiResourceSyncService
             ReplaceAssistantCustomerMappings(assistantContext.AssistantCustomerIdsByAssistantId, assistantContext.AssistantIdsByCustomerId, sameStoreMatch.AssistantId, desiredIds);
             assistantContext.ExistingCrmAssistantsByName[assistantName] = sameStoreMatch;
 
+            await EnsureAssistantKnowledgeLanguageAndSceneAsync(
+                sameStoreMatch.AssistantId, mergedGroup.Language, mergedGroup.CustomerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
@@ -774,6 +790,9 @@ public partial class AiResourceSyncService : IAiResourceSyncService
                 crossStoreMatch.StoreId = targetStoreId;
                 crossStoreMatch.AgentId = salesAgentId;
                 stats.TransferredAssistantCount++;
+
+                await EnsureAssistantKnowledgeLanguageAndSceneAsync(
+                    crossStoreMatch.AssistantId, mergedGroup.Language, mergedGroup.CustomerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
                 
                 return;
             }
@@ -1491,13 +1510,14 @@ public partial class AiResourceSyncService : IAiResourceSyncService
         if (string.IsNullOrWhiteSpace(_aiResourceSyncSetting.NotifyRobotUrl))
             return;
 
+        if (isManual && isSuccess)
+            return;
+
         var pstZone = PstTimeZone.Get();
         var currentTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, pstZone).ToString("yyyy-MM-dd HH:mm:ss");
 
         var content = isManual
-            ? isSuccess
-                ? $"✅SMT Sales Manual Create: Success\nTime: {currentTime}"
-                : $"❌SMT Sales Manual Create: Failed\nTime: {currentTime}"
+            ? $"❌SMT Sales Manual Create: Failed\nTime: {currentTime}"
             : isSuccess
                 ? $"✅SMT Sales Auto Create: Success\nTime: {currentTime}"
                 : $"❌SMT Sales Auto Create: Failed\nTime: {currentTime}";
