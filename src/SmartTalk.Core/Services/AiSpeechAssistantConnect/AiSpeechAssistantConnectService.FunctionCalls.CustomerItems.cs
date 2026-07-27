@@ -49,8 +49,6 @@ public partial class AiSpeechAssistantConnectService
                 "Reply in the guest's language: I found more than one store linked to that name. Please ask the customer for the complete or more specific store name before checking product information.");
         }
 
-        _ctx.MatchedCustomerIds = [match.SoldToId];
-
         var caches = await _salesDataProvider
             .GetCustomerItemsCacheBySoldToIdsAsync([match.SoldToId], cancellationToken)
             .ConfigureAwait(false);
@@ -65,8 +63,8 @@ public partial class AiSpeechAssistantConnectService
             .ToList();
 
         Log.Information(
-            "[AiAssistant] Store scoped customer items resolved. AssistantId: {AssistantId}, StoreName: {StoreName}, ProductName: {ProductName}, MatchedCustomerIds: {MatchedCustomerIds}, ItemLineCount: {ItemLineCount}",
-            _ctx.Assistant?.Id, args.StoreName, args.ProductName, match.SoldToIds, itemLines.Count);
+            "[AiAssistant] Store scoped customer items resolved. AssistantId: {AssistantId}, StoreName: {StoreName}, MatchedCustomerId: {MatchedCustomerId}, ItemLineCount: {ItemLineCount}",
+            _ctx.Assistant?.Id, args.StoreName, match.SoldToId, itemLines.Count);
 
         if (itemLines.Count == 0)
         {
@@ -97,8 +95,8 @@ public partial class AiSpeechAssistantConnectService
 
         await actions.UpdateSessionInstructionsAsync(BuildSessionPrompt()).ConfigureAwait(false);
         Log.Information(
-            "[AiAssistant] Customer items prompt updated in realtime session. AssistantId: {AssistantId}, CallSid: {CallSid}, MatchedCustomerIds: {MatchedCustomerIds}, CustomerItemsLength: {CustomerItemsLength}",
-            _ctx.Assistant?.Id, _ctx.CallSid, _ctx.MatchedCustomerIds, _ctx.CustomerItemsPromptValue?.Length ?? 0);
+            "[AiAssistant] Customer items prompt updated in realtime session. AssistantId: {AssistantId}, CallSid: {CallSid}, CustomerItemsLength: {CustomerItemsLength}",
+            _ctx.Assistant?.Id, _ctx.CallSid, _ctx.CustomerItemsPromptValue?.Length ?? 0);
         return true;
     }
 
@@ -137,9 +135,6 @@ public partial class AiSpeechAssistantConnectService
     {
         [JsonProperty("store_name")]
         public string StoreName { get; set; }
-
-        [JsonProperty("product_name")]
-        public string ProductName { get; set; }
 
         [JsonProperty("prefetch_only")]
         public bool PrefetchOnly { get; set; }

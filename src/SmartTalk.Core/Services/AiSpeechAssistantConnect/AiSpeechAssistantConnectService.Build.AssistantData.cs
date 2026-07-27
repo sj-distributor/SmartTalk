@@ -53,11 +53,6 @@ public partial class AiSpeechAssistantConnectService
                         type = "string",
                         description = "The store or restaurant name mentioned by the customer."
                     },
-                    product_name = new
-                    {
-                        type = "string",
-                        description = "Optional product standard name or customer nickname mentioned by the customer."
-                    },
                     prefetch_only = new
                     {
                         type = "boolean",

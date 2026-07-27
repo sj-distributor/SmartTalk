@@ -127,14 +127,28 @@ public partial class AiSpeechAssistantConnectService
         tool["description"] = CustomerItemsToolDescription;
 
         var properties = tool["parameters"]?["properties"] as JObject;
-        if (properties == null || properties["prefetch_only"] != null)
+        if (properties == null)
             return tool;
 
-        properties["prefetch_only"] = JObject.FromObject(new
+        properties.Remove("product_name");
+        if (tool["parameters"]?["required"] is JArray required)
         {
-            type = "boolean",
-            description = "Set true only when the guest merely provides or corrects the store name and is not asking a product, stock, availability, warehouse, or orderable-goods question. The matching customer item cache replaces the session knowledge placeholder silently for a later guest question."
-        });
+            foreach (var token in required
+                         .Where(x => string.Equals(x?.Value<string>(), "product_name", StringComparison.OrdinalIgnoreCase))
+                         .ToList())
+            {
+                token.Remove();
+            }
+        }
+
+        if (properties["prefetch_only"] == null)
+        {
+            properties["prefetch_only"] = JObject.FromObject(new
+            {
+                type = "boolean",
+                description = "Set true only when the guest merely provides or corrects the store name and is not asking a product, stock, availability, warehouse, or orderable-goods question. The matching customer item cache replaces the session knowledge placeholder silently for a later guest question."
+            });
+        }
 
         return tool;
     }

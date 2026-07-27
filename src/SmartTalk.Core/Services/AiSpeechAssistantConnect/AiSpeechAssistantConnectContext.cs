@@ -34,7 +34,6 @@ public class AiSpeechAssistantConnectContext
     public AiSpeechAssistantTimer Timer { get; set; }
     public List<AiSpeechAssistantFunctionCall> FunctionCalls { get; set; }
     public List<string> CandidateCustomerIds { get; set; } = [];
-    public List<string> MatchedCustomerIds { get; set; } = [];
 
     // Routing
     public int? ForwardAssistantId { get; set; }
