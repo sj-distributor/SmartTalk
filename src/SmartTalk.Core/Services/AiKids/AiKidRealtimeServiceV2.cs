@@ -149,14 +149,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                         }).ToList()
                     }, CancellationToken.None));
             },
-            OnFunctionCallAsync = async (data, actions) =>
-            {
-                var complaintResult = ProcessCollectComplaintInfo(data, ref complaintInfo);
-                if (complaintResult != null) return complaintResult;
-
-                return await OnFunctionCallAsync(data, actions, assistant, CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
+            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, assistant, CancellationToken.None)
         };
 
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
