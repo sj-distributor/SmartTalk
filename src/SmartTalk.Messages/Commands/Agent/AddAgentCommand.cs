@@ -29,6 +29,8 @@ public class AddAgentCommand : HasServiceProviderId, ICommand
 
     public AiSpeechAssistantChannel Channel { get; set; } = AiSpeechAssistantChannel.PhoneChat;
 
+    public bool? PhoneNoiseReductionEnabled { get; set; }
+
     public AgentType AgentType { get; set; } = AgentType.Agent;
 
     public AgentSourceSystem SourceSystem { get; set; } = AgentSourceSystem.Self;

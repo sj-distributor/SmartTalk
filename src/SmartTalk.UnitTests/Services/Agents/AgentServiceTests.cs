@@ -26,6 +26,55 @@ namespace SmartTalk.UnitTests.Services.Agents;
 public class AgentServiceTests
 {
     [Fact]
+    public async Task AddAgentAsync_WhenPhoneNoiseReductionDisabled_ShouldReturnDisabled()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.AddProfile<AgentMapping>();
+            cfg.AddProfile<AiSpeechAssistantMapping>();
+        }).CreateMapper();
+        var agentDataProvider = Substitute.For<IAgentDataProvider>();
+        var posDataProvider = Substitute.For<IPosDataProvider>();
+        var service = new AgentService(
+            mapper,
+            Substitute.For<ICurrentUser>(),
+            posDataProvider,
+            agentDataProvider,
+            Substitute.For<IRestaurantDataProvider>(),
+            Substitute.For<IAccountDataProvider>(),
+            Substitute.For<IAiSpeechAssistantDataProvider>(),
+            Substitute.For<ISmartTalkBackgroundJobClient>());
+
+        agentDataProvider.When(x => x.AddAgentAsync(
+                Arg.Any<Agent>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>()))
+            .Do(callInfo => callInfo.Arg<Agent>().Id = 20);
+
+        var response = await service.AddAgentAsync(
+            new AddAgentCommand
+            {
+                StoreId = 1,
+                Name = "Agent",
+                Brief = "Brief",
+                Channel = AiSpeechAssistantChannel.PhoneChat,
+                Voice = "alloy",
+                WaitInterval = 500,
+                IsReceivingCall = true,
+                ServiceHours = "[]",
+                PhoneNoiseReductionEnabled = false
+            },
+            CancellationToken.None);
+
+        response.Data.Id.ShouldBe(20);
+        response.Data.PhoneNoiseReductionEnabled.ShouldBeFalse();
+        await posDataProvider.Received(1).AddPosAgentsAsync(
+            Arg.Is<List<PosAgent>>(x => x.Count == 1 && x[0].AgentId == 20 && x[0].StoreId == 1),
+            true,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task GetSurfaceAgentsAsync_WhenNoiseReductionConfigured_ShouldReturnTrue()
     {
         var mapper = new MapperConfiguration(cfg =>
