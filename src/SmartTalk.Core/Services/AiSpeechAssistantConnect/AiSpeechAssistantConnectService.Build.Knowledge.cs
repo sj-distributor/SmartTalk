@@ -35,9 +35,15 @@ public partial class AiSpeechAssistantConnectService
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(_ctx.From, _ctx.To, _ctx.ForwardAssistantId ?? _ctx.AssistantId, cancellationToken).ConfigureAwait(false);
+        Log.Information(
+            "[AiAssistant] LoadAssistantInfo initial lookup, AssistantId: {AssistantId}, KnowledgeId: {KnowledgeId}, HasProfile: {HasProfile}, RequestedAssistantId: {RequestedAssistantId}, ForwardAssistantId: {ForwardAssistantId}, From: {From}, To: {To}",
+            assistant?.Id, knowledge?.Id, userProfile != null, _ctx.AssistantId, _ctx.ForwardAssistantId, _ctx.From, _ctx.To);
 
         if (!_ctx.AssistantId.HasValue && !_ctx.ForwardAssistantId.HasValue && assistant != null)
         {
+            Log.Information(
+                "[AiAssistant] LoadAssistantInfo resolving customer-specific assistant, MatchedAssistantId: {AssistantId}, AgentId: {AgentId}, From: {From}, To: {To}",
+                assistant.Id, assistant.AgentId, _ctx.From, _ctx.To);
             var customerAssistantId = await ResolveCustomerSpecificAssistantIdAsync(assistant.AgentId, _ctx.From, cancellationToken).ConfigureAwait(false);
             if (customerAssistantId.HasValue && customerAssistantId.Value != assistant.Id)
             {
