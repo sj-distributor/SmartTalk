@@ -1,5 +1,6 @@
 using System.Reflection;
 using AutoMapper;
+using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Domain.AIAssistant;
@@ -10,6 +11,7 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using Xunit;
 
@@ -24,6 +26,7 @@ public class SalesPlaceholderFixture
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
         var salesDataProvider = Substitute.For<ISalesDataProvider>();
         var knowledgePromptService = Substitute.For<IAiSpeechAssistantKnowledgePromptService>();
+        var configuration = new ConfigurationBuilder().Build();
         var assistantService = new AiSpeechAssistantService(
             clock: null!,
             mapper: mapper,
@@ -55,6 +58,7 @@ public class SalesPlaceholderFixture
             backgroundJobClient: null!,
             twilioService: null!,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
+            aiSpeechAssistantSettings: new AiSpeechAssistantSettings(configuration),
             aiSpeechAssistantKnowledgePromptService: knowledgePromptService,
             knowledgeScenarioDataProvider: null!,
             openaiWebSocket: null!
