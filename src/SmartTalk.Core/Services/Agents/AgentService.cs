@@ -143,11 +143,11 @@ public class AgentService : IAgentService
         };
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var agentDto = _mapper.Map<AgentDto>(agent);
+        agentDto.PhoneNoiseReductionEnabled = command.PhoneNoiseReductionEnabled ?? true;
 
-        var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
-            agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
-
-        return new AddAgentResponse { Data = MapAgentDto(agent, transferCallConfigs) };
+        return new AddAgentResponse { Data = agentDto };
     }
 
     public async Task<UpdateAgentResponse> UpdateAgentAsync(UpdateAgentCommand command, CancellationToken cancellationToken)
