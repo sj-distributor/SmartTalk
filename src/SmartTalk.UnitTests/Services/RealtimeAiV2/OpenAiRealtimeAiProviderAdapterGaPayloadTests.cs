@@ -194,7 +194,7 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
     }
 
     [Fact]
-    public void BuildSessionInstructionsUpdateMessage_OnlyUpdatesInstructions()
+    public void BuildSessionInstructionsUpdateMessage_IncludesRealtimeSessionTypeAndInstructions()
     {
         var adapter = NewAdapter();
 
@@ -202,7 +202,8 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
         var session = (JObject)json["session"]!;
 
         json["type"]!.Value<string>().ShouldBe("session.update");
+        session["type"]!.Value<string>().ShouldBe("realtime");
         session["instructions"]!.Value<string>().ShouldBe("Updated customer item knowledge.");
-        session.Properties().Select(x => x.Name).ShouldBe(new[] { "instructions" });
+        session.Properties().Select(x => x.Name).ShouldBe(new[] { "type", "instructions" });
     }
 }

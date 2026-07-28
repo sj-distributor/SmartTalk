@@ -188,6 +188,7 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
             type = "session.update",
             session = new
             {
+                type = "realtime",
                 instructions
             }
         });
