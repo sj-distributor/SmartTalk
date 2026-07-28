@@ -259,13 +259,14 @@ public class KnowledgeScenarioService : IKnowledgeScenarioService
         scene.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _knowledgeScenarioDataProvider.UpdateKnowledgeSceneAsync(scene, cancellationToken: cancellationToken).ConfigureAwait(false);
-        Log.Information("UpdateKnowledgeSceneAsync scene changed. SceneId={@SceneId}, SceneStatus={@SceneStatus}, SceneItemsChanged={@SceneItemsChanged}. Refreshing related prompts.", scene.Id, scene.Status, sceneItemsChanged);
-        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
+        Log.Information("UpdateKnowledgeSceneAsync scene changed. SceneId={@SceneId}, SceneStatus={@SceneStatus}, SceneItemsChanged={@SceneItemsChanged}. Enqueueing post update job.", scene.Id, scene.Status, sceneItemsChanged);
+       
+        _backgroundJobClient.Enqueue<IKnowledgeScenarioProcessJobService>(
+            x => x.HandleSceneUpdatedAsync(scene.Id, CancellationToken.None));
 
         Log.Information("UpdateKnowledgeSceneAsync updated scene. SceneId={@SceneId}, SceneFolderId={@SceneFolderId}, SceneName={@SceneName}", scene.Id, scene.FolderId, scene.Name);
 
         var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
-        await SnapshotKnowledgeSceneAsync(scene, sceneItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
         var sceneDto = _mapper.Map<KnowledgeSceneDto>(scene);
         sceneDto.SceneItems = OrderSceneItems(_mapper.Map<List<KnowledgeSceneItemDto>>(sceneItems));
 
