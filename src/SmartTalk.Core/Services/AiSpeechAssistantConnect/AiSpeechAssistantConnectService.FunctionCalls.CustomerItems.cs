@@ -93,10 +93,11 @@ public partial class AiSpeechAssistantConnectService
             return false;
         }
 
-        await actions.UpdateSessionInstructionsAsync(BuildSessionPrompt()).ConfigureAwait(false);
+        var updatedSessionPrompt = BuildSessionPrompt();
+        await actions.UpdateSessionInstructionsAsync(updatedSessionPrompt).ConfigureAwait(false);
         Log.Information(
-            "[AiAssistant] Customer items prompt updated in realtime session. AssistantId: {AssistantId}, CallSid: {CallSid}, CustomerItemsLength: {CustomerItemsLength}",
-            _ctx.Assistant?.Id, _ctx.CallSid, _ctx.CustomerItemsPromptValue?.Length ?? 0);
+            "[AiAssistant] Customer items prompt updated in realtime session. AssistantId: {AssistantId}, CallSid: {CallSid}, CustomerItemsLength: {CustomerItemsLength}, UpdatedSessionPrompt: {UpdatedSessionPrompt}",
+            _ctx.Assistant?.Id, _ctx.CallSid, _ctx.CustomerItemsPromptValue?.Length ?? 0, updatedSessionPrompt);
         return true;
     }
 
