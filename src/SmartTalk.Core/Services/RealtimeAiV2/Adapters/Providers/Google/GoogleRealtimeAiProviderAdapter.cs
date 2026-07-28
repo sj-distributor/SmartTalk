@@ -88,6 +88,8 @@ public class GoogleRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
         return JsonSerializer.Serialize(message);
     }
 
+    public string BuildSessionInstructionsUpdateMessage(string instructions) => null;
+
     public string BuildTextUserMessage(string text, string sessionId)
     {
         var message = new

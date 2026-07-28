@@ -42,6 +42,79 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
     }
 
     [Fact]
+    public async Task FunctionCall_SilentPrefetch_ReplySentWithoutResponseCreate()
+    {
+        var fc = new RealtimeAiWssFunctionCallData { CallId = "call_1", FunctionName = "query_customer_items_by_store_name", ArgumentsJson = "{\"store_name\":\"Sample Store\"}" };
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.FunctionCallSuggested,
+                Data = new List<RealtimeAiWssFunctionCallData> { fc }
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnFunctionCallAsync = (_, _) =>
+                Task.FromResult(new RealtimeAiFunctionCallResult
+                {
+                    Output = "Store context and customer items.",
+                    SuppressResponseAfterOutput = true
+                });
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        ProviderAdapter.Received(1).BuildFunctionCallReplyMessage(fc, "Store context and customer items.");
+        ProviderAdapter.DidNotReceive().BuildTriggerResponseMessage();
+    }
+
+    [Fact]
+    public async Task FunctionCall_SilentPrefetch_UpdatesSessionInstructionsBeforeReturningToolOutput()
+    {
+        var fc = new RealtimeAiWssFunctionCallData { CallId = "call_1", FunctionName = "query_customer_items_by_store_name", ArgumentsJson = "{\"store_name\":\"Sample Store\"}" };
+
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(new ParsedRealtimeAiProviderEvent
+            {
+                Type = RealtimeAiWssEventType.FunctionCallSuggested,
+                Data = new List<RealtimeAiWssFunctionCallData> { fc }
+            });
+        ProviderAdapter.BuildSessionInstructionsUpdateMessage("Updated customer item knowledge.")
+            .Returns("session_update:customer_items");
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.OnFunctionCallAsync = async (_, actions) =>
+            {
+                await actions.UpdateSessionInstructionsAsync("Updated customer item knowledge.");
+                return new RealtimeAiFunctionCallResult
+                {
+                    Output = "Customer item knowledge placeholder has been updated.",
+                    SuppressResponseAfterOutput = true
+                };
+            };
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(100);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        ProviderAdapter.Received(1).BuildSessionInstructionsUpdateMessage("Updated customer item knowledge.");
+        FakeWssClient.SentMessages.ShouldContain("session_update:customer_items");
+    }
+
+    [Fact]
     public async Task FunctionCall_MultipleCalls_EachReplyIsSentSeparately()
     {
         var fc1 = new RealtimeAiWssFunctionCallData { CallId = "call_1", FunctionName = "func1", ArgumentsJson = "{}" };

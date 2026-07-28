@@ -29,6 +29,7 @@ public partial class AiSpeechAssistantConnectService
         PosMenuProductPriceToken,
         PosMenuProductTimeToken
     ];
+    private const string CustomerItemsPromptMarker = "__SMARTTALK_CUSTOMER_ITEMS__";
 
     private async Task BuildKnowledgeAsync(CancellationToken cancellationToken)
     {
@@ -45,6 +46,8 @@ public partial class AiSpeechAssistantConnectService
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
+
+        PrepareCustomerItemsPromptTemplate();
 
         Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
     }
@@ -194,22 +197,28 @@ public partial class AiSpeechAssistantConnectService
         ApplyCustomerItems(fetched);
     }
 
-    private async Task<string> FetchCustomerItemsAsync(CancellationToken cancellationToken)
+    private Task<string> FetchCustomerItemsAsync(CancellationToken cancellationToken)
     {
         var hasCustomerItemsToken = _ctx.Prompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase);
         var hasHiFoodItemsToken = _ctx.Prompt.Contains("{HiFood_商品_商品数据}", StringComparison.OrdinalIgnoreCase);
 
-        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return null;
+        if (!hasCustomerItemsToken && !hasHiFoodItemsToken) return Task.FromResult<string>(null);
+        if (_ctx.CandidateCustomerIds.Count > 1) return Task.FromResult(CustomerItemsPromptMarker);
 
-        if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return null;
+        if (string.IsNullOrWhiteSpace(_ctx.Assistant.Name)) return Task.FromResult<string>(null);
+        return FetchSingleCustomerItemsAsync(cancellationToken);
+    }
 
-        var soldToIds = GetAssistantSoldToIds();
-        if (soldToIds.Count == 0) return null;
-        if (_ctx.CandidateCustomerIds.Count > 1)
-            return " ";
-
-        var caches = await _salesDataProvider.GetCustomerItemsCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
-        var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
+    private async Task<string> FetchSingleCustomerItemsAsync(CancellationToken cancellationToken)
+    {
+        var caches = await _salesDataProvider
+            .GetCustomerItemsCacheByAssistantNameAsync(_ctx.Assistant.Name, cancellationToken)
+            .ConfigureAwait(false);
+        var customerItems = caches
+            .Where(c => !string.IsNullOrEmpty(c.CacheValue))
+            .Select(c => c.CacheValue.Trim())
+            .Distinct()
+            .ToList();
 
         return customerItems.Count > 0
             ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50))
@@ -244,6 +253,27 @@ public partial class AiSpeechAssistantConnectService
         }
 
         _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_progress}", deliveryProgressText);
+    }
+
+    private void PrepareCustomerItemsPromptTemplate()
+    {
+        if (!_ctx.Prompt.Contains(CustomerItemsPromptMarker, StringComparison.Ordinal)) return;
+
+        _ctx.CustomerItemsPromptTemplate = _ctx.Prompt;
+        _ctx.CustomerItemsPromptValue = null;
+        _ctx.Prompt = _ctx.Prompt.Replace(CustomerItemsPromptMarker, " ");
+    }
+
+    private string ReplaceCustomerItemsPromptMarker(string customerItems)
+    {
+        if (string.IsNullOrWhiteSpace(_ctx.CustomerItemsPromptTemplate)) return null;
+
+        _ctx.CustomerItemsPromptValue = string.IsNullOrWhiteSpace(customerItems) ? " " : customerItems;
+        _ctx.Prompt = _ctx.CustomerItemsPromptTemplate.Replace(
+            CustomerItemsPromptMarker,
+            _ctx.CustomerItemsPromptValue);
+
+        return _ctx.Prompt;
     }
 
     // ── Menu items ────────────────────────────────────────────────────────

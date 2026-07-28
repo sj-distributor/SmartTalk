@@ -27,13 +27,14 @@ public class AiSpeechAssistantConnectContext
 
     // Assistant & knowledge
     public string Prompt { get; set; }
+    public string CustomerItemsPromptTemplate { get; set; }
+    public string CustomerItemsPromptValue { get; set; }
     public string UserProfileJson { get; set; }
     public AiSpeechAssistantDto Assistant { get; set; }
     public AiSpeechAssistantKnowledgeDto Knowledge { get; set; }
     public AiSpeechAssistantTimer Timer { get; set; }
     public List<AiSpeechAssistantFunctionCall> FunctionCalls { get; set; }
     public List<string> CandidateCustomerIds { get; set; } = [];
-    public List<string> MatchedCustomerIds { get; set; } = [];
 
     // Routing
     public int? ForwardAssistantId { get; set; }
