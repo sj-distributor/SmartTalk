@@ -20,6 +20,9 @@ public interface ISalesJobProcessJobService : IScopedDependency
     [Semaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems)]
     Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
 
+    [Semaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems)]
+    Task RefreshCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
 
     Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
@@ -27,6 +30,8 @@ public interface ISalesJobProcessJobService : IScopedDependency
 
 public class SalesJobProcessJobService : ISalesJobProcessJobService
 {
+    private const int CustomerItemsRefreshBatchSize = 10;
+
     private readonly ICrmClient _crmClient;
     private readonly SalesSetting _salesSetting;
     private readonly ISalesService _salesService;
@@ -56,42 +61,69 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         Log.Information("Start full customer items cache refresh...");
 
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken).ConfigureAwait(false);
-        var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).ToList();
+        var allSoldToIds = NormalizeSoldToIds(allSales.Select(s => s.Name));
 
-        foreach (var soldToId in allSoldToIds)
+        foreach (var soldToIdBatch in allSoldToIds.Chunk(CustomerItemsRefreshBatchSize))
         {
+            var batch = soldToIdBatch.ToList();
             _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(
-                x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None),
+                x => x.RefreshCustomerItemsCacheBySoldToIdsAsync(batch, CancellationToken.None),
                 HangfireConstants.InternalHostingCaCheKnowledgeVariable);
         }
 
-        Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
+        Log.Information(
+            "All customer items cache refresh jobs scheduled. CustomerCount: {CustomerCount}, JobCount: {JobCount}, BatchSize: {BatchSize}",
+            allSoldToIds.Count,
+            (int)Math.Ceiling(allSoldToIds.Count / (double)CustomerItemsRefreshBatchSize),
+            CustomerItemsRefreshBatchSize);
     }
 
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
+        await RefreshCustomerItemsCacheBySoldToIdsAsync([soldToId], cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task RefreshCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
         try
         {
-            var ids = soldToId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
-            Log.Information("Refreshing cache for soldToId: {SoldToId}", ids);
-
-            for (var index = 0; index < ids.Count; index++)
+            var ids = NormalizeSoldToIds(soldToIds);
+            if (ids.Count == 0)
             {
-                var id = ids[index];
-                var items = await _salesService.BuildCustomerItemsStringAsync([id], cancellationToken).ConfigureAwait(false);
-                var deliveryProgress = await _salesService.BuildCustomerDeliveryProgressStringAsync([id], cancellationToken).ConfigureAwait(false);
-                var shouldSave = index == ids.Count - 1;
-
-                await _salesDataProvider.UpsertCustomerItemsCacheAsync(id, items, false, cancellationToken).ConfigureAwait(false);
-                await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, shouldSave, cancellationToken).ConfigureAwait(false);
+                Log.Warning("RefreshCustomerItemsCacheBySoldToIdsAsync called with empty soldToIds");
+                return;
             }
 
-            Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
+            Log.Information("Refreshing customer items cache for soldToIds: {SoldToIds}", ids);
+
+            var customerItems = await _salesService.BuildCustomerItemsStringsAsync(ids, cancellationToken).ConfigureAwait(false);
+
+            for (var i = 0; i < ids.Count; i++)
+            {
+                var id = ids[i];
+                var forceSave = i == ids.Count - 1;
+                var itemsString = customerItems.GetValueOrDefault(id) ?? string.Empty;
+                var deliveryProgress = await _salesService.BuildCustomerDeliveryProgressStringAsync([id], cancellationToken).ConfigureAwait(false);
+
+                await _salesDataProvider.UpsertCustomerItemsCacheAsync(id, itemsString, false, cancellationToken).ConfigureAwait(false);
+                await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, forceSave, cancellationToken).ConfigureAwait(false);
+            }
+
+            Log.Information("Customer items cache refreshed successfully for soldToIds: {SoldToIds}", ids);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to refresh cache for soldToId: {SoldToId}", soldToId);
+            Log.Error(ex, "Failed to refresh customer items cache for soldToIds: {SoldToIds}", soldToIds);
         }
+    }
+
+    private static List<string> NormalizeSoldToIds(IEnumerable<string> soldToIds)
+    {
+        return (soldToIds ?? Enumerable.Empty<string>())
+            .SelectMany(x => (x ?? string.Empty).Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public async Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken)

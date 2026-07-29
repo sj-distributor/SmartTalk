@@ -3,6 +3,8 @@ namespace SmartTalk.Messages.Dto.Sales;
 public class GetOrderHistoryByCustomerRequestDto
 {
     public string CustomerNumber { get; set; }
+
+    public List<string> CustomerNumbers { get; set; }
 }
 
 public class GetOrderHistoryByCustomerResponseDto : SalesResponseDto
@@ -12,6 +14,8 @@ public class GetOrderHistoryByCustomerResponseDto : SalesResponseDto
 
 public class SalesOrderHistoryDto
 {
+    public string CustomerNumber { get; set; }
+    
     public string InvoiceNumber { get; set; }
     
     public string MaterialNumber { get; set; }
