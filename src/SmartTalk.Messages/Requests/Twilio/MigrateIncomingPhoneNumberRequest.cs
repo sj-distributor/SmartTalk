@@ -13,6 +13,9 @@ public class MigrateIncomingPhoneNumberRequest : IRequest
     public string LosingAccountSid { get; set; }
 
     [Required]
+    public string LosingAccountAuthToken { get; set; }
+    
+    [Required]
     public string GainingAccountSid { get; set; }
 
     public string BundleSid { get; set; }

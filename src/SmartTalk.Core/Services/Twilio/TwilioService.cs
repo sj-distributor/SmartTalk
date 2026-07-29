@@ -71,22 +71,13 @@ public class TwilioService : ITwilioService
 
     public async Task<MigrateIncomingPhoneNumberResponse> MigrateIncomingPhoneNumberAsync(MigrateIncomingPhoneNumberRequest request, CancellationToken cancellationToken = default)
     {
-        var credentialAccountSid = _twilioSettings.AccountSid;
-        var authToken = _twilioSettings.AuthToken;
-
-        if (string.IsNullOrWhiteSpace(credentialAccountSid) || string.IsNullOrWhiteSpace(authToken))
-            throw new InvalidOperationException("Twilio credentials are not configured.");
-
         var losingAccountSid = request.LosingAccountSid;
+        var authToken = request.LosingAccountAuthToken;
         var gainingAccountSid = request.GainingAccountSid;
-
-        Log.Information(
-            "Starting Twilio number migration. PhoneNumberSid: {PhoneNumberSid}, LosingAccountSid: {LosingAccountSid}, GainingAccountSid: {GainingAccountSid}, CredentialAccountSid: {CredentialAccountSid}",
-            request.PhoneNumberSid, losingAccountSid, gainingAccountSid, credentialAccountSid);
 
         var requestUrl =
             $"https://api.twilio.com/2010-04-01/Accounts/{Uri.EscapeDataString(losingAccountSid)}/IncomingPhoneNumbers/{Uri.EscapeDataString(request.PhoneNumberSid.Trim())}.json";
-        var authValue = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{credentialAccountSid}:{authToken}"));
+        var authValue = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{losingAccountSid}:{authToken}"));
 
         var headers = new Dictionary<string, string>
         {
