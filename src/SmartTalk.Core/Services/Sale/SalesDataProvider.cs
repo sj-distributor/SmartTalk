@@ -87,11 +87,14 @@ public class SalesDataProvider : ISalesDataProvider
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var trimmedAssistantName = assistantName.Trim();
-        if (!filters.Contains(trimmedAssistantName, StringComparer.OrdinalIgnoreCase))
-            filters.Add(trimmedAssistantName);
-
         var caches = await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, filters, cancellationToken).ConfigureAwait(false);
+        var trimmedAssistantName = assistantName.Trim();
+        if (caches.Count > 0)
+            return LimitCustomerItemsCaches(caches, trimmedAssistantName);
+
+        if (!filters.Contains(trimmedAssistantName, StringComparer.OrdinalIgnoreCase))
+            caches = await GetKnowledgeVariableCachesByFiltersAsync(CustomerItemsCacheKey, [trimmedAssistantName], cancellationToken).ConfigureAwait(false);
+
         return LimitCustomerItemsCaches(caches, trimmedAssistantName);
     }
 
