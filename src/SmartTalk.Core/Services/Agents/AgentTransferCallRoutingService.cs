@@ -33,11 +33,8 @@ public sealed class AgentTransferCallRoutingService : IAgentTransferCallRoutingS
 
     public async Task<TimeZoneInfo> ResolveTimeZoneAsync(Agent agent, CancellationToken cancellationToken = default)
     {
-        if (!string.IsNullOrWhiteSpace(agent.Timezone))
-            return ResolveTimeZoneOrDefault(agent.Timezone);
-
         var store = await _posDataProvider.GetPosStoreByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
-
+        
         return ResolveTimeZoneOrDefault(store?.Timezone);
     }
 
