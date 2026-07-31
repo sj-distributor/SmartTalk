@@ -48,6 +48,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
     private readonly IFfmpegService _ffmpegService;
     private readonly IPosUtilService _posUtilService;
+    private readonly ISalesCustomerMatchService _salesCustomerMatchService;
     private readonly IRealtimeAiService _realtimeAiService;
     private readonly RealtimeAiTtsConfigResolver _ttsConfigResolver;
     private readonly IMiniMaxTtsSynthesizer _miniMaxTtsSynthesizer;
@@ -71,6 +72,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
+        ISalesCustomerMatchService salesCustomerMatchService,
         IRealtimeAiService realtimeAiService,
         RealtimeAiTtsConfigResolver ttsConfigResolver,
         IMiniMaxTtsSynthesizer miniMaxTtsSynthesizer,
@@ -86,6 +88,7 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
         _ffmpegService = ffmpegService;
         _posUtilService = posUtilService;
+        _salesCustomerMatchService = salesCustomerMatchService;
         _realtimeAiService = realtimeAiService;
         _ttsConfigResolver = ttsConfigResolver;
         _miniMaxTtsSynthesizer = miniMaxTtsSynthesizer;

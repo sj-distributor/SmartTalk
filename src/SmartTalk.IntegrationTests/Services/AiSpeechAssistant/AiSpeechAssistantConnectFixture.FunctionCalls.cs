@@ -19,6 +19,7 @@ using SmartTalk.Core.Settings.MiniMax;
 using SmartTalk.IntegrationTests.Mocks;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -28,6 +29,91 @@ namespace SmartTalk.IntegrationTests.Services.AiSpeechAssistant;
 
 public partial class AiSpeechAssistantConnectFixture
 {
+    [Fact]
+    public async Task ShouldReplaceCustomerItemsPromptAfterSilentStoreNamePrefetch()
+    {
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var agent = new Agent { Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant };
+            await repository.InsertAsync(agent);
+
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "1001/1002", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+
+            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id, Prompt = "Items:#{customer_items}End.", IsActive = true, Version = "1.0"
+            });
+            await repository.InsertAsync(new Core.Domain.Sales.AiSpeechAssistantKnowledgeVariableCache
+            {
+                CacheKey = "customer_items",
+                Filter = "1001",
+                CacheValue = "DYNAMIC_STORE_ITEM_MARKER"
+            });
+        });
+
+        var crmClient = Substitute.For<ICrmClient>();
+        crmClient.GetCustomerIdsByShopNameAsync("Lucky Store", Arg.Any<CancellationToken>())
+            .Returns(new List<GetCustomerIdByShopNameResponseDto> { new() { SapId = "1001" } });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_CUSTOMER_ITEMS_PREFETCH", streamSid = "MZ_CUSTOMER_ITEMS_PREFETCH" }
+        }));
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new { @event = "stop" }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            type = "response.done",
+            response = new
+            {
+                output = new[]
+                {
+                    new
+                    {
+                        type = "function_call",
+                        name = "query_customer_items_by_store_name",
+                        call_id = "call_customer_items_prefetch",
+                        arguments = "{\"store_name\":\"Lucky Store\",\"prefetch_only\":true}"
+                    }
+                }
+            }
+        }));
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber, To = TestDidNumber, Host = TestHost, TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            builder.RegisterInstance(crmClient).As<ICrmClient>();
+            openaiWs.Register(builder);
+        });
+
+        var sentMessages = openaiWs.SentMessages.Select(b => Encoding.UTF8.GetString(b)).ToList();
+
+        sentMessages.ShouldContain(message => message.Contains("Items: End."));
+        sentMessages.ShouldContain(message => message.Contains("Items:DYNAMIC_STORE_ITEM_MARKEREnd."));
+        sentMessages.ShouldContain(message => message.Contains("Customer item knowledge for the confirmed store has been updated"));
+        sentMessages.ShouldNotContain(message => message.Contains("\"type\":\"response.create\""));
+    }
+
     [Fact]
     public async Task ShouldProcessConfirmOrder_WhenFunctionCallReceived()
     {
