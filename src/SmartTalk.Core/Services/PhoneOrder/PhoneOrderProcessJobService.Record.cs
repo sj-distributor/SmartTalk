@@ -452,13 +452,14 @@ public partial class PhoneOrderProcessJobService
             "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
             "4. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。\n" +
             "5. 「客人下單內容」不是必填項。如果錄音中沒有任何客戶下單行為，則寫「客人下單內容：無明確下單」。\n" +
-            "6. 【重要】如果通話中同時包含投訴/反饋和新下單內容，兩者必須獨立分析和記錄。投訴內容的存在不影響下單內容的識別與提取。\n";
+            "6. 【重要】如果通話中同時包含投訴/反饋和新下單內容，兩者必須獨立分析和記錄。投訴內容的存在不影響下單內容的識別與提取。\n"+
+            "7. 【重要】如果錄音內容太短、為空，或無任何有效語音、客戶未說話，只需要在內容摘要處中说明“未识别有效录音”。";
 
         List<ChatMessage> messages =
         [
             new SystemChatMessage(recordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。請仔細聆聽錄音中所有下單內容，包括蔬菜及其他非肉類產品。只有錄音中完全沒有任何下單行為時，才寫「客人下單內容：無明確下單」。")
+            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。")
         ];
 
         return messages;
