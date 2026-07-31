@@ -291,8 +291,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
     
     public async Task RefreshKnowledgeDetailsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
     {
-        if (companyId <= 0)
-            return;
+        if (companyId <= 0) return;
 
         Log.Information("[KnowledgeDetailSync] Start. CompanyId={CompanyId}", companyId);
         var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: companyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
