@@ -207,21 +207,13 @@ public partial class PhoneOrderService
         }
 
         var recordContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
-        var transcription = await _speechToTextService.SpeechToTextAsync(
-            recordContent,
-            fileType: TranscriptionFileType.Wav,
-            responseFormat: TranscriptionResponseFormat.Text,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
-        var recordName = $"{Guid.NewGuid():N}.wav";
 
         var record = new PhoneOrderRecord
         {
             SessionId = Guid.NewGuid().ToString("N"),
             AgentId = command.AgentId,
             AssistantId = command.AssistantId,
-            Language = SelectLanguageEnum(detection.Language),
+            Language = TranscriptionLanguage.Chinese,
             CreatedDate = command.CallTime == default ? DateTimeOffset.UtcNow : command.CallTime,
             Status = PhoneOrderRecordStatus.Recieved,
             OrderRecordType = command.OrderRecordType,
@@ -237,9 +229,11 @@ public partial class PhoneOrderService
             return;
         }
 
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordContent, recordName, detection.Language, SpeechMaticsJobScenario.AixvolinkReleased, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Transcription, cancellationToken).ConfigureAwait(false);
 
-        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+        _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(
+            x => x.HandleAixvolinkRecordDirectAsync(record.Id, cancellationToken),
+            HangfireConstants.InternalHostingAixvolinkPhoneOrder);
     }
 
     private async Task<bool> CheckOrderExistAsync(int agentId, DateTimeOffset createdDate, CancellationToken cancellationToken)
