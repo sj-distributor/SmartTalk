@@ -98,6 +98,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         _phoneOrderUtilService = phoneOrderUtilService;
         _phoneOrderDataProvider = phoneOrderDataProvider;
         _restaurantDataProvider = restaurantDataProvider;
+        _backgroundJobClient = backgroundJobClient;
         _speechMaticsDataProvider = speechMaticsDataProvider;
         _openAiSettings = openAiSettings;
         _transcriptionCallbackSetting = transcriptionCallbackSetting;
