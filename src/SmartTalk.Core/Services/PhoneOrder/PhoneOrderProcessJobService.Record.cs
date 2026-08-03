@@ -177,6 +177,21 @@ public partial class PhoneOrderProcessJobService
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
         var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
+        if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
+        {
+            try
+            {
+                var complaintSection = await BuildComplaintFeedbackAnalysisSectionAsync(record.TranscriptionText, aiSpeechAssistant, cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(complaintSection))
+                    record.TranscriptionText = $"{record.TranscriptionText}\n\n{complaintSection}";
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Complaint feedback analysis failed for record {RecordId}. The record will be processed without complaint analysis.", record.Id);
+            }
+        }
         
         var reports = new List<PhoneOrderRecordReport>();
 
@@ -420,7 +435,6 @@ public partial class PhoneOrderProcessJobService
                   "來電號碼：#{call_from}\n\n " +
                   "內容摘要:xxx \n\n " +
                   "客人情感與情緒(无法判断时默认为平缓): xxx \n\n " +
-                  "待辦事件: \n1.xxx\n2.xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
             .Replace("#{call_from}", callFrom ?? "")
@@ -437,13 +451,15 @@ public partial class PhoneOrderProcessJobService
             "2. 禁止輸出「好的」、「請稍等」、「我會」、「我將」、「以下是」、「正在生成」等過渡語。\n" +
             "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
             "4. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。\n" +
-            "5. 「客人下單內容」不是必填項。只有在錄音中明確聽到客戶下單且包含可識別的物料，才可以輸出具體下單內容。\n";
+            "5. 「客人下單內容」不是必填項。如果錄音中沒有任何客戶下單行為，則寫「客人下單內容：無明確下單」。\n" +
+            "6. 【重要】如果通話中同時包含投訴/反饋和新下單內容，兩者必須獨立分析和記錄。投訴內容的存在不影響下單內容的識別與提取。\n"+
+            "7. 【重要】如果錄音內容太短、為空，或無任何有效語音、客戶未說話，只需要在內容摘要處中说明“未识别有效录音”。";
 
         List<ChatMessage> messages =
         [
             new SystemChatMessage(recordAnalyzePrompt),
             new UserChatMessage(ChatMessageContentPart.CreateInputAudioPart(audioData, ChatInputAudioFormat.Wav)),
-            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。沒有明確下單時，請寫「客人下單內容：無明確下單」")
+            new UserChatMessage("請根據錄音直接輸出最終分析報告正文，不要輸出確認或等待語。")
         ];
 
         return messages;
@@ -475,6 +491,7 @@ public partial class PhoneOrderProcessJobService
     {
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
+        var isAixvolinkRecord = string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase);
         var soldToIds = new List<string>(); 
         if (!string.IsNullOrEmpty(aiSpeechAssistant.Name))
              soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -483,19 +500,39 @@ public partial class PhoneOrderProcessJobService
             ? await GetCustomerHistoryItemsBySoldToIdAsync(soldToIds, cancellationToken).ConfigureAwait(false)
             : [];
 
+        SalesCustomerMatchResult aixvolinkPreCustomerMatch = null;
+        if (isAixvolinkRecord)
+        {
+            aixvolinkPreCustomerMatch = await ResolveAixvolinkCustomerMatchAsync(record, string.Empty, cancellationToken).ConfigureAwait(false);
+            if (aixvolinkPreCustomerMatch.SoldToIds.Count > 0)
+            {
+                historyItems = await GetCustomerHistoryItemsBySoldToIdAsync(aixvolinkPreCustomerMatch.SoldToIds, cancellationToken).ConfigureAwait(false);
+                Log.Information(
+                    "Preloaded AIXVOLINK customer history items before order extraction. RecordId={RecordId}, SoldToIds={SoldToIds}, HistoryItemCount={HistoryItemCount}",
+                    record.Id,
+                    aixvolinkPreCustomerMatch.SoldToIds,
+                    historyItems.Count);
+            }
+        }
+
         var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken).ConfigureAwait(false); 
         if (!extractedOrders.Any()) return;
 
         var pacificZone = PstTimeZone.Get();
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
+        var businessKeyCounters = new Dictionary<string, int>();
 
         foreach (var storeOrder in extractedOrders)
         { 
-            var customerMatch = await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
+            var businessKeySequence = GetNextPhoneOrderPushTaskBusinessKeySequence(storeOrder, businessKeyCounters);
+            var businessKey = BuildPhoneOrderPushTaskBusinessKey(storeOrder, businessKeySequence);
+            var customerMatch = isAixvolinkRecord && aixvolinkPreCustomerMatch?.SoldToIds.Count > 0
+                ? aixvolinkPreCustomerMatch
+                : await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
             var soldToId = customerMatch.SoldToId;
             var matchedSoldToIds = customerMatch.SoldToIds.Count > 0
                 ? customerMatch.SoldToIds
-                : string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase)
+                : isAixvolinkRecord
                     ? []
                     : soldToIds;
 
@@ -507,7 +544,7 @@ public partial class PhoneOrderProcessJobService
 
             if (storeOrder.IsDeleteWholeOrder && !storeOrder.Orders.Any())
             {
-                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, matchedSoldToIds, pacificZone, pacificNow, cancellationToken).ConfigureAwait(false);
+                await CreateDeleteOrderTaskAsync(record, storeOrder, soldToId, matchedSoldToIds, pacificZone, pacificNow, $"DELETE_{businessKey}", cancellationToken).ConfigureAwait(false);
                 continue;
             }
             
@@ -516,10 +553,31 @@ public partial class PhoneOrderProcessJobService
 
             var draftOrder = CreateDraftOrder(record, storeOrder, soldToId, matchedSoldToIds, customerMatch.SalesGroup, aiSpeechAssistant, pacificZone, pacificNow, storeOrder.IsUndoCancel);
 
-            await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, cancellationToken).ConfigureAwait(false);
+            await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, businessKey, cancellationToken).ConfigureAwait(false);
         }
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static int GetNextPhoneOrderPushTaskBusinessKeySequence(ExtractedOrderDto storeOrder, Dictionary<string, int> counters)
+    {
+        var baseKey = BuildPhoneOrderPushTaskBusinessKeyBase(storeOrder);
+        counters.TryGetValue(baseKey, out var current);
+
+        var next = current + 1;
+        counters[baseKey] = next;
+
+        return next;
+    }
+
+    private static string BuildPhoneOrderPushTaskBusinessKey(ExtractedOrderDto storeOrder, int sequence)
+    {
+        return $"{BuildPhoneOrderPushTaskBusinessKeyBase(storeOrder)}_{sequence}";
+    }
+
+    private static string BuildPhoneOrderPushTaskBusinessKeyBase(ExtractedOrderDto storeOrder)
+    {
+        return $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}";
     }
 
     private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken) 
@@ -593,7 +651,10 @@ public partial class PhoneOrderProcessJobService
             "4. **如果客戶分析文本中沒有任何可識別的下單信息，請返回：{ \"stores\": [] }。不得臆造或猜測物料。**\n" +
             "5. 請務必完整提取報告中每一個提到的物料，如果没有匹配上歷史物料列表的物料，不知道它的materialNumber，那也必須保留該物料的quantity以及name。\n" +
             "6. 生成的json請不要重複物料名\n" +
-            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 IsTargetQuantity=true。";
+            "7. 如果客戶說“改成只要1箱”但未提到之前下了多少，仍然要標記 IsTargetQuantity=true。\n" +
+            "8. 【重要】客戶分析報告中可能同時包含投訴信息和下單信息。投訴文本（如「投訴信息」、「投诉对象」等章節）中的物料名稱僅為投訴對象，不是新下單，不得從投訴章節提取訂單。\n" +
+            "9. 【重要】訂單信息應從報告的「內容摘要」、「待辦事項」、「客戶下單內容」等章節提取。即使「客戶下單內容」寫了「無明確下單」，如果「內容摘要」中提到了客戶下單的具體品項（如「客戶下單一顆西蘭花」），仍然需要將這些品項提取到 orders 中。\n" +
+            "10. 蔬菜、水果、乾貨等非肉類產品同樣屬於可識別物料，必須提取。";
         Log.Information("Sending prompt to GPT: {Prompt}", systemPrompt);
 
         var messages = new List<ChatMessage>
@@ -793,12 +854,18 @@ public partial class PhoneOrderProcessJobService
             };
         }
 
-        var customerLookupPhoneNumbers = GetAixvolinkCustomerLookupNumbers(record);
-        var matched = await _salesCustomerMatchService
-            .MatchCustomerAsync(customerLookupPhoneNumbers[0], customerLookupPhoneNumbers[1], storeOrder.StoreName, customerLookupPhoneNumbers, cancellationToken)
-            .ConfigureAwait(false);
+        return await ResolveAixvolinkCustomerMatchAsync(record, storeOrder.StoreName, cancellationToken).ConfigureAwait(false);
+    }
 
-        return matched;
+    private async Task<SalesCustomerMatchResult> ResolveAixvolinkCustomerMatchAsync(
+        PhoneOrderRecord record,
+        string storeName,
+        CancellationToken cancellationToken)
+    {
+        var customerLookupPhoneNumbers = GetAixvolinkCustomerLookupNumbers(record);
+        return await _salesCustomerMatchService
+            .MatchCustomerAsync(customerLookupPhoneNumbers[0], customerLookupPhoneNumbers[1], storeName, customerLookupPhoneNumbers, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static List<string> GetAixvolinkCustomerLookupNumbers(PhoneOrderRecord record)
@@ -937,7 +1004,7 @@ public partial class PhoneOrderProcessJobService
         return result;
     }
     
-    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, TimeZoneInfo pacificZone, DateTime pacificNow, CancellationToken cancellationToken)
+    private async Task CreateDeleteOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, string soldToId, List<string> soldToIds, TimeZoneInfo pacificZone, DateTime pacificNow, string businessKey, CancellationToken cancellationToken)
     {
         var pacificDeliveryDate = storeOrder.DeliveryDate != default ? TimeZoneInfo.ConvertTimeFromUtc(storeOrder.DeliveryDate, pacificZone) : pacificNow.AddDays(1);
         var req = new DeleteAiOrderRequestDto
@@ -954,16 +1021,16 @@ public partial class PhoneOrderProcessJobService
             ParentRecordId = record.ParentRecordId,
             AssistantId = record.AssistantId ?? 0,
             TaskType = PhoneOrderPushTaskType.DeleteOrder,
-            BusinessKey = $"DELETE_{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            BusinessKey = businessKey,
             RequestJson = JsonSerializer.Serialize(req, ReadableJsonSerializerOptions),
             Status = PhoneOrderPushTaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
-        await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderPushTaskIfNotExistsAsync(task, cancellationToken).ConfigureAwait(false);
     }
     
-    private async Task CreateGenerateOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
+    private async Task CreateGenerateOrderTaskAsync(PhoneOrderRecord record, ExtractedOrderDto storeOrder, GenerateAiOrdersRequestDto request, string businessKey, CancellationToken cancellationToken)
     {
         var task = new PhoneOrderPushTask
         {
@@ -971,13 +1038,58 @@ public partial class PhoneOrderProcessJobService
             ParentRecordId = record.ParentRecordId,
             AssistantId = record.AssistantId ?? 0,
             TaskType = PhoneOrderPushTaskType.GenerateOrder,
-            BusinessKey = $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}",
+            BusinessKey = businessKey,
             RequestJson = JsonSerializer.Serialize(request, ReadableJsonSerializerOptions),
             Status = PhoneOrderPushTaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
+        await AddPhoneOrderPushTaskIfNotExistsAsync(task, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task AddPhoneOrderPushTaskIfNotExistsAsync(PhoneOrderPushTask task, CancellationToken cancellationToken)
+    {
+        var exists = await _salesDataProvider.PhoneOrderPushTaskExistsAsync(task.RecordId, task.BusinessKey, cancellationToken).ConfigureAwait(false);
+
+        if (exists)
+        {
+            Log.Information(
+                "PhoneOrderPushTask already exists, skip creating. RecordId={RecordId}, BusinessKey={BusinessKey}, TaskType={TaskType}",
+                task.RecordId,
+                task.BusinessKey,
+                task.TaskType);
+            return;
+        }
+
+        var legacyBusinessKey = GetLegacyPhoneOrderPushTaskBusinessKey(task.BusinessKey);
+        if (!string.IsNullOrEmpty(legacyBusinessKey))
+        {
+            var legacyExists = await _salesDataProvider.PhoneOrderPushTaskExistsAsync(task.RecordId, legacyBusinessKey, cancellationToken).ConfigureAwait(false);
+
+            if (legacyExists)
+            {
+                Log.Information(
+                    "Legacy PhoneOrderPushTask already exists, skip creating sequenced task. RecordId={RecordId}, BusinessKey={BusinessKey}, LegacyBusinessKey={LegacyBusinessKey}, TaskType={TaskType}",
+                    task.RecordId,
+                    task.BusinessKey,
+                    legacyBusinessKey,
+                    task.TaskType);
+                return;
+            }
+        }
+
         await _salesDataProvider.AddPhoneOrderPushTaskAsync(task, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string GetLegacyPhoneOrderPushTaskBusinessKey(string businessKey)
+    {
+        var sequenceSeparatorIndex = businessKey.LastIndexOf('_');
+        if (sequenceSeparatorIndex < 0) return null;
+
+        var sequence = businessKey[(sequenceSeparatorIndex + 1)..];
+        if (sequence != "1") return null;
+
+        return businessKey[..sequenceSeparatorIndex];
     }
 
     private async Task RefineOrderByAiAsync(ExtractedOrderDto storeOrder, string soldToId, CancellationToken cancellationToken)

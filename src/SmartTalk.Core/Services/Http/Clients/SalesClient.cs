@@ -27,6 +27,8 @@ public interface ISalesClient : IScopedDependency
     Task<QueryGoodsStatusResponseDto> QueryGoodsStatusAsync(QueryGoodsStatusRequestDto request, CancellationToken cancellationToken);
 
     Task<GetCustomerAiQuotationResponseDto> GetCustomerAiQuotationAsync(GetCustomerAiQuotationRequestDto request, CancellationToken cancellationToken);
+    
+    Task<GetOrderInformationByCustomerIdResponseDto> GetOrderInformationByCustomerIdAsync(GetOrderInformationByCustomerIdRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -152,5 +154,15 @@ public class SalesClient : ISalesClient
         var url = $"{_salesSetting.BaseUrl}/api/CustomerInfo/GetCustomerAiQuotation";
 
         return await _httpClientFactory.PostAsJsonAsync<GetCustomerAiQuotationResponseDto>(url, request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetOrderInformationByCustomerIdResponseDto> GetOrderInformationByCustomerIdAsync(GetOrderInformationByCustomerIdRequestDto request, CancellationToken cancellationToken)
+    {
+        if (request?.CustomerIds == null || request.CustomerIds.Count == 0)
+            throw new ArgumentException("CustomerIds cannot be null or empty.");
+
+        var url = $"{_salesSetting.BaseUrl}/api/SmartalkAI/GetOrderInformationByCustomerId";
+
+        return await _httpClientFactory.PostAsJsonAsync<GetOrderInformationByCustomerIdResponseDto>(url, request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
