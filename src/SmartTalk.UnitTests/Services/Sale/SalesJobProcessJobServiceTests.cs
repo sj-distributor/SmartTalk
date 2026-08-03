@@ -50,7 +50,7 @@ public class SalesJobProcessJobServiceTests
     }
 
     [Fact]
-    public async Task RefreshCustomerItemsCacheBySoldToIdsAsync_ShouldBuildOnceAndUpsertEachCustomerCache()
+    public async Task RefreshCustomerItemsCacheBySoldToIdsAsync_ShouldBuildOnceAndUpsertCustomerCachesInBatch()
     {
         _salesService.BuildCustomerItemsStringsAsync(
                 Arg.Is<List<string>>(x => x.SequenceEqual(new[] { "00001", "00002" })),
@@ -69,8 +69,12 @@ public class SalesJobProcessJobServiceTests
             Arg.Is<List<string>>(x => x.SequenceEqual(new[] { "00001", "00002" })),
             Arg.Any<CancellationToken>());
 
-        await _salesDataProvider.Received(1).UpsertCustomerItemsCacheAsync("00001", "items-1", false, Arg.Any<CancellationToken>());
-        await _salesDataProvider.Received(1).UpsertCustomerItemsCacheAsync("00002", "items-2", true, Arg.Any<CancellationToken>());
+        await _salesDataProvider.Received(1).UpsertCustomerItemsCachesAsync(
+            Arg.Is<Dictionary<string, string>>(x =>
+                x.Count == 2 &&
+                x["00001"] == "items-1" &&
+                x["00002"] == "items-2"),
+            Arg.Any<CancellationToken>());
     }
 
     private SalesJobProcessJobService BuildService()

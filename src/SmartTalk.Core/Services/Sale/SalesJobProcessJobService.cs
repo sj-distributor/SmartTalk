@@ -84,12 +84,11 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
             var customerItems = await _salesService.BuildCustomerItemsStringsAsync(ids, cancellationToken).ConfigureAwait(false);
 
-            for (var i = 0; i < ids.Count; i++)
-            {
-                var forceSave = i == ids.Count - 1;
-                var itemsString = customerItems.GetValueOrDefault(ids[i]) ?? string.Empty;
-                await _salesDataProvider.UpsertCustomerItemsCacheAsync(ids[i], itemsString, forceSave, cancellationToken).ConfigureAwait(false);
-            }
+            var cacheItems = ids.ToDictionary(
+                x => x,
+                x => customerItems.GetValueOrDefault(x) ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+            await _salesDataProvider.UpsertCustomerItemsCachesAsync(cacheItems, cancellationToken).ConfigureAwait(false);
 
             Log.Information("Customer items cache refreshed successfully for soldToIds: {SoldToIds}", ids);
         }
