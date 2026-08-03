@@ -10,6 +10,10 @@ public partial class AiSpeechAssistantConnectService
     {
         if (_ctx.IsTransfer) return null;
 
+        if (_ctx.AgentTransferCallConfigs.Count > 0)
+            _ctx.HumanContactPhone = _agentTransferCallRoutingService.SelectTransferCallNumber(
+                _ctx.AgentTransferCallConfigs, _clock.Now, _ctx.TimeZone);
+
         if (string.IsNullOrEmpty(_ctx.HumanContactPhone))
         {
             Log.Information("[AiAssistant] Transfer unavailable, no human contact, CallSid: {CallSid}", _ctx.CallSid);
