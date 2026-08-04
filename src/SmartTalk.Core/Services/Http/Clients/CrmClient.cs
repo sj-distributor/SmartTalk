@@ -182,10 +182,7 @@ public class CrmClient : ICrmClient
             {
                 try
                 {
-                    response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(
-                        pagedUrl,
-                        cancellationToken: cancellationToken,
-                        headers: headers).ConfigureAwait(false);
+                    response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
 
                     if (response?.Data is { Count: > 0 })
                         break;
@@ -199,8 +196,7 @@ public class CrmClient : ICrmClient
 
                     break;
                 }
-                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested && retry
-                                                    < maxRetry)
+                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested && retry < maxRetry)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
                 }
