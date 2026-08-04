@@ -7,15 +7,17 @@ namespace SmartTalk.UnitTests.Services.PhoneOrder;
 public class PhoneOrderProcessJobServiceSummaryRoutingTests
 {
     [Theory]
-    [InlineData(4.99, true)]
-    [InlineData(5, true)]
-    [InlineData(5.01, false)]
-    public void ShouldUseFixedInvalidSummary_ShouldApplyDurationRule(
+    [InlineData(4.99, false, true)]
+    [InlineData(5, false, true)]
+    [InlineData(5.01, false, false)]
+    [InlineData(90, true, true)]
+    public void ShouldUseFixedInvalidSummary_ShouldApplyDurationOrSingleSpeakerRule(
         double durationSeconds,
+        bool hasExactlyOneSpeaker,
         bool expected)
     {
         PhoneOrderProcessJobService
-            .ShouldUseFixedInvalidSummary(durationSeconds)
+            .ShouldUseFixedInvalidSummary(durationSeconds, hasExactlyOneSpeaker)
             .ShouldBe(expected);
     }
 
@@ -23,7 +25,7 @@ public class PhoneOrderProcessJobServiceSummaryRoutingTests
     public void ShouldUseFixedInvalidSummary_ShouldUseOriginalSummaryWhenDurationIsUnknown()
     {
         PhoneOrderProcessJobService
-            .ShouldUseFixedInvalidSummary(null)
+            .ShouldUseFixedInvalidSummary(null, false)
             .ShouldBeFalse();
     }
 

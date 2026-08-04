@@ -4,6 +4,7 @@ using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Ffmpeg;
@@ -65,23 +66,56 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     }
 
     [Fact]
-    public async Task HandleReleasedDiarizedTranscribeAsync_LongSingleSpeakerOrder_ShouldUseOriginalSummaryWithoutOptimization()
+    public async Task HandleReleasedDiarizedTranscribeAsync_AboveThresholdSingleSpeakerCall_ShouldCompleteWithFixedSummary()
     {
-        var fixture = new FlowFixture("00:01:30", SingleSpeakerOrderTranscription);
+        var fixture = new FlowFixture("00:00:07.92", SingleSpeakerGreetingTranscription);
 
         await fixture.Service.HandleReleasedDiarizedTranscribeAsync(
             fixture.Record.Id,
             CancellationToken.None);
 
-        fixture.Service.OriginalSummaryCallCount.ShouldBe(1);
-        fixture.Record.Duration.ShouldBe(90);
+        fixture.Service.OriginalSummaryCallCount.ShouldBe(0);
+        fixture.Record.Duration.ShouldBe(7.92);
         fixture.Record.Status.ShouldBe(PhoneOrderRecordStatus.Sent);
-        fixture.Record.TranscriptionText.ShouldBe(TestPhoneOrderProcessJobService.OriginalSummary);
+        fixture.Record.Scenario.ShouldBe(DialogueScenarios.InvalidCall);
+        fixture.Record.IsCompleted.ShouldBeTrue();
 
         await fixture.PhoneOrderService.Received(1).ProcessPhoneOrderDiarizedTranscriptionAsync(
             Arg.Any<List<PhoneOrderDiarizedSpeakInfoDto>>(),
             fixture.Record,
             false,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleReleasedSpeechMaticsCallBackAsync_AboveThresholdSingleSpeakerCall_ShouldCompleteWithFixedSummary()
+    {
+        const string jobId = "speechmatics-job-42";
+        var fixture = new FlowFixture("00:00:07.92", SingleSpeakerGreetingTranscription);
+
+        fixture.SpeechMaticsDataProvider
+            .GetSpeechMaticsJobAsync(jobId, Arg.Any<CancellationToken>())
+            .Returns(new SpeechMaticsJob
+            {
+                JobId = jobId,
+                CallbackMessage = SingleSpeakerSpeechMaticsCallback
+            });
+        fixture.PhoneOrderDataProvider
+            .GetPhoneOrderRecordByTranscriptionJobIdAsync(jobId, Arg.Any<CancellationToken>())
+            .Returns(fixture.Record);
+
+        await fixture.Service.HandleReleasedSpeechMaticsCallBackAsync(jobId, CancellationToken.None);
+
+        fixture.Service.OriginalSummaryCallCount.ShouldBe(0);
+        fixture.Record.Duration.ShouldBe(7.92);
+        fixture.Record.Status.ShouldBe(PhoneOrderRecordStatus.Sent);
+        fixture.Record.Scenario.ShouldBe(DialogueScenarios.InvalidCall);
+        fixture.Record.IsCompleted.ShouldBeTrue();
+
+        await fixture.PhoneOrderService.Received(1).ExtractPhoneOrderRecordAiMenuAsync(
+            Arg.Any<List<SmartTalk.Messages.Dto.SpeechMatics.SpeechMaticsSpeakInfoDto>>(),
+            fixture.Record,
+            Arg.Any<byte[]>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -168,11 +202,23 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         }
         """;
 
-    private const string SingleSpeakerOrderTranscription = """
+    private const string SingleSpeakerSpeechMaticsCallback = """
         {
-          "segments": [
-            { "start": 4.2, "end": 7.0, "speaker": "speaker_0", "text": "I would like two cases of water." },
-            { "start": 7.1, "end": 9.0, "speaker": "speaker_0", "text": "Please deliver them tomorrow." }
+          "results": [
+            {
+              "start_time": 0.4,
+              "end_time": 0.9,
+              "alternatives": [
+                { "speaker": "S1", "content": "Hello," }
+              ]
+            },
+            {
+              "start_time": 1.05,
+              "end_time": 2.9,
+              "alternatives": [
+                { "speaker": "S1", "content": "this is OME. How can I help you today?" }
+              ]
+            }
           ]
         }
         """;

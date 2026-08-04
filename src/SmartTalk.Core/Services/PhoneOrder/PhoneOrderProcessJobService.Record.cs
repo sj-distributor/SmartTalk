@@ -71,6 +71,12 @@ public partial class PhoneOrderProcessJobService
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             var speakInfos = StructureDiarizationResults(callBack.Results);
+            var hasExactlyOneSpeaker = HasExactlyOneMeaningfulSpeaker(
+                callBack.Results
+                    .Where(x => !x.Alternatives.IsNullOrEmpty())
+                    .Select(x => (
+                        Speaker: x.Alternatives[0].Speaker,
+                        Text: x.Alternatives[0].Content)));
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
             await TryCalculateRecordingDurationForSummaryAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
@@ -80,6 +86,7 @@ public partial class PhoneOrderProcessJobService
             await SummarizeConversationContentByRecordingEvidenceAsync(
                 record,
                 audioContent,
+                hasExactlyOneSpeaker,
                 cancellationToken).ConfigureAwait(false);
 
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -101,9 +108,10 @@ public partial class PhoneOrderProcessJobService
     private async Task<bool> SummarizeConversationContentByRecordingEvidenceAsync(
         PhoneOrderRecord record,
         byte[] audioContent,
+        bool hasExactlyOneSpeaker,
         CancellationToken cancellationToken)
     {
-        if (!ShouldUseFixedInvalidSummary(record.Duration))
+        if (!ShouldUseFixedInvalidSummary(record.Duration, hasExactlyOneSpeaker))
         {
             await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
             return false;
@@ -113,8 +121,8 @@ public partial class PhoneOrderProcessJobService
         return true;
     }
 
-    internal static bool ShouldUseFixedInvalidSummary(double? durationSeconds) =>
-        durationSeconds is <= InvalidRecordingDurationThresholdSeconds;
+    internal static bool ShouldUseFixedInvalidSummary(double? durationSeconds, bool hasExactlyOneSpeaker) =>
+        durationSeconds is <= InvalidRecordingDurationThresholdSeconds || hasExactlyOneSpeaker;
 
     internal static bool HasExactlyOneMeaningfulSpeaker(IEnumerable<(string Speaker, string Text)> segments)
     {
