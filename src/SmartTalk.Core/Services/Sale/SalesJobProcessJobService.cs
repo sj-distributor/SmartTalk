@@ -6,6 +6,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.SpeechMatics;
+using SmartTalk.Core.Settings.Jobs;
 using SmartTalk.Messages.Commands.Sales;
 
 namespace SmartTalk.Core.Services.Sale;
@@ -16,6 +17,9 @@ public interface ISalesJobProcessJobService : IScopedDependency
 
     [Semaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems)]
     Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken);
+
+    [Semaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems)]
+    Task RefreshCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
     Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken);
 
@@ -28,13 +32,15 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     private readonly ISalesService _salesService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly CustomerItemsRefreshBatchSizeSetting _customerItemsRefreshBatchSizeSetting;
 
-    public SalesJobProcessJobService(ICrmClient crmClient, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide)
+    public SalesJobProcessJobService(ICrmClient crmClient, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide, CustomerItemsRefreshBatchSizeSetting customerItemsRefreshBatchSizeSetting)
     {
         _crmClient = crmClient;
         _salesService = salesService;
         _salesDataProvider = salesDataProvider;
         _backgroundJobClient = backgroundJobClient;
+        _customerItemsRefreshBatchSizeSetting = customerItemsRefreshBatchSizeSetting;
     }
     
     public async Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken)
@@ -42,33 +48,65 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         Log.Information("Start full customer items cache refresh...");
 
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken).ConfigureAwait(false);
-        var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).ToList();
+        var allSoldToIds = NormalizeSoldToIds(allSales.Select(s => s.Name));
+        var batchSize = _customerItemsRefreshBatchSizeSetting.Value;
 
-        foreach (var soldToId in allSoldToIds)
+        foreach (var soldToIdBatch in allSoldToIds.Chunk(batchSize))
         {
-            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(x => x.RefreshCustomerItemsCacheBySoldToIdAsync(soldToId, CancellationToken.None), HangfireConstants.InternalHostingCaCheKnowledgeVariable);
+            var batch = soldToIdBatch.ToList();
+            _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(
+                x => x.RefreshCustomerItemsCacheBySoldToIdsAsync(batch, CancellationToken.None),
+                HangfireConstants.InternalHostingCaCheKnowledgeVariable);
         }
 
-        Log.Information("All customer items cache refresh jobs scheduled. Count: {Count}", allSoldToIds.Count);
+        Log.Information(
+            "All customer items cache refresh jobs scheduled. CustomerCount: {CustomerCount}, JobCount: {JobCount}, BatchSize: {BatchSize}",
+            allSoldToIds.Count,
+            (int)Math.Ceiling(allSoldToIds.Count / (double)batchSize),
+            batchSize);
     }
     
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
+        await RefreshCustomerItemsCacheBySoldToIdsAsync([soldToId], cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task RefreshCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
         try
         {
-            var ids = soldToId.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
-            Log.Information("Refreshing cache for soldToId: {SoldToId}", ids);
-            
-            var combinedItems = await _salesService.BuildCustomerItemsStringAsync(ids, cancellationToken).ConfigureAwait(false);
+            var ids = NormalizeSoldToIds(soldToIds);
+            if (ids.Count == 0)
+            {
+                Log.Warning("RefreshCustomerItemsCacheBySoldToIdsAsync called with empty soldToIds");
+                return;
+            }
 
-            await _salesDataProvider.UpsertCustomerItemsCacheAsync(soldToId, combinedItems, true, cancellationToken).ConfigureAwait(false);
+            Log.Information("Refreshing customer items cache for soldToIds: {SoldToIds}", ids);
 
-            Log.Information("Cache refreshed successfully for soldToId: {SoldToId}", soldToId);
+            var customerItems = await _salesService.BuildCustomerItemsStringsAsync(ids, cancellationToken).ConfigureAwait(false);
+
+            var cacheItems = ids.ToDictionary(
+                x => x,
+                x => customerItems.GetValueOrDefault(x) ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+            await _salesDataProvider.UpsertCustomerItemsCachesAsync(cacheItems, cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Customer items cache refreshed successfully for soldToIds: {SoldToIds}", ids);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to refresh cache for soldToId: {SoldToId}", soldToId);
+            Log.Error(ex, "Failed to refresh customer items cache for soldToIds: {SoldToIds}", soldToIds);
         }
+    }
+
+    private static List<string> NormalizeSoldToIds(IEnumerable<string> soldToIds)
+    {
+        return (soldToIds ?? Enumerable.Empty<string>())
+            .SelectMany(x => (x ?? string.Empty).Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
     
     public async Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken)

@@ -26,6 +26,7 @@ using SmartTalk.Messages.Dto.AiResourceSync;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Dto.Sales;
+using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
@@ -68,6 +69,41 @@ public class AiResourceSyncServiceTests
 
         await processJobService.Received(1).RefreshCrmCustomerContactPhoneMapsAsync(
             Arg.Any<SchedulingRefreshCrmCustomerContactPhoneMapCommand>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SendNotifyAsync_ManualSuccess_ShouldNotSendMessage()
+    {
+        var weChatClient = Substitute.For<IWeChatClient>();
+        var sut = CreateSut(weChatClient: weChatClient);
+
+        await sut.SendNotifyAsync(isSuccess: true, isManual: true, CancellationToken.None);
+
+        await weChatClient.DidNotReceive().SendWorkWechatRobotMessagesAsync(
+            Arg.Any<string>(),
+            Arg.Any<SendWorkWechatGroupRobotMessageDto>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SendNotifyAsync_ManualFailure_ShouldSendMessage()
+    {
+        var weChatClient = Substitute.For<IWeChatClient>();
+        weChatClient.SendWorkWechatRobotMessagesAsync(
+                Arg.Any<string>(),
+                Arg.Any<SendWorkWechatGroupRobotMessageDto>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new WorkWeChatResponseDto());
+        var sut = CreateSut(weChatClient: weChatClient);
+
+        await sut.SendNotifyAsync(isSuccess: false, isManual: true, CancellationToken.None);
+
+        await weChatClient.Received(1).SendWorkWechatRobotMessagesAsync(
+            Arg.Any<string>(),
+            Arg.Is<SendWorkWechatGroupRobotMessageDto>(x =>
+                x.MsgType == "text" &&
+                x.Text.Content.Contains("SMT Sales Manual Create: Failed")),
             Arg.Any<CancellationToken>());
     }
 
@@ -238,12 +274,12 @@ public class AiResourceSyncServiceTests
         var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         var sut = CreateSut(
             mediator: mediator,
@@ -255,7 +291,7 @@ public class AiResourceSyncServiceTests
             salesDataProvider: salesDataProvider,
             redisSafeRunner: redisSafeRunner);
         
-        await sut.SyncInternalAsync(new AiResourceSyncCommand
+        var result = await sut.SyncInternalAsync(new AiResourceSyncCommand
         {
             IsManual = true,
             ServiceProviderId = 123,
@@ -291,6 +327,7 @@ public class AiResourceSyncServiceTests
                 x.CompanyId == 1 &&
                 x.CreatedBy == 888),
             Arg.Any<CancellationToken>());
+        Assert.True(result.Stats.AppliedSceneCount > 0);
     }
 
     [Fact]
@@ -350,20 +387,20 @@ public class AiResourceSyncServiceTests
         var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<Agent>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AgentLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<Agent>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AgentLockResult>>>()());
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         var sut = CreateSut(
             mediator: mediator,
@@ -512,20 +549,20 @@ public class AiResourceSyncServiceTests
         var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<Agent>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AgentLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<Agent>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AgentLockResult>>>()());
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         var salesDataProvider = Substitute.For<ISalesDataProvider>();
         salesDataProvider.AddCrmSalesAutoSyncRunAsync(Arg.Any<SmartTalk.Core.Domain.Sales.CrmSalesAutoSyncRun>(), true, Arg.Any<CancellationToken>())
@@ -727,7 +764,7 @@ public class AiResourceSyncServiceTests
                 x.Count == 1 && x[0].AgentId == 201 && x[0].AssistantId == 900),
             true,
             Arg.Any<CancellationToken>());
-        await aiSpeechAssistantDataProvider.Received(1).UpdateAiSpeechAssistantsAsync(
+        await aiSpeechAssistantDataProvider.Received().UpdateAiSpeechAssistantsAsync(
             Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>(x =>
                 x.Count == 1 && x[0].Id == 900 && x[0].AgentId == 201),
             true,
@@ -1192,7 +1229,8 @@ public class AiResourceSyncServiceTests
         IKnowledgeScenarioDataProvider? knowledgeScenarioDataProvider = null,
         ISalesDataProvider? salesDataProvider = null,
         IRedisSafeRunner? redisSafeRunner = null,
-        ISmartTalkBackgroundJobClient? backgroundJobClient = null)
+        ISmartTalkBackgroundJobClient? backgroundJobClient = null,
+        IWeChatClient? weChatClient = null)
     {
         var redisRunner = redisSafeRunner ?? Substitute.For<IRedisSafeRunner>();
         redisRunner.ExecuteWithLockAsync(
@@ -1205,20 +1243,20 @@ public class AiResourceSyncServiceTests
             .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.StoreLockResult>>>()());
         redisRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<Agent>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AgentLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<Agent>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AgentLockResult>>>()());
         redisRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         return new AiResourceSyncService(
             mediator ?? Substitute.For<IMediator>(),
@@ -1229,7 +1267,7 @@ public class AiResourceSyncServiceTests
             aiSpeechAssistantKnowledgePromptService ?? Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
             knowledgeScenarioDataProvider ?? Substitute.For<IKnowledgeScenarioDataProvider>(),
             salesDataProvider ?? Substitute.For<ISalesDataProvider>(),
-            Substitute.For<IWeChatClient>(),
+            weChatClient ?? Substitute.For<IWeChatClient>(),
             redisRunner,
             backgroundJobClient ?? Substitute.For<ISmartTalkBackgroundJobClient>(),
             new SalesSettingBuilder().Build(),
@@ -1255,9 +1293,9 @@ public class AiResourceSyncServiceTests
         {
             return new AiResourceSyncSetting(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["SalesAutoCreate:NotifyRobotUrl"] = "https://example.com/robot",
-                ["SalesAutoCreate:DefaultAssistantGreetings"] = "Hello",
-                ["SalesAutoCreate:ServiceProviderId"] = "123"
+                ["AiResourceSync:NotifyRobotUrl"] = "https://example.com/robot",
+                ["AiResourceSync:DefaultAssistantGreetings"] = "Hello",
+                ["AiResourceSync:ServiceProviderId"] = "123"
             }).Build());
         }
     }

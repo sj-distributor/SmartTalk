@@ -1069,9 +1069,7 @@ public partial class AiSpeechAssistantService
 
     private async Task RefreshKnowledgeScenePromptAsync(AiSpeechAssistantKnowledge knowledge, CancellationToken cancellationToken)
     {
-        var scenePrompt = await _aiSpeechAssistantKnowledgePromptService
-            .GenerateScenePromptAsync(knowledge.Id, cancellationToken)
-            .ConfigureAwait(false);
+        var scenePrompt = await _aiSpeechAssistantKnowledgePromptService.GenerateScenePromptAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
 
         if (string.Equals(knowledge.ScenePrompt ?? string.Empty, scenePrompt, StringComparison.Ordinal))
             return;
@@ -1463,7 +1461,7 @@ public partial class AiSpeechAssistantService
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCallAsync([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
-            if (assistant.IsTransferHuman)
+            if (assistant.IsTransferHuman && !string.IsNullOrWhiteSpace(transferCallNumber))
             {
                 if (humanConcat == null)
                 {
