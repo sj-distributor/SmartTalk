@@ -249,20 +249,7 @@ public class SalesDataProvider : ISalesDataProvider
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    public async Task<CrmSalesAutoSyncRun> GetLatestSuccessfulCrmSalesAutoSyncRunByModeAsync(
-        string mode, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(mode))
-            return null;
-
-        return await _repository.Query<CrmSalesAutoSyncRun>()
-            .Where(x => x.Mode == mode && x.IsSuccess)
-            .OrderByDescending(x => x.CreatedDate)
-            .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
-    }
-
+    
     public async Task<bool> HasSuccessfulCrmSalesAutoSyncRunAsync(CancellationToken cancellationToken = default)
     {
         return await _repository.Query<CrmSalesAutoSyncRun>().AnyAsync(x => x.IsSuccess, cancellationToken).ConfigureAwait(false);
