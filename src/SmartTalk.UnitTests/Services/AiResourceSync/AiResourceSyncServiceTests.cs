@@ -792,6 +792,10 @@ public class AiResourceSyncServiceTests
         aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
             .Returns([]);
 
+        var salesDataProvider = Substitute.For<ISalesDataProvider>();
+        salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>())
+            .Returns(false);
+
         List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap> capturedMappings = null;
         aiSpeechAssistantDataProvider
             .When(x => x.AddCrmCustomerContactPhoneMapsAsync(Arg.Any<List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap>>(), true, Arg.Any<CancellationToken>()))
@@ -799,6 +803,7 @@ public class AiResourceSyncServiceTests
 
         var sut = CreateSut(
             crmClient: crmClient,
+            salesDataProvider: salesDataProvider,
             posDataProvider: posDataProvider,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider);
 
@@ -817,6 +822,70 @@ public class AiResourceSyncServiceTests
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4152182467" && x.ContactName == "NICOLE");
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4155357933" && x.ContactName == "JINGXIAN");
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4154076788" && x.ContactName == "STEVEN");
+        await salesDataProvider.Received(1).HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefreshCrmCustomerContactPhoneMapsAsync_UsesChangedCustomersAfterInitialSync()
+    {
+        var customer = new CrmSalesAutoSyncCustomerDto
+        {
+            CustomerId = "118895",
+            CustomerName = "PHO DAY",
+            SalesName = "TIFFANY.X",
+            SalesGroup = "008",
+            Language = "中文",
+            Contacts =
+            [
+                new() { Name = "NICOLE", Phone = "415-218-2467", Identity = "老闆", Language = "粵語" }
+            ]
+        };
+
+        var crmClient = Substitute.For<ICrmClient>();
+        crmClient.GetChangedSalesAutoSyncCustomersAsync(Arg.Any<CancellationToken>())
+            .Returns([customer]);
+
+        var posDataProvider = Substitute.For<IPosDataProvider>();
+        posDataProvider.GetPosCompanyByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.Pos.Company { Id = 1, Name = "OME" });
+        posDataProvider.GetPosCompanyStoresAsync(
+                Arg.Any<List<int>>(), Arg.Any<List<int>>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new SmartTalk.Core.Domain.Pos.CompanyStore
+                {
+                    Id = 10,
+                    CompanyId = 1,
+                    CreatedDate = DateTimeOffset.UtcNow,
+                    Names = "{\"en\":{\"name\":\"TIFFANY.X 008\"},\"cn\":{\"name\":\"TIFFANY.X 008\"}}"
+                }
+            ]);
+
+        var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
+        aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(10, "118895", Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Id = 9801,
+                AgentId = 201,
+                Name = "118895"
+            });
+        aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        var salesDataProvider = Substitute.For<ISalesDataProvider>();
+        salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var sut = CreateSut(
+            crmClient: crmClient,
+            salesDataProvider: salesDataProvider,
+            posDataProvider: posDataProvider,
+            aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider);
+
+        await sut.RefreshCrmCustomerContactPhoneMapsAsync(CancellationToken.None);
+
+        await crmClient.Received(1).GetChangedSalesAutoSyncCustomersAsync(Arg.Any<CancellationToken>());
+        await crmClient.DidNotReceive().GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

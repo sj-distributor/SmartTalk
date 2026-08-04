@@ -19,13 +19,11 @@ public partial class AiResourceSyncService
         if (company == null)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
 
-        var (allCustomers, _) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        allCustomers ??= [];
+        var syncCustomers = await LoadCrmCustomerContactPhoneMapCustomersAsync(cancellationToken).ConfigureAwait(false);
+        syncCustomers ??= [];
 
-        var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(allCustomers);
-        var existingStores = await _posDataProvider
-            .GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(syncCustomers);
+        var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var storeMap = existingStores
             .Select(x => new { Store = x, StoreName = GetStoreName(x.Names) })
@@ -34,6 +32,19 @@ public partial class AiResourceSyncService
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store, StringComparer.OrdinalIgnoreCase);
 
         await SyncCustomerContactPhoneMapsAsync(company.Id, customerGroups, storeMap, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<List<CrmSalesAutoSyncCustomerDto>> LoadCrmCustomerContactPhoneMapCustomersAsync(CancellationToken cancellationToken)
+    {
+        var hasSuccessfulRun = await _salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(cancellationToken).ConfigureAwait(false);
+
+        if (hasSuccessfulRun)
+            return await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
+
+        var (allCustomers, _) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        allCustomers ??= [];
+
+        return allCustomers;
     }
     
     private async Task SyncCustomerContactPhoneMapsAsync(int companyId, IReadOnlyList<CrmSalesAutoSyncCustomerGroup> customerGroups, 
