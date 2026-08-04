@@ -60,7 +60,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         if (sceneIds.Count == 0)
             return string.Empty;
 
-        var scenes = await _aiSpeechAssistantDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+        var scenes = await _aiSpeechAssistantDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false) ?? [];
         var publishedScenes = scenes
             .Where(x => x.Status == KnowledgeSceneStatus.Published)
             .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
@@ -120,14 +120,14 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             .ToDictionary(g => g.Key, g => g.ToList());
 
         var sceneIds = relations.Select(x => x.SceneId).Distinct().ToList();
-        var scenes = await _aiSpeechAssistantDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false);
+        var scenes = await _aiSpeechAssistantDataProvider.GetKnowledgeScenesByIdsAsync(sceneIds, cancellationToken).ConfigureAwait(false) ?? [];
         var publishedScenes = scenes
             .Where(x => x.Status == KnowledgeSceneStatus.Published)
             .ToDictionary(x => x.Id);
 
         var sceneItems = sceneIds.Count == 0
             ? []
-            : await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+            : await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdsAsync(sceneIds, cancellationToken: cancellationToken).ConfigureAwait(false) ?? [];
         var sceneKnowledgeMap = sceneItems
             .GroupBy(x => x.SceneId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.UpdatedAt ?? x.CreatedAt).ThenBy(x => x.Id).ToList());
@@ -171,10 +171,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
 
     public async Task RefreshScenePromptsBySceneIdsAsync(List<int> sceneIds, CancellationToken cancellationToken)
     {
-        var distinctSceneIds = (sceneIds ?? [])
-            .Where(x => x > 0)
-            .Distinct()
-            .ToList();
+        var distinctSceneIds = (sceneIds ?? []).Where(x => x > 0).Distinct().ToList();
 
         if (distinctSceneIds.Count == 0)
             return;
@@ -291,8 +288,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
     
     public async Task RefreshKnowledgeDetailsByCompanyIdAsync(int companyId, CancellationToken cancellationToken)
     {
-        if (companyId <= 0)
-            return;
+        if (companyId <= 0) return;
 
         Log.Information("[KnowledgeDetailSync] Start. CompanyId={CompanyId}", companyId);
         var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: companyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);

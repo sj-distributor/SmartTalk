@@ -326,17 +326,18 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             return;
 
         var staleKnowledgeIds = staleKnowledges.Select(x => x.Id).ToList();
-        var details = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
+        var relations = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
 
-        await _speechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeDetailsAsync(details, false, cancellationToken).ConfigureAwait(false);
+        var crmRelationsToDelete = relations
+            .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync)
+            .ToList();
 
-        staleKnowledges.ForEach(x =>
-        {
-            x.Prompt = string.Empty;
-            x.ScenePrompt = string.Empty;
-        });
+        if (crmRelationsToDelete.Count == 0)
+            return;
 
-        await _speechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync(staleKnowledges, true, cancellationToken).ConfigureAwait(false);
+        await _speechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(crmRelationsToDelete, true, cancellationToken).ConfigureAwait(false);
+
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool TryMergeNormalizedJson(int knowledgeId, string knowledgeJson, IEnumerable<string> copyKnowledgePoints, out string mergedJson)
