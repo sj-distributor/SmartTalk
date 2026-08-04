@@ -188,7 +188,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
 
     Task<List<CrmCustomerContactPhoneMap>> GetCrmCustomerContactPhoneMapsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default);
 
-    Task<CrmCustomerContactPhoneMap> GetActiveCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(int agentId, string normalizedPhoneNumber, CancellationToken cancellationToken = default);
+    Task<CrmCustomerContactPhoneMap> GetCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(int agentId, string normalizedPhoneNumber, CancellationToken cancellationToken = default);
 
     Task AddCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
 
