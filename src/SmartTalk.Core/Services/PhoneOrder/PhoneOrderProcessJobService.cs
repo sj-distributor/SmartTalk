@@ -145,7 +145,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         
         Log.Information("Calculating recording duration: {Duration}", duration);
         
-        record.Duration = TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : 0;
+        record.Duration = TimeSpan.TryParse(duration, out var timeSpan) ? timeSpan.TotalSeconds : null;
     }
 
     public async Task FillingIncomingCallNumberAsync(PhoneOrderRecord record, CancellationToken cancellationToken)
