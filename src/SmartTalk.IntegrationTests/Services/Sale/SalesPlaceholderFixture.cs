@@ -12,6 +12,8 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Settings.AiSpeechAssistant;
+using SmartTalk.Core.Settings.Jobs;
+using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using Xunit;
 
@@ -128,14 +130,14 @@ public class SalesPlaceholderFixture
         var salesDataProvider = Substitute.For<ISalesDataProvider>();
         var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
 
-        salesService.BuildCustomerItemsStringAsync(
-                Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1001"),
+        salesService.BuildCustomerItemsStringsAsync(
+                Arg.Is<List<string>>(x => x.Count == 2 && x[0] == "1001" && x[1] == "1002"),
                 Arg.Any<CancellationToken>())
-            .Returns("商品1001");
-        salesService.BuildCustomerItemsStringAsync(
-                Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1002"),
-                Arg.Any<CancellationToken>())
-            .Returns("商品1002");
+            .Returns(new Dictionary<string, string>
+            {
+                ["1001"] = "商品1001",
+                ["1002"] = "商品1002"
+            });
         salesService.BuildCustomerDeliveryProgressStringAsync(
                 Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1001"),
                 Arg.Any<CancellationToken>())
@@ -145,19 +147,25 @@ public class SalesPlaceholderFixture
                 Arg.Any<CancellationToken>())
             .Returns("到货1002");
 
+        var configuration = new ConfigurationBuilder().Build();
         var sut = new SalesJobProcessJobService(
             crmClient,
-            null!,
+            new SalesSetting(configuration),
             salesService,
             salesDataProvider,
             backgroundJobClient,
             null!,
-            null!);
+            null!,
+            new CustomerItemsRefreshBatchSizeSetting(configuration));
 
         await sut.RefreshCustomerItemsCacheBySoldToIdAsync("1001/1002", CancellationToken.None);
 
-        await salesDataProvider.Received(1).UpsertCustomerItemsCacheAsync("1001", "商品1001", false, Arg.Any<CancellationToken>());
-        await salesDataProvider.Received(1).UpsertCustomerItemsCacheAsync("1002", "商品1002", false, Arg.Any<CancellationToken>());
+        await salesDataProvider.Received(1).UpsertCustomerItemsCachesAsync(
+            Arg.Is<Dictionary<string, string>>(x =>
+                x.Count == 2 &&
+                x["1001"] == "商品1001" &&
+                x["1002"] == "商品1002"),
+            Arg.Any<CancellationToken>());
         await salesDataProvider.Received(1).UpsertDeliveryProgressCacheAsync("1001", "到货1001", false, Arg.Any<CancellationToken>());
         await salesDataProvider.Received(1).UpsertDeliveryProgressCacheAsync("1002", "到货1002", true, Arg.Any<CancellationToken>());
         await salesDataProvider.DidNotReceive().UpsertDeliveryProgressCacheAsync("1001/1002", Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());

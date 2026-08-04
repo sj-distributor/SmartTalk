@@ -8,6 +8,7 @@ using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.SpeechMatics;
+using SmartTalk.Core.Settings.Jobs;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Commands.Sales;
 
@@ -30,14 +31,13 @@ public interface ISalesJobProcessJobService : IScopedDependency
 
 public class SalesJobProcessJobService : ISalesJobProcessJobService
 {
-    private const int CustomerItemsRefreshBatchSize = 10;
-
     private readonly ICrmClient _crmClient;
     private readonly SalesSetting _salesSetting;
     private readonly ISalesService _salesService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly CustomerItemsRefreshBatchSizeSetting _customerItemsRefreshBatchSizeSetting;
 
     public SalesJobProcessJobService(
         ICrmClient crmClient,
@@ -46,7 +46,8 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         ISalesDataProvider salesDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
         SpeechMaticsDataProvider speechMaticsDataProvide,
-        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider)
+        IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        CustomerItemsRefreshBatchSizeSetting customerItemsRefreshBatchSizeSetting)
     {
         _crmClient = crmClient;
         _salesSetting = salesSetting;
@@ -54,6 +55,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         _salesDataProvider = salesDataProvider;
         _backgroundJobClient = backgroundJobClient;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _customerItemsRefreshBatchSizeSetting = customerItemsRefreshBatchSizeSetting;
     }
 
     public async Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken)
@@ -62,8 +64,9 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken).ConfigureAwait(false);
         var allSoldToIds = NormalizeSoldToIds(allSales.Select(s => s.Name));
+        var batchSize = _customerItemsRefreshBatchSizeSetting.Value;
 
-        foreach (var soldToIdBatch in allSoldToIds.Chunk(CustomerItemsRefreshBatchSize))
+        foreach (var soldToIdBatch in allSoldToIds.Chunk(batchSize))
         {
             var batch = soldToIdBatch.ToList();
             _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(
@@ -74,8 +77,8 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         Log.Information(
             "All customer items cache refresh jobs scheduled. CustomerCount: {CustomerCount}, JobCount: {JobCount}, BatchSize: {BatchSize}",
             allSoldToIds.Count,
-            (int)Math.Ceiling(allSoldToIds.Count / (double)CustomerItemsRefreshBatchSize),
-            CustomerItemsRefreshBatchSize);
+            (int)Math.Ceiling(allSoldToIds.Count / (double)batchSize),
+            batchSize);
     }
 
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
@@ -98,14 +101,18 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
             var customerItems = await _salesService.BuildCustomerItemsStringsAsync(ids, cancellationToken).ConfigureAwait(false);
 
+            var cacheItems = ids.ToDictionary(
+                x => x,
+                x => customerItems.GetValueOrDefault(x) ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+            await _salesDataProvider.UpsertCustomerItemsCachesAsync(cacheItems, cancellationToken).ConfigureAwait(false);
+
             for (var i = 0; i < ids.Count; i++)
             {
                 var id = ids[i];
                 var forceSave = i == ids.Count - 1;
-                var itemsString = customerItems.GetValueOrDefault(id) ?? string.Empty;
                 var deliveryProgress = await _salesService.BuildCustomerDeliveryProgressStringAsync([id], cancellationToken).ConfigureAwait(false);
 
-                await _salesDataProvider.UpsertCustomerItemsCacheAsync(id, itemsString, false, cancellationToken).ConfigureAwait(false);
                 await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, forceSave, cancellationToken).ConfigureAwait(false);
             }
 
