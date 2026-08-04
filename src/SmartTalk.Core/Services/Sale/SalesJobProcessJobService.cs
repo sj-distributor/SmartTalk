@@ -6,6 +6,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.SpeechMatics;
+using SmartTalk.Core.Settings.Jobs;
 using SmartTalk.Messages.Commands.Sales;
 
 namespace SmartTalk.Core.Services.Sale;
@@ -27,19 +28,19 @@ public interface ISalesJobProcessJobService : IScopedDependency
 
 public class SalesJobProcessJobService : ISalesJobProcessJobService
 {
-    private const int CustomerItemsRefreshBatchSize = 10;
-
     private readonly ICrmClient _crmClient;
     private readonly ISalesService _salesService;
     private readonly ISalesDataProvider _salesDataProvider;
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
+    private readonly CustomerItemsRefreshBatchSizeSetting _customerItemsRefreshBatchSizeSetting;
 
-    public SalesJobProcessJobService(ICrmClient crmClient, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide)
+    public SalesJobProcessJobService(ICrmClient crmClient, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide, CustomerItemsRefreshBatchSizeSetting customerItemsRefreshBatchSizeSetting)
     {
         _crmClient = crmClient;
         _salesService = salesService;
         _salesDataProvider = salesDataProvider;
         _backgroundJobClient = backgroundJobClient;
+        _customerItemsRefreshBatchSizeSetting = customerItemsRefreshBatchSizeSetting;
     }
     
     public async Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken)
@@ -48,8 +49,9 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
 
         var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken).ConfigureAwait(false);
         var allSoldToIds = NormalizeSoldToIds(allSales.Select(s => s.Name));
+        var batchSize = _customerItemsRefreshBatchSizeSetting.Value;
 
-        foreach (var soldToIdBatch in allSoldToIds.Chunk(CustomerItemsRefreshBatchSize))
+        foreach (var soldToIdBatch in allSoldToIds.Chunk(batchSize))
         {
             var batch = soldToIdBatch.ToList();
             _backgroundJobClient.Enqueue<ISalesJobProcessJobService>(
@@ -60,8 +62,8 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         Log.Information(
             "All customer items cache refresh jobs scheduled. CustomerCount: {CustomerCount}, JobCount: {JobCount}, BatchSize: {BatchSize}",
             allSoldToIds.Count,
-            (int)Math.Ceiling(allSoldToIds.Count / (double)CustomerItemsRefreshBatchSize),
-            CustomerItemsRefreshBatchSize);
+            (int)Math.Ceiling(allSoldToIds.Count / (double)batchSize),
+            batchSize);
     }
     
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Constants;
@@ -6,6 +7,7 @@ using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Settings.Jobs;
 using Xunit;
 
 namespace SmartTalk.UnitTests.Services.Sale;
@@ -50,6 +52,37 @@ public class SalesJobProcessJobServiceTests
     }
 
     [Fact]
+    public async Task ScheduleRefreshCustomerItemsCacheAsync_ShouldUseConfiguredBatchSize()
+    {
+        var capturedBatches = new List<List<string>>();
+        _salesDataProvider.GetAllSalesAsync(Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Range(1, 15)
+                .Select(x => new Sales { Name = x.ToString("00000") })
+                .ToList());
+
+        _backgroundJobClient.Enqueue(
+                Arg.Do<Expression<Func<ISalesJobProcessJobService, Task>>>(expression =>
+                {
+                    var methodCall = expression.Body as MethodCallExpression;
+                    methodCall.ShouldNotBeNull();
+                    var argument = methodCall.Arguments[0];
+                    var batch = Expression.Lambda<Func<List<string>>>(argument).Compile().Invoke();
+                    capturedBatches.Add(batch);
+                }),
+                HangfireConstants.InternalHostingCaCheKnowledgeVariable)
+            .Returns("job-id");
+
+        var sut = BuildService(batchSize: 7);
+
+        await sut.ScheduleRefreshCustomerItemsCacheAsync(new(), CancellationToken.None);
+
+        capturedBatches.Count.ShouldBe(3);
+        capturedBatches[0].Count.ShouldBe(7);
+        capturedBatches[1].Count.ShouldBe(7);
+        capturedBatches[2].ShouldBe(["00015"]);
+    }
+
+    [Fact]
     public async Task RefreshCustomerItemsCacheBySoldToIdsAsync_ShouldBuildOnceAndUpsertCustomerCachesInBatch()
     {
         _salesService.BuildCustomerItemsStringsAsync(
@@ -77,8 +110,21 @@ public class SalesJobProcessJobServiceTests
             Arg.Any<CancellationToken>());
     }
 
-    private SalesJobProcessJobService BuildService()
+    private SalesJobProcessJobService BuildService(int batchSize = 10)
     {
-        return new SalesJobProcessJobService(_crmClient, _salesService, _salesDataProvider, _backgroundJobClient, null);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["CustomerItemsRefreshBatchSize"] = batchSize.ToString()
+            })
+            .Build();
+
+        return new SalesJobProcessJobService(
+            _crmClient,
+            _salesService,
+            _salesDataProvider,
+            _backgroundJobClient,
+            null,
+            new CustomerItemsRefreshBatchSizeSetting(configuration));
     }
 }
