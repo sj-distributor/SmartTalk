@@ -2,6 +2,7 @@ using Hangfire.Throttling;
 using Serilog;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Settings.AiResourceSync;
 using SmartTalk.Messages.Commands.AiResourceSync;
 using SmartTalk.Messages.Constants;
 
@@ -19,10 +20,12 @@ public partial interface IAiResourceSyncProcessJobService: IScopedDependency
 public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
 {
     private readonly IAiResourceSyncService _aiResourceSyncService;
+    private readonly AiResourceSyncSetting _aiResourceSyncSetting;
 
-    public AiResourceSyncProcessJobService(IAiResourceSyncService aiResourceSyncService)
+    public AiResourceSyncProcessJobService(IAiResourceSyncService aiResourceSyncService, AiResourceSyncSetting aiResourceSyncSetting)
     {
         _aiResourceSyncService = aiResourceSyncService;
+        _aiResourceSyncSetting = aiResourceSyncSetting;
     }
 
     private const int MaxSyncAttempts = 3;
@@ -30,9 +33,13 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
 
     public async Task AiResourceSyncAsync(SchedulingAiResourceSyncCommand command, CancellationToken cancellationToken)
     { 
+       var serviceProviderId = command.ServiceProviderId ?? _aiResourceSyncSetting.ServiceProviderId;
+       if (!serviceProviderId.HasValue || serviceProviderId.Value <= 0)
+           throw new InvalidOperationException("AiResourceSync:ServiceProviderId is not configured.");
+
        await ExecuteSyncCrmSalesAutoCreateAsync(new AiResourceSyncCommand
        {
-           ServiceProviderId = 1,
+           ServiceProviderId = serviceProviderId,
            InitiatedByUserId = CurrentUsers.InternalUser.Id
        }, cancellationToken).ConfigureAwait(false);
     }

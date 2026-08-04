@@ -98,16 +98,26 @@ public class KnowledgeDetailSyncWithSceneMetadataTests
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(
                 Arg.Is<List<int>>(x => x.Count == 1 && x[0] == 100),
                 Arg.Any<CancellationToken>())
-            .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>
-            {
-                new()
+            .Returns(
+                new List<AiSpeechAssistantKnowledgeSceneRelation>
                 {
-                    Id = 2,
-                    KnowledgeId = 100,
-                    SceneId = 48,
-                    SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync
-                }
-            });
+                    new()
+                    {
+                        Id = 2,
+                        KnowledgeId = 100,
+                        SceneId = 48,
+                        SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync
+                    }
+                },
+                new List<AiSpeechAssistantKnowledgeSceneRelation>
+                {
+                    new()
+                    {
+                        KnowledgeId = 100,
+                        SceneId = 49,
+                        SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync
+                    }
+                });
         aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsAsync(100, Arg.Any<CancellationToken>())
             .Returns(new List<AiSpeechAssistantKnowledgeSceneRelation>
             {

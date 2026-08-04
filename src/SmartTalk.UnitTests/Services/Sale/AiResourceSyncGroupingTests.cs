@@ -1,3 +1,4 @@
+using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.Sale;
 using Xunit;
 using SmartTalk.Messages.Dto.Crm;
@@ -5,7 +6,7 @@ using SmartTalk.Messages.Dto.Sales;
 
 namespace SmartTalk.UnitTests.Services.Sale;
 
-public class CrmSalesAutoSyncGroupingTests
+public class AiResourceSyncGroupingTests
 {
     [Fact]
     public void BuildCustomerGroups_MergesCustomersWithSharedPhoneUnderSameSales()
@@ -17,7 +18,7 @@ public class CrmSalesAutoSyncGroupingTests
             CreateCustomer("300", "Alice", "5552220002")
         };
 
-        var groups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
+        var groups = AiResourceSyncGrouping.BuildCustomerGroups(customers);
 
         Assert.Equal(2, groups.Count);
         Assert.Contains(groups, x => x.CustomerIds.SequenceEqual(new[] { "100", "200" }));
@@ -33,7 +34,7 @@ public class CrmSalesAutoSyncGroupingTests
             CreateCustomer("200", "Bob", null)
         };
 
-        var groups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
+        var groups = AiResourceSyncGrouping.BuildCustomerGroups(customers);
 
         Assert.Equal(2, groups.Count);
         Assert.All(groups, x => Assert.Single(x.CustomerIds));
@@ -42,7 +43,7 @@ public class CrmSalesAutoSyncGroupingTests
     [Fact]
     public void BuildAssistantName_JoinsIdsWithSlash()
     {
-        var name = CrmSalesAutoSyncGrouping.BuildAssistantName(["200", "100"], "English");
+        var name = AiResourceSyncGrouping.BuildAssistantName(["200", "100"], "English");
 
         Assert.Equal("100/200", name);
     }
@@ -50,7 +51,7 @@ public class CrmSalesAutoSyncGroupingTests
     [Fact]
     public void TryParseAssistantName_ParsesLegacyMergedIds()
     {
-        var parsed = CrmSalesAutoSyncGrouping.TryParseAssistantName("100/200 (English)", out var ids, out var language);
+        var parsed = AiResourceSyncGrouping.TryParseAssistantName("100/200 (English)", out var ids, out var language);
 
         Assert.True(parsed);
         Assert.Equal(["100", "200"], ids);
@@ -60,7 +61,7 @@ public class CrmSalesAutoSyncGroupingTests
     [Fact]
     public void TryParseAssistantName_ParsesMergedIdsWithoutLanguageSuffix()
     {
-        var parsed = CrmSalesAutoSyncGrouping.TryParseAssistantName("100/200", out var ids, out var language);
+        var parsed = AiResourceSyncGrouping.TryParseAssistantName("100/200", out var ids, out var language);
 
         Assert.True(parsed);
         Assert.Equal(["100", "200"], ids);
@@ -76,7 +77,7 @@ public class CrmSalesAutoSyncGroupingTests
             SalesGroup = null
         };
 
-        Assert.Equal("Jessica.C", CrmSalesAutoSyncGrouping.BuildSalesKey(customer));
+        Assert.Equal("Jessica.C", AiResourceSyncGrouping.BuildSalesKey(customer));
     }
 
     [Fact]
@@ -88,7 +89,7 @@ public class CrmSalesAutoSyncGroupingTests
             CreateCustomer("200", "Bob", "018", "5551110001", null)
         };
 
-        var groups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
+        var groups = AiResourceSyncGrouping.BuildCustomerGroups(customers);
 
         Assert.Equal(2, groups.Count);
         Assert.All(groups, x => Assert.Single(x.CustomerIds));
@@ -103,7 +104,7 @@ public class CrmSalesAutoSyncGroupingTests
             CreateCustomer("200", "Alice", "GroupA", "5551110001", "manager")
         };
 
-        var groups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(customers);
+        var groups = AiResourceSyncGrouping.BuildCustomerGroups(customers);
 
         Assert.Single(groups);
         Assert.Equal(new[] { "100", "200" }, groups[0].CustomerIds);

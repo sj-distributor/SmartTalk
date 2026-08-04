@@ -1,10 +1,11 @@
+using Hangfire.Throttling;
 using Hangfire;
 using Mediator.Net;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Settings.AiResourceSync;
 using SmartTalk.Core.Settings.Jobs;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiResourceSync;
-using SmartTalk.Messages.Commands.Sales;
 
 namespace SmartTalk.Core.Jobs.RecurringJobs;
 
@@ -12,16 +13,22 @@ public class SchedulingAiResourceSyncRecurringJob : IRecurringJob
 {
     private readonly IMediator _mediator;
     private readonly SchedulingAiResourceSyncRecurringJobCronExpression _setting;
+    private readonly AiResourceSyncSetting _aiResourceSyncSetting;
 
-    public SchedulingAiResourceSyncRecurringJob(IMediator mediator, SchedulingAiResourceSyncRecurringJobCronExpression setting)
+    public SchedulingAiResourceSyncRecurringJob(IMediator mediator, SchedulingAiResourceSyncRecurringJobCronExpression setting, AiResourceSyncSetting aiResourceSyncSetting)
     {
         _mediator = mediator;
         _setting = setting;
+        _aiResourceSyncSetting = aiResourceSyncSetting;
     }
 
+    [Semaphore(HangfireConstants.SemaphoreSyncCrmSalesAutoCreate)]
     public async Task Execute()
     {
-        await _mediator.SendAsync(new SchedulingAiResourceSyncCommand()).ConfigureAwait(false);
+        await _mediator.SendAsync(new SchedulingAiResourceSyncCommand
+        {
+            ServiceProviderId = _aiResourceSyncSetting.ServiceProviderId
+        }).ConfigureAwait(false);
     }
 
     public string JobId => nameof(SchedulingAiResourceSyncRecurringJob);

@@ -8,13 +8,14 @@ using SmartTalk.Core.Services.Http.Clients;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Messages.Dto.KnowledgeScenario;
 using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
 
 public interface IKnowledgeScenarioProcessJobService : IScopedDependency
 {
-    Task HandleSceneUpdatedAsync(int sceneId, CancellationToken cancellationToken);
+    Task HandleSceneUpdatedAsync(KnowledgeSceneUpdatedSnapshotDto snapshot, CancellationToken cancellationToken);
 }
 
 public class KnowledgeScenarioProcessJobService : IKnowledgeScenarioProcessJobService
@@ -33,24 +34,41 @@ public class KnowledgeScenarioProcessJobService : IKnowledgeScenarioProcessJobSe
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
     }
 
-    public async Task HandleSceneUpdatedAsync(int sceneId, CancellationToken cancellationToken)
+    public async Task HandleSceneUpdatedAsync(KnowledgeSceneUpdatedSnapshotDto snapshot, CancellationToken cancellationToken)
     {
-        if (sceneId <= 0)
+        if (snapshot?.SceneId <= 0)
             return;
 
-        var scene = (await _knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync([sceneId], cancellationToken: cancellationToken).ConfigureAwait(false)).FirstOrDefault();
-
-        if (scene == null)
+        var scene = new KnowledgeScene
         {
-            Log.Warning("HandleSceneUpdatedAsync skipped because scene was not found. SceneId={SceneId}", sceneId);
-            return;
-        }
+            Id = snapshot.SceneId,
+            FolderId = snapshot.FolderId,
+            Name = snapshot.Name,
+            Description = snapshot.Description,
+            Version = snapshot.Version,
+            Status = snapshot.Status,
+            CreatedAt = snapshot.CreatedAt,
+            UpdatedAt = snapshot.UpdatedAt
+        };
 
         Log.Information("HandleSceneUpdatedAsync start. SceneId={SceneId}, Version={Version}", scene.Id, scene.Version);
 
         await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsBySceneIdsAsync([scene.Id], cancellationToken).ConfigureAwait(false);
 
-        var sceneItems = await _knowledgeScenarioDataProvider.GetKnowledgeSceneItemsBySceneIdAsync(scene.Id, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var sceneItems = (snapshot.SceneItems ?? [])
+            .Select(x => new KnowledgeSceneItem
+            {
+                Id = x.SceneItemId,
+                SceneId = snapshot.SceneId,
+                Name = x.Name,
+                Type = x.Type,
+                Content = x.Content,
+                FileName = x.FileName,
+                CreatedAt = x.CreatedAt,
+                UpdatedAt = x.UpdatedAt
+            })
+            .ToList();
+        
         await SnapshotKnowledgeSceneAsync(scene, sceneItems, scene.Version, true, cancellationToken).ConfigureAwait(false);
 
         Log.Information("HandleSceneUpdatedAsync completed. SceneId={SceneId}, SceneItemCount={SceneItemCount}", scene.Id, sceneItems.Count);

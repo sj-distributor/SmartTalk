@@ -1,11 +1,10 @@
 using System.Text.RegularExpressions;
-using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
-namespace SmartTalk.Core.Services.Sale;
+namespace SmartTalk.Core.Services.AiResourceSync;
 
-public static class CrmSalesAutoSyncGrouping
+public static class AiResourceSyncGrouping
 {
     private static readonly Regex AssistantNameRegex = new(@"^(.+?) \((.+)\)$", RegexOptions.Compiled);
 
@@ -30,7 +29,6 @@ public static class CrmSalesAutoSyncGrouping
         => customers
             .Select(x => x.CustomerId)
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     public static string BuildAssistantName(IReadOnlyList<string> customerIds, string language)

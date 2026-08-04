@@ -258,12 +258,12 @@ public class AiResourceSyncServiceTests
         var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         var sut = CreateSut(
             mediator: mediator,
@@ -275,7 +275,7 @@ public class AiResourceSyncServiceTests
             salesDataProvider: salesDataProvider,
             redisSafeRunner: redisSafeRunner);
         
-        await sut.SyncInternalAsync(new AiResourceSyncCommand
+        var result = await sut.SyncInternalAsync(new AiResourceSyncCommand
         {
             IsManual = true,
             ServiceProviderId = 123,
@@ -311,6 +311,7 @@ public class AiResourceSyncServiceTests
                 x.CompanyId == 1 &&
                 x.CreatedBy == 888),
             Arg.Any<CancellationToken>());
+        Assert.True(result.Stats.AppliedSceneCount > 0);
     }
 
     [Fact]
@@ -370,20 +371,20 @@ public class AiResourceSyncServiceTests
         var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<Agent>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AgentLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<Agent>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AgentLockResult>>>()());
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         var sut = CreateSut(
             mediator: mediator,
@@ -532,20 +533,20 @@ public class AiResourceSyncServiceTests
         var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<Agent>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AgentLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<Agent>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AgentLockResult>>>()());
         redisSafeRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         var salesDataProvider = Substitute.For<ISalesDataProvider>();
         salesDataProvider.AddCrmSalesAutoSyncRunAsync(Arg.Any<SmartTalk.Core.Domain.Sales.CrmSalesAutoSyncRun>(), true, Arg.Any<CancellationToken>())
@@ -957,20 +958,20 @@ public class AiResourceSyncServiceTests
             .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.StoreLockResult>>>()());
         redisRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<Agent>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AgentLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<Agent>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AgentLockResult>>>()());
         redisRunner.ExecuteWithLockAsync(
                 Arg.Any<string>(),
-                Arg.Any<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>(),
+                Arg.Any<Func<Task<AiResourceSyncService.AssistantLockResult>>>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<TimeSpan?>(),
                 Arg.Any<SmartTalk.Messages.Enums.Caching.RedisServer>())
-            .Returns(callInfo => callInfo.Arg<Func<Task<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant>>>()());
+            .Returns(callInfo => callInfo.Arg<Func<Task<AiResourceSyncService.AssistantLockResult>>>()());
 
         return new AiResourceSyncService(
             mediator ?? Substitute.For<IMediator>(),
