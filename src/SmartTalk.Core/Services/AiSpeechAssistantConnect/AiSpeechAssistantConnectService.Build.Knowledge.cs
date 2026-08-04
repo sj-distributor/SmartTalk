@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Utils;
@@ -72,7 +73,7 @@ public partial class AiSpeechAssistantConnectService
 
     private async Task<int?> ResolveCustomerSpecificAssistantIdAsync(int agentId, string callerPhoneNumber, CancellationToken cancellationToken)
     {
-        var normalizedPhoneNumber = CrmSalesAutoSyncGrouping.NormalizePhoneNumber(callerPhoneNumber);
+        var normalizedPhoneNumber = AiResourceSyncGrouping.NormalizePhoneNumber(callerPhoneNumber);
         if (string.IsNullOrWhiteSpace(normalizedPhoneNumber))
             return null;
 

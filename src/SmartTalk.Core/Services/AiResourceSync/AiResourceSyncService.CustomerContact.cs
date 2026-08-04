@@ -23,7 +23,7 @@ public partial class AiResourceSyncService
         var syncCustomers = await LoadCrmCustomerContactPhoneMapCustomersAsync(isFullSync, cancellationToken).ConfigureAwait(false);
         syncCustomers ??= [];
 
-        var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(syncCustomers);
+        var customerGroups = AiResourceSyncGrouping.BuildCustomerGroups(syncCustomers);
         var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var storeMap = existingStores
@@ -84,7 +84,7 @@ public partial class AiResourceSyncService
             if (!storeMap.TryGetValue(customerGroup.SalesKey, out var store))
                 continue;
 
-            var assistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(customerGroup.CustomerIds, customerGroup.Language);
+            var assistantName = AiResourceSyncGrouping.BuildAssistantName(customerGroup.CustomerIds, customerGroup.Language);
             var assistant = await _aiSpeechAssistantDataProvider
                 .GetCrmAutoSyncAssistantByStoreAndNameAsync(store.Id, assistantName, cancellationToken)
                 .ConfigureAwait(false);
@@ -103,7 +103,7 @@ public partial class AiResourceSyncService
     {
         return from customer in customerGroup.Customers
             from contact in customer.Contacts ?? []
-            let normalizedPhone = CrmSalesAutoSyncGrouping.NormalizePhoneNumber(contact?.Phone)
+            let normalizedPhone = AiResourceSyncGrouping.NormalizePhoneNumber(contact?.Phone)
             where !string.IsNullOrWhiteSpace(normalizedPhone) && !string.IsNullOrWhiteSpace(customer.CustomerId)
             select new CrmCustomerContactPhoneMap
             {
