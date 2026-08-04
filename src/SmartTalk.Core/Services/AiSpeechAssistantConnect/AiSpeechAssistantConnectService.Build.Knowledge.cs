@@ -77,7 +77,7 @@ public partial class AiSpeechAssistantConnectService
             return null;
 
         var mapping = await _aiSpeechAssistantDataProvider
-            .GetActiveCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(agentId, normalizedPhoneNumber, cancellationToken)
+            .GetCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(agentId, normalizedPhoneNumber, cancellationToken)
             .ConfigureAwait(false);
 
         return mapping?.AssistantId;

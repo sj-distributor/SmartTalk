@@ -19,7 +19,8 @@ public partial class AiResourceSyncService
         if (company == null)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
 
-        var syncCustomers = await LoadCrmCustomerContactPhoneMapCustomersAsync(cancellationToken).ConfigureAwait(false);
+        var isFullSync = !await _salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(cancellationToken).ConfigureAwait(false);
+        var syncCustomers = await LoadCrmCustomerContactPhoneMapCustomersAsync(isFullSync, cancellationToken).ConfigureAwait(false);
         syncCustomers ??= [];
 
         var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(syncCustomers);
@@ -34,12 +35,9 @@ public partial class AiResourceSyncService
         await SyncCustomerContactPhoneMapsAsync(company.Id, customerGroups, storeMap, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<List<CrmSalesAutoSyncCustomerDto>> LoadCrmCustomerContactPhoneMapCustomersAsync(CancellationToken cancellationToken)
+    private async Task<List<CrmSalesAutoSyncCustomerDto>> LoadCrmCustomerContactPhoneMapCustomersAsync(bool isFullSync, CancellationToken cancellationToken)
     {
-        var hasSuccessfulRun = await _salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(cancellationToken).ConfigureAwait(false);
-
-        if (hasSuccessfulRun)
-            return await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
+        if (!isFullSync) return await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
 
         var (allCustomers, _) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         allCustomers ??= [];
@@ -119,7 +117,6 @@ public partial class AiResourceSyncService
                 ContactLanguage = contact?.Language?.Trim(),
                 ContactPhoneRaw = contact?.Phone?.Trim(),
                 ContactPhoneNormalized = normalizedPhone,
-                IsActive = true,
                 CreatedDate = now,
                 LastModifiedDate = now
             };
@@ -147,17 +144,6 @@ public partial class AiResourceSyncService
             existing.ContactIdentity = desired.ContactIdentity;
             existing.ContactLanguage = desired.ContactLanguage;
             existing.ContactPhoneRaw = desired.ContactPhoneRaw;
-            existing.IsActive = true;
-            existing.LastModifiedDate = now;
-            toUpdate.Add(existing);
-        }
-
-        foreach (var (key, existing) in existingByKey)
-        {
-            if (desiredByKey.ContainsKey(key) || !existing.IsActive)
-                continue;
-
-            existing.IsActive = false;
             existing.LastModifiedDate = now;
             toUpdate.Add(existing);
         }

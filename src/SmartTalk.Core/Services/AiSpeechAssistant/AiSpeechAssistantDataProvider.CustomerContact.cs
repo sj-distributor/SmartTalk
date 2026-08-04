@@ -16,14 +16,14 @@ public partial class AiSpeechAssistantDataProvider
             .ConfigureAwait(false);
     }
 
-    public async Task<CrmCustomerContactPhoneMap> GetActiveCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(
+    public async Task<CrmCustomerContactPhoneMap> GetCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(
         int agentId, string normalizedPhoneNumber, CancellationToken cancellationToken = default)
     {
         if (agentId <= 0 || string.IsNullOrWhiteSpace(normalizedPhoneNumber))
             return null;
 
         return await _repository.Query<CrmCustomerContactPhoneMap>()
-            .Where(x => x.AgentId == agentId && x.IsActive && x.ContactPhoneNormalized == normalizedPhoneNumber)
+            .Where(x => x.AgentId == agentId && x.ContactPhoneNormalized == normalizedPhoneNumber)
             .OrderByDescending(x => x.LastModifiedDate ?? x.CreatedDate)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);

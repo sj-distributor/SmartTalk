@@ -817,7 +817,6 @@ public class AiResourceSyncServiceTests
             Assert.Equal("PHO DAY", x.CustomerName);
             Assert.Equal(9801, x.AssistantId);
             Assert.Equal(201, x.AgentId);
-            Assert.True(x.IsActive);
         });
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4152182467" && x.ContactName == "NICOLE");
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4155357933" && x.ContactName == "JINGXIAN");
@@ -886,6 +885,85 @@ public class AiResourceSyncServiceTests
 
         await crmClient.Received(1).GetChangedSalesAutoSyncCustomersAsync(Arg.Any<CancellationToken>());
         await crmClient.DidNotReceive().GetSalesAutoSyncCustomersAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefreshCrmCustomerContactPhoneMapsAsync_NotDeactivateMissingMappingsIncrementalSync()
+    {
+        var customer = new CrmSalesAutoSyncCustomerDto
+        {
+            CustomerId = "118895",
+            CustomerName = "PHO DAY",
+            SalesName = "TIFFANY.X",
+            SalesGroup = "008",
+            Language = "中文",
+            Contacts =
+            [
+                new() { Name = "NICOLE", Phone = "415-218-2467", Identity = "老闆", Language = "粵語" }
+            ]
+        };
+
+        var crmClient = Substitute.For<ICrmClient>();
+        crmClient.GetChangedSalesAutoSyncCustomersAsync(Arg.Any<CancellationToken>())
+            .Returns([customer]);
+
+        var posDataProvider = Substitute.For<IPosDataProvider>();
+        posDataProvider.GetPosCompanyByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.Pos.Company { Id = 1, Name = "OME" });
+        posDataProvider.GetPosCompanyStoresAsync(
+                Arg.Any<List<int>>(), Arg.Any<List<int>>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new SmartTalk.Core.Domain.Pos.CompanyStore
+                {
+                    Id = 10,
+                    CompanyId = 1,
+                    CreatedDate = DateTimeOffset.UtcNow,
+                    Names = "{\"en\":{\"name\":\"TIFFANY.X 008\"},\"cn\":{\"name\":\"TIFFANY.X 008\"}}"
+                }
+            ]);
+
+        var existingMapping = new SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap
+        {
+            Id = 88,
+            CompanyId = 1,
+            AgentId = 201,
+            AssistantId = 9801,
+            CustomerId = "118895",
+            CustomerName = "PHO DAY",
+            ContactName = "OLD",
+            ContactPhoneNormalized = "4150000000",
+            CreatedDate = DateTimeOffset.UtcNow.AddDays(-1),
+            LastModifiedDate = DateTimeOffset.UtcNow.AddDays(-1)
+        };
+
+        var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
+        aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(10, "118895", Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Id = 9801,
+                AgentId = 201,
+                Name = "118895"
+            });
+        aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
+            .Returns([existingMapping]);
+
+        var salesDataProvider = Substitute.For<ISalesDataProvider>();
+        salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var sut = CreateSut(
+            crmClient: crmClient,
+            salesDataProvider: salesDataProvider,
+            posDataProvider: posDataProvider,
+            aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider);
+
+        await sut.RefreshCrmCustomerContactPhoneMapsAsync(CancellationToken.None);
+
+        await aiSpeechAssistantDataProvider.DidNotReceive().UpdateCrmCustomerContactPhoneMapsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap>>(x => x.Any(m => m.Id == 88)),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
