@@ -118,7 +118,7 @@ public class AiResourceSyncGroupingTests
     [InlineData(null, "")]
     public void NormalizePhoneNumber_NormalizesForInboundMatching(string rawPhoneNumber, string expected)
     {
-        var normalized = CrmSalesAutoSyncGrouping.NormalizePhoneNumber(rawPhoneNumber);
+        var normalized = AiResourceSyncGrouping.NormalizePhoneNumber(rawPhoneNumber);
 
         Assert.Equal(expected, normalized);
     }
