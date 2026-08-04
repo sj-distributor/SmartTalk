@@ -72,6 +72,7 @@ public partial class PhoneOrderProcessJobService
             var usedFixedInvalidSummary = await SummarizeConversationContentByRecordingEvidenceAsync(
                 record,
                 audioContent,
+                hasExactlyOneSpeaker,
                 cancellationToken).ConfigureAwait(false);
 
             await _phoneOrderService.ProcessPhoneOrderDiarizedTranscriptionAsync(
