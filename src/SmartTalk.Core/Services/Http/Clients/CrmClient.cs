@@ -182,7 +182,7 @@ public class CrmClient : ICrmClient
             {
                 try
                 {
-                    response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+                    response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, timeout: SyncRequestTimeout, headers: headers).ConfigureAwait(false);
 
                     if (response?.Data is { Count: > 0 })
                         break;
