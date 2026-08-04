@@ -41,6 +41,8 @@ public partial interface IPhoneOrderProcessJobService
 
 public partial class PhoneOrderProcessJobService
 {
+    private const double InvalidRecordingDurationThresholdSeconds = 5;
+
     private static readonly JsonSerializerOptions ReadableJsonSerializerOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
@@ -69,12 +71,23 @@ public partial class PhoneOrderProcessJobService
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             var speakInfos = StructureDiarizationResults(callBack.Results);
+            var hasExactlyOneSpeaker = HasExactlyOneMeaningfulSpeaker(
+                callBack.Results
+                    .Where(x => !x.Alternatives.IsNullOrEmpty())
+                    .Select(x => (
+                        Speaker: x.Alternatives[0].Speaker,
+                        Text: x.Alternatives[0].Content)));
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
+            await TryCalculateRecordingDurationForSummaryAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
 
             await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
 
-            await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+            await SummarizeConversationContentByRecordingEvidenceAsync(
+                record,
+                audioContent,
+                hasExactlyOneSpeaker,
+                cancellationToken).ConfigureAwait(false);
 
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -92,7 +105,169 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task<bool> SummarizeConversationContentByRecordingEvidenceAsync(
+        PhoneOrderRecord record,
+        byte[] audioContent,
+        bool hasExactlyOneSpeaker,
+        CancellationToken cancellationToken)
+    {
+        if (!ShouldUseFixedInvalidSummary(record.Duration, hasExactlyOneSpeaker))
+        {
+            await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        await SummarizeInvalidConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    internal static bool ShouldUseFixedInvalidSummary(double? durationSeconds, bool hasExactlyOneSpeaker) =>
+        durationSeconds is <= InvalidRecordingDurationThresholdSeconds || hasExactlyOneSpeaker;
+
+    internal static bool HasExactlyOneMeaningfulSpeaker(IEnumerable<(string Speaker, string Text)> segments)
+    {
+        var speakers = segments
+            .Where(x => !string.IsNullOrWhiteSpace(x.Speaker) && HasMeaningfulSpeech(x.Text))
+            .Select(x => x.Speaker.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(2)
+            .ToList();
+
+        return speakers.Count == 1;
+    }
+
+    private static bool HasMeaningfulSpeech(string text) =>
+        !string.IsNullOrWhiteSpace(text) && Regex.IsMatch(text, @"[\p{L}\p{N}]");
+
+    private async Task TryCalculateRecordingDurationForSummaryAsync(
+        PhoneOrderRecord record,
+        byte[] audioContent,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await CalculateRecordingDurationInternalAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            Log.Warning(
+                e,
+                "Calculate recording duration failed; continue with original summary. RecordId={RecordId}",
+                record.Id);
+        }
+    }
+
+    private async Task SummarizeInvalidConversationContentAsync(
+        PhoneOrderRecord record,
+        byte[] audioContent,
+        CancellationToken cancellationToken)
+    {
+        var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider
+            .GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken)
+            .ConfigureAwait(false);
+        var callFrom = record.PhoneNumber ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(callFrom) &&
+            !string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                await RetryHelper.RetryAsync(async () =>
+                {
+                    var callInfo = await _twilioService.FetchCallAsync(record.SessionId);
+                    callFrom = callInfo?.From;
+                }, maxRetryCount: 3, delaySeconds: 3, cancellationToken);
+            }
+            catch (Exception e)
+            {
+                Log.Warning("Fetched incoming phone number from Twilio failed: {Message}", e.Message);
+            }
+        }
+
+        var englishSummary = BuildInvalidConversationSummary(callFrom);
+        var chineseSummary = BuildInvalidConversationSummaryChinese(callFrom);
+
+        record.Status = PhoneOrderRecordStatus.Sent;
+        record.TranscriptionText = englishSummary;
+        record.Scenario = DialogueScenarios.InvalidCall;
+        record.Remark = string.Empty;
+        record.IsHumanAnswered = false;
+        record.IsCustomerFriendly = null;
+        record.IsCompleted = true;
+
+        await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(
+        [
+            new PhoneOrderRecordReport
+            {
+                RecordId = record.Id,
+                Report = englishSummary,
+                Language = TranscriptionLanguage.English,
+                IsOrigin = record.Language == TranscriptionLanguage.English,
+                CreatedDate = DateTimeOffset.Now
+            },
+            new PhoneOrderRecordReport
+            {
+                RecordId = record.Id,
+                Report = chineseSummary,
+                Language = TranscriptionLanguage.Chinese,
+                IsOrigin = record.Language == TranscriptionLanguage.Chinese,
+                CreatedDate = DateTimeOffset.Now
+            }
+        ], true, cancellationToken).ConfigureAwait(false);
+
+        await _phoneOrderDataProvider.MarkRecordCompletedAsync(record.Id, cancellationToken).ConfigureAwait(false);
+        await CallBackSmartiesRecordAsync(agent, record, cancellationToken).ConfigureAwait(false);
+
+        var message = agent.WechatRobotMessage?
+            .Replace("#{assistant_name}", aiSpeechAssistant?.Name ?? "")
+            .Replace("#{agent_id}", agent.Id.ToString())
+            .Replace("#{record_id}", record.Id.ToString())
+            .Replace("#{assistant_file_url}", record.Url);
+
+        message = await SwitchKeyMessageByGetUserProfileAsync(
+            record,
+            callFrom,
+            aiSpeechAssistant,
+            agent,
+            message,
+            cancellationToken).ConfigureAwait(false);
+
+        await SendWorkWechatMessageByRobotKeyAsync(
+            message,
+            record,
+            audioContent,
+            agent,
+            aiSpeechAssistant,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static string BuildInvalidConversationSummary(string callFrom) =>
+        "Conversation Topic: No valid content\n\n" +
+        $"- Caller ID: {callFrom ?? string.Empty}\n\n" +
+        "- Summary: No valid recording detected\n\n" +
+        "- Guest's Emotion and Mood: Unable to determine\n\n" +
+        "- Guest's Pronunciation: Unable to determine\n\n" +
+        "- To-Do Items:\n\n" +
+        "1. None\n\n" +
+        "2. None\n\n" +
+        "- Guest's Order Details: No specific order placed";
+
+    internal static string BuildInvalidConversationSummaryChinese(string callFrom) =>
+        "通话主题：无有效内容\n\n" +
+        $"- 来电号码：{callFrom ?? string.Empty}\n\n" +
+        "- 内容摘要：未检测到有效录音\n\n" +
+        "- 客人情感与情绪：无法判断\n\n" +
+        "- 客人发音：无法判断\n\n" +
+        "- 待办事项：\n\n" +
+        "1. 无\n\n" +
+        "2. 无\n\n" +
+        "- 客人下单内容：无明确下单";
+
+    internal virtual async Task SummarizeConversationContentAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
     {
         var (aiSpeechAssistant, agent) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken).ConfigureAwait(false);
 
