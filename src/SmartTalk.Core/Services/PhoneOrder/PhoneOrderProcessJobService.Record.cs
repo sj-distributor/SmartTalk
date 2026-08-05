@@ -192,7 +192,7 @@ public partial class PhoneOrderProcessJobService
         var chineseSummary = BuildInvalidConversationSummaryChinese(callFrom);
 
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = englishSummary;
+        record.TranscriptionText = chineseSummary;
         record.Scenario = DialogueScenarios.InvalidCall;
         record.Remark = string.Empty;
         record.IsHumanAnswered = false;
