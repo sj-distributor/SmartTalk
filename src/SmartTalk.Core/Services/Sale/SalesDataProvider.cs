@@ -153,7 +153,7 @@ public class SalesDataProvider : ISalesDataProvider
         var existingCachesBySoldToId = existingCaches
             .GroupBy(x => x.Filter, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
-
+s
         var now = DateTimeOffset.UtcNow;
         var cachesToInsert = new List<AiSpeechAssistantKnowledgeVariableCache>();
         var cachesToUpdate = new List<AiSpeechAssistantKnowledgeVariableCache>();
