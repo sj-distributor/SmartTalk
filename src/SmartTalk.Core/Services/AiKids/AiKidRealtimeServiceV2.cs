@@ -1,5 +1,6 @@
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
@@ -145,7 +146,8 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
                             Transcription = t.Text
                         }).ToList()
                     }, CancellationToken.None));
-            }
+            },
+            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, assistant, CancellationToken.None)
         };
 
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
@@ -173,7 +175,14 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var configs = functionCalls
             .Where(x => !string.IsNullOrWhiteSpace(x.Content))
-            .Select(x => (x.Type, Config: JsonConvert.DeserializeObject<object>(x.Content)))
+            .Select(x => (x.Type, Config: JsonConvert.DeserializeObject<JObject>(x.Content)))
+            .ToList();
+
+        var tools = configs
+            .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool)
+            .Select(x => x.Config)
+            .Where(x => x != null)
+            .Cast<object>()
             .ToList();
 
         return new RealtimeAiModelConfig
@@ -184,10 +193,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             ModelName = assistant.ModelName,
             ModelLanguage = assistant.ModelLanguage,
             Prompt = resolvedPrompt,
-            Tools = configs
-                .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool)
-                .Select(x => x.Config)
-                .ToList(),
+            Tools = tools,
             TurnDetection = configs.FirstOrDefault(x => x.Type == AiSpeechAssistantSessionConfigType.TurnDirection).Config,
             VendorOptions = new OpenAiRealtimeModelOptions
             {
@@ -196,6 +202,17 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         };
     }
 
+    private async Task<RealtimeAiFunctionCallResult> OnFunctionCallAsync(
+        RealtimeAiWssFunctionCallData functionCallData,
+        RealtimeAiSessionActions actions,
+        Domain.AISpeechAssistant.AiSpeechAssistant assistant,
+        CancellationToken cancellationToken)
+    {
+        if (functionCallData == null || string.IsNullOrWhiteSpace(functionCallData.FunctionName))
+            return null;
+
+        return null;
+    }
     private async Task<string> BuildResolvedPromptAsync(
         Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {

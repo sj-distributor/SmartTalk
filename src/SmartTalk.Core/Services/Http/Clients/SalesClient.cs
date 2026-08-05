@@ -25,6 +25,8 @@ public interface ISalesClient : IScopedDependency
 
     Task<QueryGoodsStatusResponseDto> QueryGoodsStatusAsync(QueryGoodsStatusRequestDto request, CancellationToken cancellationToken);
 
+    Task<GetCustomerAiQuotationResponseDto> GetCustomerAiQuotationAsync(GetCustomerAiQuotationRequestDto request, CancellationToken cancellationToken);
+    
     Task<GetOrderInformationByCustomerIdResponseDto> GetOrderInformationByCustomerIdAsync(GetOrderInformationByCustomerIdRequestDto request, CancellationToken cancellationToken);
 }
 
@@ -160,6 +162,19 @@ public class SalesClient : ISalesClient
         var response = await _httpClientFactory.PostAsJsonAsync<QueryGoodsStatusResponseDto>(url, request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return response;
+    }
+
+    public async Task<GetCustomerAiQuotationResponseDto> GetCustomerAiQuotationAsync(GetCustomerAiQuotationRequestDto request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request?.CustomerId))
+            throw new ArgumentException("CustomerId cannot be null or empty.");
+
+        if (request.MaterialIdList == null || request.MaterialIdList.Count == 0)
+            throw new ArgumentException("MaterialIdList cannot be null or empty.");
+
+        var url = $"{_salesSetting.BaseUrl}/api/CustomerInfo/GetCustomerAiQuotation";
+
+        return await _httpClientFactory.PostAsJsonAsync<GetCustomerAiQuotationResponseDto>(url, request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<GetOrderInformationByCustomerIdResponseDto> GetOrderInformationByCustomerIdAsync(GetOrderInformationByCustomerIdRequestDto request, CancellationToken cancellationToken)
