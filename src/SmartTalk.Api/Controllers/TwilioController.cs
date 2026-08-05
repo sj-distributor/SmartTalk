@@ -25,4 +25,14 @@ public class TwilioController : ControllerBase
 
         return Ok(response);
     }
+    
+    [HttpPost("messages/send")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(SendTwilioMessageResponse))]
+    public async Task<IActionResult> SendMessageAsync([FromBody] SendTwilioMessageRequest request, CancellationToken cancellationToken)
+    {
+        var response = await _mediator.RequestAsync<SendTwilioMessageRequest, SendTwilioMessageResponse>(request, cancellationToken).ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
 }

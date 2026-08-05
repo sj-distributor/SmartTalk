@@ -21,6 +21,8 @@ public interface ITwilioService : IScopedDependency
     Task CreateRecordingAsync(string callSid, Uri recordingStatusCallback);
 
     Task<MigrateIncomingPhoneNumberResponse> MigrateIncomingPhoneNumberAsync(MigrateIncomingPhoneNumberRequest request, CancellationToken cancellationToken = default);
+    
+    Task<SendTwilioMessageResponse> SendMessageAsync(SendTwilioMessageRequest request, CancellationToken cancellationToken = default);
 }
 
 public record TwilioCallInfo(string From, string To, DateTimeOffset? StartTime);
@@ -123,4 +125,41 @@ public class TwilioService : ITwilioService
 
         throw new InvalidOperationException(errorMessage);
     }
+
+    public async Task<SendTwilioMessageResponse> SendMessageAsync(SendTwilioMessageRequest request, CancellationToken cancellationToken = default)
+    {
+        var requestUrl =
+            $"https://api.twilio.com/2010-04-01/Accounts/{Uri.EscapeDataString(_twilioSettings.AccountSid)}/Messages.json";
+        var authValue = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_twilioSettings.AccountSid}:{_twilioSettings.AuthToken}"));
+
+        var headers = new Dictionary<string, string>
+        {
+            { "Accept", "application/json" },
+            { "Authorization", $"Basic {authValue}" }
+        };
+
+        var formData = new Dictionary<string, string>
+        {
+            { "From", request.FromNumber.Trim() },
+            { "To", request.ToNumber.Trim() },
+            { "Body", request.Body.Trim() }
+        };
+
+        var response = await _httpClientFactory.PostAsync<SendTwilioMessageResponse>(requestUrl, new FormUrlEncodedContent(formData), cancellationToken, headers: headers, isNeedToReadErrorContent: true).ConfigureAwait(false);
+
+        if (response == null)
+            throw new InvalidOperationException("Twilio message send failed: empty response.");
+
+        Log.Information(
+            "Twilio message sent. FromNumber: {FromNumber}, ToNumber: {ToNumber}, Sid: {Sid}, Status: {Status}", request.FromNumber,
+            request.ToNumber, response.Sid, response.Status);
+
+        if (!string.IsNullOrWhiteSpace(response.Sid))
+            return response;
+
+        throw new InvalidOperationException(string.IsNullOrWhiteSpace(response.ErrorMessage)
+            ? "Twilio message send failed."
+            : $"Twilio message send failed: {response.ErrorMessage}");
+    }
+
 }
