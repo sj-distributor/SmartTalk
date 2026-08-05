@@ -23,6 +23,11 @@ public interface IAutoTestProcessJobService : IScopedDependency
 
 public class AutoTestProcessJobService : IAutoTestProcessJobService
 {
+    private const int CallRecordSyncDelayDays = 3;
+    private const int CallRecordSyncMaxLookbackMonths = 2;
+    private static readonly TimeSpan CallRecordSyncOverlap = TimeSpan.FromHours(1);
+    private static readonly TimeSpan CallRecordSyncWindowSize = TimeSpan.FromHours(12);
+
     private readonly ICrmClient _crmClient;
     private readonly IAttachmentService _attachmentService;
     private readonly IAutoTestDataProvider _autoTestDataProvider;
@@ -46,25 +51,24 @@ public class AutoTestProcessJobService : IAutoTestProcessJobService
         if (whiteList == null || whiteList.Count == 0)
             return;
 
-        var now = DateTime.UtcNow.AddDays(-3);
-
-        var globalStartTime = new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
+        var utcNow = DateTime.UtcNow;
+        var now = utcNow.AddDays(-CallRecordSyncDelayDays);
+        var earliestStartTime = utcNow.AddMonths(-CallRecordSyncMaxLookbackMonths);
+        var globalStartTime = now;
 
         foreach (var phone in whiteList)
         {
             var lastRecord = await _autoTestDataProvider.GetLastCallRecordAsync(phone, cancellationToken).ConfigureAwait(false);
+            var phoneStartTime = lastRecord?.StartTimeUtc.Subtract(CallRecordSyncOverlap) ?? earliestStartTime;
 
-            if (lastRecord == null)
-            {
-                globalStartTime = new DateTime(2025, 9, 9, 0, 0, 0, DateTimeKind.Utc);
-                break;
-            }
-
-            if (lastRecord.StartTimeUtc < globalStartTime)
-                globalStartTime = lastRecord.StartTimeUtc;
+            if (phoneStartTime < globalStartTime)
+                globalStartTime = phoneStartTime;
         }
 
-        var windowSize = TimeSpan.FromHours(12);
+        if (globalStartTime < earliestStartTime)
+            globalStartTime = earliestStartTime;
+        
+        var windowSize = CallRecordSyncWindowSize;
         var startTime = globalStartTime;
 
         while (startTime < now)
