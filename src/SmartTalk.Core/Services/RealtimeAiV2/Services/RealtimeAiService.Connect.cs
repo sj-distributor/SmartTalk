@@ -63,6 +63,15 @@ public partial class RealtimeAiService
 
     private async Task DisconnectFromProviderAsync(string reason)
     {
+        // Claimed atomically rather than inferred from SessionCts being null: both callers pass a
+        // null check, and the loser then throws on the Dispose the winner already did. Exactly one
+        // caller performs the teardown; the other returns, as it did before minus the exception.
+        if (Interlocked.Exchange(ref _ctx.ProviderDisconnectClaimed, 1) == 1)
+        {
+            Log.Debug("[RealtimeAi] Provider teardown already in progress, SessionId: {SessionId}", _ctx.SessionId);
+            return;
+        }
+
         if (_ctx.SessionCts == null)
         {
             Log.Debug("[RealtimeAi] Already disconnected, SessionId: {SessionId}", _ctx.SessionId);

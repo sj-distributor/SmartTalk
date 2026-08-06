@@ -28,6 +28,13 @@ public class RealtimeAiSessionContext
     public IRealtimeAiTtsProvider TtsProvider { get; set; }
     public CancellationTokenSource SessionCts { get; set; }
 
+    /// <summary>
+    /// Claim flag for provider teardown, taken with Interlocked. A provider drop on a live session
+    /// reaches DisconnectFromProviderAsync from two directions at once — the critical-error path and
+    /// the orchestration loop unwinding — and a plain null check on SessionCts lets both through.
+    /// </summary>
+    public int ProviderDisconnectClaimed;
+
     // Negotiated once at connect (OutputModeNegotiator) and reused for the session — never re-sniffed.
     public RealtimeAiOutputMode OutputMode { get; set; }
 
