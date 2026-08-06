@@ -105,36 +105,31 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
     }
 
     /// <summary>
-    /// Start ConnectAsync on a background thread and wait for the read loop to begin.
-    /// Returns the task so the test can later signal the FakeWs to close and await completion.
+    /// Starts ConnectAsync in the background and returns once the session is actually up — the read
+    /// loop has reached its first ReceiveAsync — or once ConnectAsync has finished, whichever comes
+    /// first. Returns the task so a test can later signal the FakeWs to close and await completion.
+    ///
+    /// <para>Waits on a signal rather than a fixed delay. A fixed delay is a race the test loses
+    /// whenever the machine is busy: xunit runs test classes in parallel, so the background task may
+    /// not have reached ConnectToProviderAsync yet, and any assertion the test makes immediately
+    /// afterwards fails for reasons that have nothing to do with the behaviour under test.</para>
     /// </summary>
     protected async Task<Task> StartSessionInBackgroundAsync(RealtimeSessionOptions? options = null)
     {
         options ??= CreateDefaultOptions();
 
-        var sessionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        // The read loop will block on ReceiveAsync, so once ConnectAsync reaches OrchestrateSessionAsync
-        // and calls ReceiveAsync for the first time, we know the session is running.
-        // We give a small delay to ensure the loop has entered.
         var task = Task.Run(async () =>
         {
             try
             {
-                // Signal that we're about to start
-                _ = Task.Delay(50).ContinueWith(_ => sessionStarted.TrySetResult());
                 await Sut.ConnectAsync(options, CancellationToken.None).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                sessionStarted.TrySetException(ex);
-            }
         });
 
-        await sessionStarted.Task.ConfigureAwait(false);
-        // Extra small delay to ensure the read loop has entered ReceiveAsync
-        await Task.Delay(50).ConfigureAwait(false);
+        // ConnectAsync completing first is legitimate: connect-failure tests never reach the loop.
+        await Task.WhenAny(FakeWs.ReceiveStarted, task).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
         return task;
     }
 

@@ -48,8 +48,19 @@ public class FakeWebSocket : WebSocket
         return result;
     }
 
+    private readonly TaskCompletionSource _receiveStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Completes when the service's read loop first calls ReceiveAsync — i.e. the session is fully
+    /// up. Tests wait on this instead of guessing with a fixed delay, which loses the race whenever
+    /// the machine is busy running other test classes in parallel.
+    /// </summary>
+    public Task ReceiveStarted => _receiveStarted.Task;
+
     public override ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer, CancellationToken cancellationToken)
     {
+        _receiveStarted.TrySetResult();
+
         return ReceiveInternalAsync(buffer, cancellationToken);
     }
 
