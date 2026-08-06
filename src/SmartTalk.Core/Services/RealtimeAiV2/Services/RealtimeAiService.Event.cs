@@ -528,7 +528,13 @@ public partial class RealtimeAiService
         await SendToClientAsync(_ctx.ClientAdapter.BuildErrorMessage(errorData.Code, errorData.Message, _ctx.SessionId)).ConfigureAwait(false);
 
         if (errorData.IsCritical)
+        {
+            // Recorded at the point of decision. Teardown cannot tell afterwards whether the socket
+            // closed because the caller hung up or because the engine gave up on the provider.
+            _ctx.TerminationCause ??= RealtimeAiSessionOutcome.ProviderFault;
+
             await DisconnectFromProviderAsync($"Critical provider error: {errorData.Message}").ConfigureAwait(false);
+        }
     }
 
     private static bool IsActiveResponseInProgressError(RealtimeAiErrorData errorData)

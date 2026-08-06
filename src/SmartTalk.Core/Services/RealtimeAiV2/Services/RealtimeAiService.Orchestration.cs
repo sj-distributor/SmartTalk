@@ -1,8 +1,11 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using NAudio.Wave;
 using Serilog;
+using Serilog.Events;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -121,13 +124,13 @@ public partial class RealtimeAiService
 
     private async Task CleanupSessionAsync(bool clientIsClose)
     {
+        var outcome = ResolveSessionOutcome(clientIsClose);
+
         if (clientIsClose)
             await SafeExecuteAsync(
                 () => _ctx.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close acknowledged", CancellationToken.None), "acknowledge client close");
         else
         {
-            Log.Warning("[RealtimeAi] Client disconnected abnormally, SessionId: {SessionId}, WebSocketState: {WebSocketState}", _ctx.SessionId, GetWebSocketStateSafe());
-
             if (_ctx.Options.MaxSessionDuration.HasValue)
                 await SafeExecuteAsync(
                     () => CloseClientWebSocketIfOpenAsync("Session ended"), "close client socket");
@@ -144,6 +147,46 @@ public partial class RealtimeAiService
 
         await SafeExecuteAsync(HandleRecordingAsync, "handle recording");
         await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");
+
+        LogSessionEnded(outcome);
+    }
+
+    /// <summary>
+    /// A deliberate teardown records its own cause; anything else is read off the client socket. The
+    /// duration ceiling is inferred rather than signalled because CancelAfter shares the session CTS
+    /// with every other cancellation path, so there is nothing to distinguish it at the callback.
+    /// </summary>
+    private RealtimeAiSessionOutcome ResolveSessionOutcome(bool clientIsClose)
+    {
+        if (_ctx.TerminationCause is { } cause) return cause;
+
+        if (clientIsClose) return RealtimeAiSessionOutcome.ClientClosed;
+
+        if (_ctx.Options.MaxSessionDuration is { } ceiling && Stopwatch.GetElapsedTime(_ctx.SessionStartedAt) >= ceiling)
+            return RealtimeAiSessionOutcome.MaxDurationReached;
+
+        return RealtimeAiSessionOutcome.ClientAborted;
+    }
+
+    /// <summary>
+    /// One line per session carrying how it ended and what it produced, levelled by outcome so
+    /// "abnormal disconnect rate" becomes a number worth alerting on. Replaces two Warnings that
+    /// attributed every ending — including the engine's own decisions — to the client.
+    /// </summary>
+    private void LogSessionEnded(RealtimeAiSessionOutcome outcome)
+    {
+        var level = outcome switch
+        {
+            RealtimeAiSessionOutcome.ProviderFault => LogEventLevel.Error,
+            RealtimeAiSessionOutcome.ClientAborted => LogEventLevel.Warning,
+            _ => LogEventLevel.Information
+        };
+
+        Log.Write(level,
+            "[RealtimeAi] Session ended, SessionId: {SessionId}, Outcome: {Outcome}, ElapsedSessionMs: {ElapsedSessionMs}, " +
+            "TurnCount: {TurnCount}, TranscriptionCount: {TranscriptionCount}, WebSocketState: {WebSocketState}",
+            _ctx.SessionId, outcome, (long)Stopwatch.GetElapsedTime(_ctx.SessionStartedAt).TotalMilliseconds,
+            _ctx.Round, _ctx.Transcriptions.Count, GetWebSocketStateSafe());
     }
 
     private async Task CloseClientWebSocketIfOpenAsync(string reason)

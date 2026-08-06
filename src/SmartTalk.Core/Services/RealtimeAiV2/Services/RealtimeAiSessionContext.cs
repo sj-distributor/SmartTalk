@@ -35,6 +35,12 @@ public class RealtimeAiSessionContext
     /// </summary>
     public int ProviderDisconnectClaimed;
 
+    /// <summary>
+    /// Set when the engine itself decides to end the session, so teardown can report why instead of
+    /// inferring it from the client socket's state. Null means the client ended it.
+    /// </summary>
+    public RealtimeAiSessionOutcome? TerminationCause { get; set; }
+
     // Negotiated once at connect (OutputModeNegotiator) and reused for the session — never re-sniffed.
     public RealtimeAiOutputMode OutputMode { get; set; }
 
