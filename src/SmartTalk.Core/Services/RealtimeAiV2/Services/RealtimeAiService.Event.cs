@@ -107,8 +107,14 @@ public partial class RealtimeAiService
                     await MarkProviderResponseStartedAsync().ConfigureAwait(false);
                     break;
 
+                case RealtimeAiWssEventType.Ignored:
+                    Log.Debug("[RealtimeAi] Ignored provider event, SessionId: {SessionId}, ProviderEventType: {ProviderEventType}", _ctx.SessionId, parsedEvent.Data);
+                    break;
+
                 case RealtimeAiWssEventType.Unknown:
-                    Log.Warning("[RealtimeAi] Unknown provider event, SessionId: {SessionId}, Data: {Data}, Raw: {RawJson}", _ctx.SessionId, parsedEvent.Data, parsedEvent.RawJson);
+                    // The raw frame is deliberately absent: it carries function-call arguments, i.e.
+                    // the customer's order, name and phone. The event type is the diagnostic part.
+                    Log.Warning("[RealtimeAi] Unknown provider event, SessionId: {SessionId}, ProviderEventType: {ProviderEventType}", _ctx.SessionId, parsedEvent.Data);
                     break;
             }
         }
