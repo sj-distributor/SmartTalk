@@ -62,9 +62,19 @@ public class FakeRealtimeAiWssClient : IRealtimeAiWssClient
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// When true, DisconnectAsync throws. Lets tests exercise a transport failure during teardown
+    /// without also breaking the connect-time session.update send, which ThrowOnSend would.
+    /// </summary>
+    public bool ThrowOnDisconnect { get; set; }
+
     public Task DisconnectAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
     {
         DisconnectCallCount++;
+
+        if (ThrowOnDisconnect)
+            throw new WebSocketException("Simulated disconnect failure");
+
         _currentState = WebSocketState.Closed;
         return Task.CompletedTask;
     }
