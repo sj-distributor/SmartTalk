@@ -8,6 +8,7 @@ public partial class AiSpeechAssistantConnectService
 {
     private static AiSpeechAssistantConnectContext BuildContext(ConnectAiSpeechAssistantCommand command) => new()
     {
+        SessionId = Guid.NewGuid().ToString(),
         Host = command.Host,
         From = command.From,
         To = command.To,

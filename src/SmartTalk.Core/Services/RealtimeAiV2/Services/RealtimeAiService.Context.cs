@@ -15,6 +15,9 @@ public partial class RealtimeAiService
 
         _ctx = new RealtimeAiSessionContext
         {
+            // A consumer-supplied id lets its own pre-connect lines share the engine's correlation
+            // value; blank or absent falls back to the property's own generated default.
+            SessionId = string.IsNullOrWhiteSpace(options.SessionId) ? Guid.NewGuid().ToString() : options.SessionId,
             Options = options,
             WebSocket = options.WebSocket,
             SessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)

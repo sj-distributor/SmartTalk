@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using SmartTalk.Core.Logging;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
@@ -9,6 +10,15 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 public class AiSpeechAssistantConnectContext
 {
     // Call identity
+    public string SessionId { get; set; }
+
+    /// <summary>
+    /// Ambient log scope for this call, opened at the entry point. CallSid and StreamSid are set on
+    /// it once Twilio's start frame arrives, which is why it must be deferred rather than a plain
+    /// LogContext.PushProperty.
+    /// </summary>
+    public DeferredLogScope LogScope { get; set; }
+
     public string CallSid { get; set; }
     public string StreamSid { get; set; }
     public string Host { get; set; }

@@ -12,8 +12,9 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public class RealtimeAiSessionContext
 {
-    // Identity
-    public string SessionId { get; } = Guid.NewGuid().ToString();
+    // Identity — the consumer may supply this via RealtimeSessionOptions.SessionId so its own
+    // pre-connect log lines share the value; otherwise the engine mints one.
+    public string SessionId { get; init; } = Guid.NewGuid().ToString();
 
     // Configuration
     public RealtimeSessionOptions Options { get; set; }

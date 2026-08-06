@@ -22,6 +22,10 @@ public partial class AiSpeechAssistantConnectService
         _ctx.CallSid = callSid;
         _ctx.StreamSid = streamSid;
 
+        // Back-fills the scope opened at the entry point: from here on every line of this call —
+        // consumer, engine, provider transport — carries CallSid without any of them passing it.
+        _ctx.LogScope?.Set("CallSid", callSid).Set("StreamSid", streamSid).Set("AgentId", _ctx.AgentId);
+
         Log.Information("[AiAssistant] Call started, CallSid: {CallSid}, StreamSid: {StreamSid}", callSid, streamSid);
 
         TriggerTwilioRecordingPhoneCall();
