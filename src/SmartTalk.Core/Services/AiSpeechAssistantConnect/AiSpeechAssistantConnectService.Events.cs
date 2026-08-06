@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Logging;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -24,7 +25,7 @@ public partial class AiSpeechAssistantConnectService
 
         // Back-fills the scope opened at the entry point: from here on every line of this call —
         // consumer, engine, provider transport — carries CallSid without any of them passing it.
-        _ctx.LogScope?.Set("CallSid", callSid).Set("StreamSid", streamSid).Set("AgentId", _ctx.AgentId);
+        _ctx.LogScope?.Set(LogProperties.CallSid, callSid).Set(LogProperties.StreamSid, streamSid).Set(LogProperties.AgentId, _ctx.AgentId);
 
         Log.Information("[AiAssistant] Call started, CallSid: {CallSid}, StreamSid: {StreamSid}", callSid, streamSid);
 

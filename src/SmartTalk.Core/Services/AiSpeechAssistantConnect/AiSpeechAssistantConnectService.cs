@@ -104,9 +104,9 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         // ones that run before the engine exists. CallSid only arrives on Twilio's start frame, so
         // the scope is deferred and HandleClientStartAsync fills it in then.
         _ctx.LogScope = new DeferredLogScope()
-            .Set(RealtimeAiService.RealtimeSessionIdProperty, _ctx.SessionId)
-            .Set("From", command.From)
-            .Set("To", command.To);
+            .Set(LogProperties.RealtimeSessionId, _ctx.SessionId)
+            .Set(LogProperties.From, command.From)
+            .Set(LogProperties.To, command.To);
 
         using var callScope = LogContext.Push(_ctx.LogScope);
 

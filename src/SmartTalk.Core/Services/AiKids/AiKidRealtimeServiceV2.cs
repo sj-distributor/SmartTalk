@@ -68,8 +68,8 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         // Same correlation key the engine uses, pushed before the first log line so the prompt and
         // knowledge resolution below join to the engine's lines for this session in Seq.
         using var callScope = LogContext.Push(new DeferredLogScope()
-            .Set(RealtimeAiService.RealtimeSessionIdProperty, sessionId)
-            .Set("AssistantId", command.AssistantId));
+            .Set(LogProperties.RealtimeSessionId, sessionId)
+            .Set(LogProperties.AssistantId, command.AssistantId));
 
         var assistant = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)

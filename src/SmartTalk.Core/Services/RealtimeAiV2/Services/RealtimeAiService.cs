@@ -13,13 +13,6 @@ public interface IRealtimeAiService : IScopedDependency
 
 public partial class RealtimeAiService : IRealtimeAiService
 {
-    /// <summary>
-    /// Ambient correlation property carried by every log line written inside a session. Consumers
-    /// push the same name so their pre-connect lines join to the engine's in Seq; renaming it breaks
-    /// every saved query and signal, so it is pinned by RealtimeAiServiceLogCorrelationTests.
-    /// </summary>
-    public const string RealtimeSessionIdProperty = "RealtimeSessionId";
-
     private RealtimeAiSessionContext _ctx;
 
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
@@ -40,7 +33,7 @@ public partial class RealtimeAiService : IRealtimeAiService
         // Ambient for the whole session. Everything the engine calls into inherits it — including the
         // provider WSS client's receive loop, which Task.Run starts inside this scope — so those log
         // lines become filterable by call without editing any of their call sites.
-        using var callScope = LogContext.Push(new DeferredLogScope().Set(RealtimeSessionIdProperty, _ctx.SessionId));
+        using var callScope = LogContext.Push(new DeferredLogScope().Set(LogProperties.RealtimeSessionId, _ctx.SessionId));
 
         Log.Information("[RealtimeAi] Session initialized, Context: {@Context}", _ctx);
 
