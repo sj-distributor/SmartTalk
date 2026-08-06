@@ -31,6 +31,13 @@ public class RealtimeAiSessionContext
     // Negotiated once at connect (OutputModeNegotiator) and reused for the session — never re-sniffed.
     public RealtimeAiOutputMode OutputMode { get; set; }
 
+    // Latency anchors — Stopwatch ticks, not wall clock: monotonic, immune to clock adjustment,
+    // and allocation-free to read. Elapsed values are derived at the log site.
+    public long SessionStartedAt { get; set; }
+    public long ProviderConnectedAt { get; set; }
+    public long TurnStartedAt { get; set; }
+    public bool TurnFirstAudioReported { get; set; }
+
     // Runtime state
     public int Round { get; set; }
     public volatile bool IsAiSpeaking;

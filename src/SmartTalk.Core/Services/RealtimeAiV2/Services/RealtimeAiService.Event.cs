@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.WebSockets;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
@@ -35,7 +36,10 @@ public partial class RealtimeAiService
             switch (parsedEvent.Type)
             {
                 case RealtimeAiWssEventType.SessionInitialized:
-                    Log.Information("[RealtimeAi] Provider session initialized, SessionId: {SessionId}", _ctx.SessionId);
+                    // "Connected" only means the socket opened; this is the provider actually
+                    // accepting the session config, which is the point the call can start.
+                    Log.Information("[RealtimeAi] Provider session initialized, SessionId: {SessionId}, ElapsedProviderReadyMs: {ElapsedProviderReadyMs}",
+                        _ctx.SessionId, (long)Stopwatch.GetElapsedTime(_ctx.ProviderConnectedAt).TotalMilliseconds);
                     await OnSessionInitializedAsync().ConfigureAwait(false);
                     break;
 
@@ -159,9 +163,26 @@ public partial class RealtimeAiService
         if (!_ctx.ResponseStartTimestampTwilio.HasValue && _ctx.LatestMediaTimestamp.HasValue)
             _ctx.ResponseStartTimestampTwilio = _ctx.LatestMediaTimestamp;
 
+        ReportFirstAudioOfTurnIfNeeded();
+
         var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
         await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Time from the provider starting a response to the first audio actually leaving for the
+    /// caller — the number that maps onto what a caller experiences as a pause. Once per turn: the
+    /// deltas that follow are the same turn still speaking.
+    /// </summary>
+    private void ReportFirstAudioOfTurnIfNeeded()
+    {
+        if (_ctx.TurnFirstAudioReported || _ctx.TurnStartedAt == 0) return;
+
+        _ctx.TurnFirstAudioReported = true;
+
+        Log.Information("[RealtimeAi] First audio of turn, SessionId: {SessionId}, Round: {Round}, ElapsedToFirstAudioMs: {ElapsedToFirstAudioMs}",
+            _ctx.SessionId, _ctx.Round, (long)Stopwatch.GetElapsedTime(_ctx.TurnStartedAt).TotalMilliseconds);
     }
 
     private void TryTrackLastAssistantItemId(ParsedRealtimeAiProviderEvent parsedEvent)
@@ -292,7 +313,10 @@ public partial class RealtimeAiService
 
         await SendToClientAsync(_ctx.ClientAdapter.BuildTurnCompletedMessage(_ctx.SessionId)).ConfigureAwait(false);
         
-        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}", _ctx.SessionId, _ctx.Round);
+        // Feeds the absolute turn ceiling the hardening plan adds later: without the real p99.9
+        // that threshold would be a guess.
+        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}, ElapsedTurnMs: {ElapsedTurnMs}",
+            _ctx.SessionId, _ctx.Round, _ctx.TurnStartedAt == 0 ? 0 : (long)Stopwatch.GetElapsedTime(_ctx.TurnStartedAt).TotalMilliseconds);
     }
 
     private async Task ForwardProviderTextToTtsAsync(string text)
@@ -354,6 +378,9 @@ public partial class RealtimeAiService
 
     private void ResetCurrentResponseState()
     {
+        _ctx.TurnStartedAt = Stopwatch.GetTimestamp();
+        _ctx.TurnFirstAudioReported = false;
+
         // Bump the turn generation first so any TTS-synthesis watchdog still pending from the previous
         // turn no-ops when it fires (it captured the old generation).
         Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
@@ -463,9 +490,16 @@ public partial class RealtimeAiService
 
         foreach (var functionCall in functionCalls)
         {
-            Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, Function: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
+            Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, FunctionName: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
+
+            var handlerStartedAt = Stopwatch.GetTimestamp();
 
             var result = await _ctx.Options.OnFunctionCallAsync(functionCall, _ctx.SessionActions).ConfigureAwait(false);
+
+            // Handlers run inline on the provider receive loop, so this doubles as the measure of how
+            // long that loop was blocked — and it is where the per-call timeout gets its value from.
+            Log.Information("[RealtimeAi] Function call completed, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}",
+                _ctx.SessionId, functionCall.FunctionName, (long)Stopwatch.GetElapsedTime(handlerStartedAt).TotalMilliseconds);
 
             if (!string.IsNullOrEmpty(result?.Output)) replies.Add((functionCall, result.Output));
             if (result?.ShouldTriggerResponse == true) shouldTriggerResponse = true;
