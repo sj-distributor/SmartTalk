@@ -42,7 +42,10 @@ public partial class RealtimeAiService
 
         await _ctx.WssClient.SendMessageAsync(configJson, _ctx.SessionCts.Token).ConfigureAwait(false);
 
-        Log.Information("[RealtimeAi] Connected to provider, SessionId: {SessionId}, Provider: {Provider}", _ctx.SessionId, _ctx.Options.ModelConfig.Provider);
+        // OutputMode belongs here rather than on the session-start line: it is only known once the
+        // negotiator has run, and reporting it before that made every call look like Audio.
+        Log.Information("[RealtimeAi] Connected to provider, SessionId: {SessionId}, Provider: {Provider}, OutputMode: {OutputMode}, TtsProvider: {TtsProvider}",
+            _ctx.SessionId, _ctx.Options.ModelConfig.Provider, _ctx.OutputMode, _ctx.TtsProvider.TtsProviderType);
     }
 
     private async Task DisconnectFromProviderAsync(string reason)

@@ -279,7 +279,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             finalPrompt = finalPrompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);
         }
 
-        Log.Information("The final prompt: {FinalPrompt}", finalPrompt);
+        // Length only — the engine's session-start line already carries the hash that identifies
+        // which revision was live.
+        Log.Information("[AiKidRealtimeV2] Prompt resolved, PromptChars: {PromptChars}", finalPrompt?.Length ?? 0);
 
         return finalPrompt;
     }

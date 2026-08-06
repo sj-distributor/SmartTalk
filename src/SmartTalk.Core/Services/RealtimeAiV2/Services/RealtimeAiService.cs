@@ -1,8 +1,11 @@
+using System.Security.Cryptography;
+using System.Text;
 using Serilog;
 using Serilog.Context;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Logging;
 using SmartTalk.Core.Services.Timer;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -35,7 +38,7 @@ public partial class RealtimeAiService : IRealtimeAiService
         // lines become filterable by call without editing any of their call sites.
         using var callScope = LogContext.Push(new DeferredLogScope().Set(LogProperties.RealtimeSessionId, _ctx.SessionId));
 
-        Log.Information("[RealtimeAi] Session initialized, Context: {@Context}", _ctx);
+        LogSessionInitialized();
 
         try
         {
@@ -48,6 +51,38 @@ public partial class RealtimeAiService : IRealtimeAiService
         }
 
         await OrchestrateSessionAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Describes the session without reproducing its content. This deliberately replaced a
+    /// <c>{@Context}</c> destructure of the whole session context, which reached
+    /// <c>Options.ModelConfig.Prompt</c> — for a phone call, the resolved restaurant prompt carrying
+    /// the caller's number, their CRM record and the menu — and wrote it to Seq and stdout on every
+    /// inbound call, before the caller heard the greeting.
+    ///
+    /// <para>The prompt is represented by its length and a short hash, which is enough to confirm
+    /// which revision was live without the sink retaining any of it. Guarded by
+    /// RealtimeAiServiceLogPrivacyTests.</para>
+    /// </summary>
+    private void LogSessionInitialized()
+    {
+        var model = _ctx.Options.ModelConfig;
+
+        Log.Information(
+            "[RealtimeAi] Session initialized, SessionId: {SessionId}, Provider: {Provider}, Client: {Client}, " +
+            "Region: {Region}, TtsProvider: {TtsProvider}, Recording: {Recording}, " +
+            "PromptChars: {PromptChars}, PromptSha256: {PromptSha256}, ToolCount: {ToolCount}",
+            _ctx.SessionId, model.Provider, _ctx.Options.ClientConfig.Client,
+            _ctx.Options.Region, _ctx.Options.TtsConfig?.ProviderType ?? RealtimeAiTtsProviderType.BuiltIn, _ctx.Options.EnableRecording,
+            model.Prompt?.Length ?? 0, ShortHash(model.Prompt), model.Tools?.Count ?? 0);
+    }
+
+    /// <summary>First 8 hex chars of the SHA-256 — identifies a revision, reveals nothing about it.</summary>
+    private static string ShortHash(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..8].ToLowerInvariant();
     }
 
     private string GetWebSocketStateSafe()

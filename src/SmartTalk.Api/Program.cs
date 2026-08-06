@@ -38,6 +38,12 @@ public class Program
                 ApiKey = MaskApiKey(c.ApiKey),
                 c.ProviderSpecificConfig
             })
+            // Global backstop. The realtime chain no longer destructures anything large, but these
+            // caps mean the next `{@Something}` added anywhere cannot quietly put a multi-KB payload
+            // — a resolved prompt, a menu, a knowledge blob — into Seq on every call.
+            .Destructure.ToMaximumStringLength(2048)
+            .Destructure.ToMaximumCollectionCount(50)
+            .Destructure.ToMaximumDepth(4)
             .Enrich.FromLogContext()
             .Enrich.WithProperty("Application", application)
             .WriteTo.Console()
