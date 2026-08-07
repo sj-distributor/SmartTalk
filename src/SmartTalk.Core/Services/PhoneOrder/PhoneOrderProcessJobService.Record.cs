@@ -35,6 +35,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderProcessJobService
 {
     Task HandleReleasedSpeechMaticsCallBackAsync(string jobId, CancellationToken cancellationToken);
+
+    Task HandleAixvolinkRecordDirectAsync(int recordId, CancellationToken cancellationToken);
     
     Task<DialogueScenarioResultDto> IdentifyDialogueScenariosAsync(string query, CancellationToken cancellationToken);
 }
@@ -79,19 +81,10 @@ public partial class PhoneOrderProcessJobService
                         Text: x.Alternatives[0].Content)));
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-            await TryCalculateRecordingDurationForSummaryAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
 
             await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
 
-            await SummarizeConversationContentByRecordingEvidenceAsync(
-                record,
-                audioContent,
-                hasExactlyOneSpeaker,
-                cancellationToken).ConfigureAwait(false);
-
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.CalculateRecordingDurationAsync(record, null, cancellationToken), HangfireConstants.InternalHostingFfmpeg);
+            await ProcessRecordAudioAnalysisAsync(record, audioContent, hasExactlyOneSpeaker, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -103,6 +96,64 @@ public partial class PhoneOrderProcessJobService
 
             Log.Warning("Handle transcription callback failed: {@Exception}", e);
         }
+    }
+
+    public async Task HandleAixvolinkRecordDirectAsync(int recordId, CancellationToken cancellationToken)
+    {
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(recordId, cancellationToken).ConfigureAwait(false);
+
+        if (record == null) return;
+
+        if (!string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Warning("Skip direct AIXVOLINK record processing because source provider does not match. RecordId={RecordId}, SourceProvider={SourceProvider}", record.Id, record.SourceProvider);
+            return;
+        }
+
+        try
+        {
+            record.Status = PhoneOrderRecordStatus.Transcription;
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+            var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
+
+            await ProcessRecordAudioAnalysisAsync(
+                record,
+                audioContent,
+                hasExactlyOneSpeaker: false,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            record.Status = PhoneOrderRecordStatus.Exception;
+
+            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken)
+                .ConfigureAwait(false);
+            await _phoneOrderDataProvider.MarkRecordCompletedAsync(record.Id, cancellationToken).ConfigureAwait(false);
+
+            Log.Warning("Handle direct AIXVOLINK record processing failed: {@Exception}", e);
+        }
+    }
+
+    private async Task ProcessRecordAudioAnalysisAsync(
+        PhoneOrderRecord record,
+        byte[] audioContent,
+        bool hasExactlyOneSpeaker,
+        CancellationToken cancellationToken)
+    {
+        await TryCalculateRecordingDurationForSummaryAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+
+        await SummarizeConversationContentByRecordingEvidenceAsync(
+            record,
+            audioContent,
+            hasExactlyOneSpeaker,
+            cancellationToken).ConfigureAwait(false);
+
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(
+            x => x.CalculateRecordingDurationAsync(record, null, cancellationToken),
+            HangfireConstants.InternalHostingFfmpeg);
     }
 
     private async Task<bool> SummarizeConversationContentByRecordingEvidenceAsync(
@@ -192,7 +243,7 @@ public partial class PhoneOrderProcessJobService
         var chineseSummary = BuildInvalidConversationSummaryChinese(callFrom);
 
         record.Status = PhoneOrderRecordStatus.Sent;
-        record.TranscriptionText = englishSummary;
+        record.TranscriptionText = chineseSummary;
         record.Scenario = DialogueScenarios.InvalidCall;
         record.Remark = string.Empty;
         record.IsHumanAnswered = false;
@@ -273,10 +324,11 @@ public partial class PhoneOrderProcessJobService
 
         Log.Information("Get Assistant: {@Assistant} and Agent: {@Agent} by agent id {agentId}", aiSpeechAssistant, agent, record.AgentId);
         
+        var isAixvolinkRecord = string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase);
         var callFrom = record.PhoneNumber ?? string.Empty;
         var callTo = record.IncomingCallNumber ?? string.Empty;
 
-        if (string.IsNullOrWhiteSpace(callFrom) && !string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(callFrom) && !isAixvolinkRecord)
         {
             try
             {
@@ -351,7 +403,12 @@ public partial class PhoneOrderProcessJobService
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
-        var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        var sourceReportLanguage = record.Language;
+        if (!isAixvolinkRecord)
+        {
+            var detection = await _translationClient.DetectLanguageAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+            sourceReportLanguage = SelectReportLanguageEnum(detection.Language);
+        }
 
         if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
         {
@@ -374,14 +431,14 @@ public partial class PhoneOrderProcessJobService
         {
             RecordId = record.Id,
             Report = record.TranscriptionText,
-            Language = SelectReportLanguageEnum(detection.Language),
-            IsOrigin = SelectReportLanguageEnum(detection.Language) == record.Language,
+            Language = sourceReportLanguage,
+            IsOrigin = sourceReportLanguage == record.Language,
             CreatedDate = DateTimeOffset.Now
         });
         
-        var targetLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? "en" : "zh";
+        var targetLanguage = sourceReportLanguage == TranscriptionLanguage.Chinese ? "en" : "zh";
         
-        var reportLanguage = SelectReportLanguageEnum(detection.Language) == TranscriptionLanguage.Chinese ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
+        var reportLanguage = sourceReportLanguage == TranscriptionLanguage.Chinese ? TranscriptionLanguage.English : TranscriptionLanguage.Chinese;
         
         var translatedText = await _translationClient.TranslateTextAsync(record.TranscriptionText, targetLanguage, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -627,8 +684,9 @@ public partial class PhoneOrderProcessJobService
             "3. 禁止說明你正在處理錄音，也不要要求使用者等待或補充資料。\n" +
             "4. 如果報告格式包含「交談主題」，第一行必須是「交談主題：」。\n" +
             "5. 「客人下單內容」不是必填項。如果錄音中沒有任何客戶下單行為，則寫「客人下單內容：無明確下單」。\n" +
-            "6. 【重要】如果通話中同時包含投訴/反饋和新下單內容，兩者必須獨立分析和記錄。投訴內容的存在不影響下單內容的識別與提取。\n"+
-            "7. 【重要】如果錄音內容太短、為空，或無任何有效語音、客戶未說話，只需要在內容摘要處中说明“未识别有效录音”。";
+            "6. 【重要】如果通話中同時包含投訴/反饋和新下單內容，兩者必須獨立分析和記錄。投訴內容的存在不影響下單內容的識別與提取。\n" +
+            "7. 【重要】如果錄音內容太短、為空，或無任何有效語音、客戶未說話，只需要在內容摘要處中说明“未识别有效录音”。\n" +
+            "8. 【重要】只有录音中明确听到客户提出商品和订单意图时，才可以写入客户下单内容；不得根据示例或物料列表推测、补充或生成订单。";
 
         List<ChatMessage> messages =
         [
