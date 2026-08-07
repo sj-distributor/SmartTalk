@@ -165,7 +165,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
 
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetCrmAutoSyncAssistantByStoreAndNameAsync(int storeId, string assistantName, CancellationToken cancellationToken = default);
-    
+
     Task<bool> HasCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default);
     
     Task<List<CrmAutoSyncAssistantLocationDto>> GetCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default);
@@ -966,11 +966,10 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             where posAgent.StoreId == storeId
-                  && agent.SourceSystem == AgentSourceSystem.AiResource
                   && assistant.Name == assistantName
             orderby assistant.CreatedDate descending
             select assistant;
-
+        
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
