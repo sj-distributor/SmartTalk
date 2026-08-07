@@ -204,8 +204,15 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         ProviderAdapter.Received(1).BuildFunctionCallReplyMessage(fc, "done");
     }
 
+    /// <summary>
+    /// Was <c>FunctionCall_CallbackThrows_ExceptionCaughtTurnNotCompleted</c>, which pinned the
+    /// defect rather than a requirement: its own comment noted that the switch arm exits early and
+    /// <c>OnAiTurnCompletedAsync</c> is never called. That left the turn open forever — no idle
+    /// timer, nothing to move the call on — for the most failure-prone step in the chain.
+    /// Completion now runs in a finally, so the turn closes whatever the handler did.
+    /// </summary>
     [Fact]
-    public async Task FunctionCall_CallbackThrows_ExceptionCaughtTurnNotCompleted()
+    public async Task FunctionCall_CallbackThrows_TurnStillCompletes()
     {
         ProviderAdapter.ParseMessage(Arg.Any<string>())
             .Returns(new ParsedRealtimeAiProviderEvent
@@ -230,11 +237,9 @@ public class RealtimeAiServiceFunctionCallTests : RealtimeAiServiceTestBase
         FakeWs.EnqueueClose();
         await sessionTask;
 
-        // Exception is caught by the outer try-catch in OnWssMessageReceivedAsync.
-        // Because OnFunctionCallsReceivedAsync throws, the switch case exits early
-        // and OnAiTurnCompletedAsync is NEVER called → Round not incremented,
-        // BuildTurnCompletedMessage not sent.
-        ClientAdapter.DidNotReceive().BuildTurnCompletedMessage(Arg.Any<string>());
+        // The handler's exception is contained: it is logged against the tool that raised it, and
+        // the turn completes regardless, so the session stays able to continue.
+        ClientAdapter.Received().BuildTurnCompletedMessage(Arg.Any<string>());
     }
 
     [Fact]

@@ -93,11 +93,20 @@ public partial class RealtimeAiService
                             await FlushProviderTextToTtsAsync().ConfigureAwait(false);
                     }
 
-                    if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
-                        await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
-                    if (parsedEvent.Usage != null)
-                        await OnResponseUsageReceivedAsync(parsedEvent.Usage).ConfigureAwait(false);
-                    await MarkProviderTurnCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
+                    try
+                    {
+                        if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
+                            await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
+                        if (parsedEvent.Usage != null)
+                            await OnResponseUsageReceivedAsync(parsedEvent.Usage).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        // The turn must complete even when handling its payload failed. Skipping this
+                        // leaves the turn open forever: no idle timer, nothing to move the call on,
+                        // and the caller waiting on an AI that will never speak again.
+                        await MarkProviderTurnCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
+                    }
                     break;
 
                 case RealtimeAiWssEventType.Error:
@@ -492,29 +501,49 @@ public partial class RealtimeAiService
         if (_ctx.Options.OnFunctionCallAsync == null) return;
 
         var shouldTriggerResponse = false;
-        var replies = new List<(RealtimeAiWssFunctionCallData FunctionCall, string Output)>();
+        var repliesSent = 0;
 
+        // Per handler, not per batch: this chain has seventeen tools doing POS lookups and HTTP
+        // calls, and one of them failing must not discard its siblings' replies.
         foreach (var functionCall in functionCalls)
         {
             Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, FunctionName: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
 
             var handlerStartedAt = Stopwatch.GetTimestamp();
 
-            var result = await _ctx.Options.OnFunctionCallAsync(functionCall, _ctx.SessionActions).ConfigureAwait(false);
+            RealtimeAiFunctionCallResult result;
+
+            try
+            {
+                result = await _ctx.Options.OnFunctionCallAsync(functionCall, _ctx.SessionActions).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Named against the tool that failed — "a function call failed" is not actionable
+                // across seventeen of them.
+                Log.Error(ex, "[RealtimeAi] Function call failed, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}",
+                    _ctx.SessionId, functionCall.FunctionName, (long)Stopwatch.GetElapsedTime(handlerStartedAt).TotalMilliseconds);
+
+                continue;
+            }
 
             // Handlers run inline on the provider receive loop, so this doubles as the measure of how
             // long that loop was blocked — and it is where the per-call timeout gets its value from.
             Log.Information("[RealtimeAi] Function call completed, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}",
                 _ctx.SessionId, functionCall.FunctionName, (long)Stopwatch.GetElapsedTime(handlerStartedAt).TotalMilliseconds);
 
-            if (!string.IsNullOrEmpty(result?.Output)) replies.Add((functionCall, result.Output));
             if (result?.ShouldTriggerResponse == true) shouldTriggerResponse = true;
+
+            if (string.IsNullOrEmpty(result?.Output)) continue;
+
+            // Sent as each handler finishes rather than accumulated, so a later failure cannot
+            // discard a reply that was already produced.
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, result.Output)).ConfigureAwait(false);
+
+            repliesSent++;
         }
 
-        foreach (var (functionCall, output) in replies)
-            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
-
-        if (replies.Count > 0 || shouldTriggerResponse)
+        if (repliesSent > 0 || shouldTriggerResponse)
             await QueueOrTriggerProviderResponseAsync("function call").ConfigureAwait(false);
     }
 
