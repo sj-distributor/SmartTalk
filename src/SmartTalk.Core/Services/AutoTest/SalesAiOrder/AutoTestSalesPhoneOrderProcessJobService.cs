@@ -705,23 +705,24 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
         foreach (var batch in customerIds.Chunk(10))
         {
             var batchCustomerIds = batch.ToList();
-            var materialOverviewResponse = await _salesClient
-                .GetCustomerMaterialOverviewAsync(
-                    new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = batchCustomerIds },
-                    cancellationToken)
+            var askInfoResponse = await _salesClient
+                .GetAskInfoDetailListByCustomerAsync(
+                    new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = batchCustomerIds }, cancellationToken)
                 .ConfigureAwait(false);
+            var orderHistoryResponse = await _salesClient
+                .GetOrderHistoryByCustomerAsync(
+                    new GetOrderHistoryByCustomerRequestDto { CustomerNumbers = batchCustomerIds },
+                    cancellationToken).ConfigureAwait(false);
 
-            if (materialOverviewResponse?.Code != 200)
-            {
-                Log.Warning("GetCustomerMaterialOverviewAsync returned non-success response. ResultCode: {ResultCode}, ResultMsg: {ResultMsg}", materialOverviewResponse?.Code, materialOverviewResponse?.Message);
-                continue;
-            }
+            if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
+                historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material))
+                    .Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
 
-            if (materialOverviewResponse?.Data != null && materialOverviewResponse.Data.Any())
-                historyItems.AddRange(materialOverviewResponse.Data
-                    .SelectMany(x => x.Items ?? [])
-                    .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
-                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)));
+            if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
+                historyItems.AddRange(
+                    orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
+                        .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ??
+                    new List<(string, string, DateTime?)>());
         }
 
         return historyItems;

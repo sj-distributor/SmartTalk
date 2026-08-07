@@ -12,14 +12,12 @@ public interface ISalesService : IScopedDependency
     Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
     Task<Dictionary<string, string>> BuildCustomerItemsStringsAsync(List<string> soldToIds, CancellationToken cancellationToken);
-    
-    Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken);
 
-    Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken);
+    Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
+    Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken);
 
     Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
-
-    Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken);
 }
 
 public class SalesService : ISalesService
@@ -88,74 +86,149 @@ public class SalesService : ISalesService
             return result;
         }
 
-        var customerMaterialOverviews = await GetCustomerMaterialOverviewInBatchesAsync(normalizedSoldToIds, cancellationToken)
+        var askItemsResponseData = await GetAskInfoDetailListByCustomerInBatchesAsync(normalizedSoldToIds, cancellationToken)
+            .ConfigureAwait(false);
+        var orderHistoryResponseData = await GetOrderHistoryByCustomerInBatchesAsync(normalizedSoldToIds, cancellationToken)
             .ConfigureAwait(false);
 
-        var materialOverviewByCustomer = customerMaterialOverviews
+        var askItemsByCustomer = askItemsResponseData
+            .Where(x => !string.IsNullOrWhiteSpace(x.CustomerId))
+            .GroupBy(x => BuildCustomerLookupKey(x.CustomerId), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        var orderItemsByCustomer = orderHistoryResponseData
             .Where(x => !string.IsNullOrWhiteSpace(x.CustomerNumber))
             .GroupBy(x => BuildCustomerLookupKey(x.CustomerNumber), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var soldToId in normalizedSoldToIds)
         {
+            var allItems = new List<string>();
             var customerLookupKey = BuildCustomerLookupKey(soldToId);
-            var materialOverview = materialOverviewByCustomer.GetValueOrDefault(customerLookupKey);
-            var materialItems = materialOverview?.Items?
-                .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber) || !string.IsNullOrWhiteSpace(x.MaterialDescription))
-                .ToList() ?? [];
-
-            var habitLookup = materialOverview?.Level5Habits?
-                .Where(x => !string.IsNullOrWhiteSpace(x.LevelCode5))
-                .GroupBy(x => x.LevelCode5, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, CustomerMaterialLevel5HabitDto>(StringComparer.OrdinalIgnoreCase);
-
-            string FormatItem(CustomerMaterialItemDto item)
+            var askItems = askItemsByCustomer.GetValueOrDefault(customerLookupKey) ?? [];
+            var orderItems = orderItemsByCustomer.GetValueOrDefault(customerLookupKey) ?? [];
+            var goodsStatusLookup = await BuildGoodsStatusLookupAsync(askItems, orderItems, soldToId, cancellationToken).ConfigureAwait(false);
+            
+            string ResolveOrderHistoryLevelCode(SalesOrderHistoryDto item)
             {
-                var materialDesc = item.MaterialDescription ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(item?.Level5) ? item.Level5 : item?.LevelCode;
+            }
+
+            var levelCodes = askItems.Where(x => !string.IsNullOrWhiteSpace(x.LevelCode))
+                .Select(x =>
+                {
+                    var levelCode = x.LevelCode.Trim();
+                    return levelCode[..Math.Min(levelCode.Length, 15)];
+                })
+                .Concat(orderItems.Select(ResolveOrderHistoryLevelCode)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x =>
+                    {
+                        var levelCode = x.Trim();
+                        return levelCode[..Math.Min(levelCode.Length, 15)];
+                    }))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToList();
+
+            var quotationLookup = await BuildQuotationLookupAsync(soldToId, askItems, orderItems, cancellationToken).ConfigureAwait(false);
+            
+            var materials = askItems.Where(x => !string.IsNullOrEmpty(x.Material)).Select(x => x.Material)
+                .Concat(orderItems.Where(x => !string.IsNullOrEmpty(x.MaterialNumber)).Select(x => x.MaterialNumber)).Distinct().ToList();
+            
+            var requestDto = new GetCustomerLevel5HabitRequstDto 
+            { 
+                CustomerId = soldToId, 
+                LevelCode5List = levelCodes, 
+                Material = materials 
+            };
+            
+            Log.Information("Sending GetCustomerLevel5HabitAsync with: {@RequestDto}", requestDto);
+            
+            var habitResponse = levelCodes.Any() ? await _salesClient.GetCustomerLevel5HabitAsync(requestDto, cancellationToken).ConfigureAwait(false) : null;
+            
+            Log.Information("GetCustomerLevel5HabitAsync Response: {@HabitResponse}", habitResponse);
+
+            var habitLookup = habitResponse?.HistoryCustomerLevel5HabitDtos?
+                                  .Where(h => !string.IsNullOrWhiteSpace(h.LevelCode5))
+                                  .GroupBy(h =>
+                                  {
+                                      var levelCode = h.LevelCode5.Trim();
+                                      return levelCode[..Math.Min(levelCode.Length, 15)];
+                                  })
+                                  .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+                              ?? new Dictionary<string, HistoryCustomerLevel5HabitDto>(StringComparer.OrdinalIgnoreCase);
+
+            string FormatItem(string materialDesc, string levelCode = null, string materialNumber = null, string plant = null, string rtype = null)
+            {
                 var parts = materialDesc?.Split('·') ?? Array.Empty<string>();
                 var name = parts.Length > 4 ? $"{parts[0]}{parts[4]}" : parts.FirstOrDefault() ?? "";
                 var brand = parts.Length > 1 ? parts[1] : "";
                 var size = parts.Length > 3 ? parts[3] : "";
-
+                var status = string.IsNullOrWhiteSpace(materialNumber) || string.IsNullOrWhiteSpace(plant) ? string.Empty : goodsStatusLookup.GetValueOrDefault(BuildGoodsStatusKey(materialNumber, plant, rtype), string.Empty);
+                var price = FormatQuotationPrice(FindQuotation(quotationLookup, materialNumber));
+                
                 string aliasText = "";
+                MaterialPartInfoDto partInfo = null;
+                
+                var normalizedLevelCode = string.IsNullOrWhiteSpace(levelCode)
+                    ? string.Empty
+                    : levelCode.Trim()[..Math.Min(levelCode.Trim().Length, 15)];
 
-                if (!string.IsNullOrEmpty(item.LevelCode5) && habitLookup.TryGetValue(item.LevelCode5, out var habit))
+                if (!string.IsNullOrEmpty(normalizedLevelCode) && habitLookup.TryGetValue(normalizedLevelCode, out var habit))
                 {
                     aliasText = habit.CustomerLikeNames != null && habit.CustomerLikeNames.Any()
                         ? string.Join(", ", habit.CustomerLikeNames.Select(n => n.CustomerLikeName))
                         : "";
+
+                    partInfo = habit.MaterialPartInfoDtos?.FirstOrDefault(p =>
+                        string.Equals(p.MaterialNumber, materialNumber, StringComparison.OrdinalIgnoreCase));
                 }
 
-                return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, status: {item.GoodsStatus ?? ""}, " +
-                       $"baseUnit: {item.BaseUnit ?? ""}, salesUnit: {item.SalesUnit ?? ""}, weights: {item.Weight}, " +
-                       $"placeOfOrigin: {item.PlaceOfOrigin ?? ""}, packing: {item.Packing ?? ""}, specifications: {item.Specifications ?? ""}, " +
-                       $"ranks: {item.Rank ?? ""}, atr: {item.Atr}";
+                return $"Item: {name}, Brand: {brand}, Size: {size}, Aliases: {aliasText}, status: {status}, " +
+                       $"baseUnit: {partInfo?.BaseUnit ?? ""}, salesUnit: {partInfo?.SalesUnit ?? ""}, weights: {partInfo?.Weights ?? 0}, " +
+                       $"placeOfOrigin: {partInfo?.PlaceOfOrigin ?? ""}, packing: {partInfo?.Packing ?? ""}, specifications: {partInfo?.Specifications ?? ""}, " +
+                       $"ranks: {partInfo?.Ranks ?? ""}, atr: {partInfo?.Atr}, price: {price}";
             }
 
-            result[soldToId] = string.Join(Environment.NewLine, materialItems.Select(FormatItem).Distinct().Take(150));
+            allItems.AddRange(askItems.Select(x => FormatItem(x.MaterialDesc, x.LevelCode, x.Material, x.Plant, x.MaterialType)));
+            allItems.AddRange(orderItems.Select(x => FormatItem(x.MaterialDescription, ResolveOrderHistoryLevelCode(x), x.MaterialNumber, x.Plant, x.MaterialType)));
+            result[soldToId] = string.Join(Environment.NewLine, allItems.Distinct().Take(150));
         }
 
         return result;
     }
 
-    private async Task<List<CustomerMaterialOverviewDto>> GetCustomerMaterialOverviewInBatchesAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    private async Task<List<VwAskDetail>> GetAskInfoDetailListByCustomerInBatchesAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
-        var result = new List<CustomerMaterialOverviewDto>();
+        var result = new List<VwAskDetail>();
 
         foreach (var batch in soldToIds.Chunk(CustomerItemsQueryBatchSize))
         {
             var response = await _salesClient
-                .GetCustomerMaterialOverviewAsync(
-                    new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = batch.ToList() },
+                .GetAskInfoDetailListByCustomerAsync(
+                    new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = batch.ToList() },
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            if (response?.Code != 200)
-            {
-                Log.Warning("GetCustomerMaterialOverviewAsync returned non-success response. ResultCode: {ResultCode}, ResultMsg: {ResultMsg}", response?.Code, response?.Message);
-                continue;
-            }
+            if (response?.Data != null)
+                result.AddRange(response.Data);
+        }
+
+        return result;
+    }
+
+    private async Task<List<SalesOrderHistoryDto>> GetOrderHistoryByCustomerInBatchesAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var result = new List<SalesOrderHistoryDto>();
+
+        foreach (var batch in soldToIds.Chunk(CustomerItemsQueryBatchSize))
+        {
+            var response = await _salesClient
+                .GetOrderHistoryByCustomerAsync(
+                    new GetOrderHistoryByCustomerRequestDto { CustomerNumbers = batch.ToList() },
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             if (response?.Data != null)
                 result.AddRange(response.Data);
@@ -184,34 +257,56 @@ public class SalesService : ISalesService
         var withoutLeadingZeros = trimmed.TrimStart('0');
         return withoutLeadingZeros.Length == 0 ? "0" : withoutLeadingZeros;
     }
-    
-    public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
+
+    public async Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var deliveryProgressTexts = new List<string>();
+
+        if (soldToIds == null || soldToIds.Count == 0)
+        {
+            Log.Warning("BuildCustomerDeliveryProgressStringAsync called with empty soldToIds");
+            return string.Empty;
+        }
+
+        foreach (var soldToId in soldToIds)
+        {
+            var deliveryProgressText = await BuildDeliveryProgressListAsync([soldToId], cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(deliveryProgressText)) continue;
+
+            deliveryProgressTexts.Add($"=== 客户 {soldToId} 配送进度 ===");
+            deliveryProgressTexts.Add(deliveryProgressText.TrimEnd());
+        }
+
+        return string.Join(Environment.NewLine, deliveryProgressTexts);
+    }
+
+    public async Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken)
     {
         var processedCustomerIds = customerIds.Select(id => "0000" + id).ToList();
 
-        var getOrderArrivalTimeList = await _salesClient.GetOrderArrivalTimeAsync(
+        var deliveryProgressResponse = await _salesClient.GetOrderArrivalTimeAsync(
             new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds }, cancellationToken).ConfigureAwait(false);
 
-        if (getOrderArrivalTimeList.Data.Count == 0) return "这位客户暂时没有订单。";
-        
+        if (deliveryProgressResponse.Data.Count == 0) return "这位客户暂时没有订单。";
+
         var resultBuilder = new StringBuilder();
-        
-        var notDeliveredOrders = getOrderArrivalTimeList.Data.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
-        
-        var deliveringOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 4).ToList();
-        
-        var completedOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 7).ToList();
-        
+
+        var notDeliveredOrders = deliveryProgressResponse.Data
+            .Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus))
+            .ToList();
+
+        var deliveringOrders = deliveryProgressResponse.Data
+            .Where(order => order.OrderStatus == 4)
+            .ToList();
+
+        var completedOrders = deliveryProgressResponse.Data
+            .Where(order => order.OrderStatus == 7)
+            .ToList();
         AppendOrderSection(resultBuilder, "未配送", notDeliveredOrders);
         AppendOrderSection(resultBuilder, "配送中", deliveringOrders);
         AppendOrderSection(resultBuilder, "已完成", completedOrders);
 
         return resultBuilder.ToString();
-    }
-
-    public async Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
-    {
-        return await BuildCrmKnowledgeByPhoneAsync(phoneNumber, null, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
@@ -227,29 +322,19 @@ public class SalesService : ISalesService
         };
     }
 
-    public async Task<string> BuildCrmCustomerInfoByPhoneAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
-    {
-        var knowledge = await BuildCrmKnowledgeByPhoneAsync(phoneNumber, crmToken, cancellationToken).ConfigureAwait(false);
-        return knowledge.CustomerInfo;
-    }
-
     private async Task<List<GetCustomersPhoneNumberDataDto>> TryGetCrmCustomersByPhoneAsync(string normalizedPhone, string crmToken, CancellationToken cancellationToken)
     {
         try
         {
-            var token = crmToken;
-            if (string.IsNullOrWhiteSpace(token))
-                token = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
-
-            if (string.IsNullOrWhiteSpace(token))
+            if (string.IsNullOrWhiteSpace(crmToken))
             {
-                Log.Warning("CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
+                Log.Warning("BuildCrmKnowledgeByPhoneAsync: CRM token is empty, phone: {PhoneNumber}", normalizedPhone);
                 return [];
             }
 
             return await _crmClient.GetCustomersByPhoneNumberAsync(
                     new GetCustmoersByPhoneNumberRequestDto { PhoneNumber = normalizedPhone },
-                    token, cancellationToken)
+                    crmToken, cancellationToken)
                 .ConfigureAwait(false) ?? [];
         }
         catch (Exception ex)
@@ -509,4 +594,115 @@ public class SalesService : ISalesService
         }
     }
 
+    private static string BuildGoodsStatusKey(string material, string plant, string rtype)
+    {
+        return $"{material?.Trim().ToUpperInvariant()}|{plant?.Trim().ToUpperInvariant()}|{(rtype ?? string.Empty).Trim().ToUpperInvariant()}";
+    }
+
+    private static string BuildMaterialKey(string material)
+    {
+        if (string.IsNullOrWhiteSpace(material)) return string.Empty;
+
+        var trimmed = material.Trim();
+
+        return long.TryParse(trimmed, out _) ? trimmed.PadLeft(18, '0') : trimmed.ToUpperInvariant();
+    }
+
+    private async Task<Dictionary<string, AiQuotationDto>> BuildQuotationLookupAsync(string soldToId, List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems, CancellationToken cancellationToken)
+    {
+        var materialIds = askItems
+            .Select(x => x.Material)
+            .Concat(orderItems.Select(x => x.MaterialNumber))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(soldToId) || materialIds.Count == 0)
+            return new Dictionary<string, AiQuotationDto>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var response = await _salesClient.GetCustomerAiQuotationAsync(new GetCustomerAiQuotationRequestDto
+            {
+                CustomerId = soldToId,
+                MaterialIdList = materialIds
+            }, cancellationToken).ConfigureAwait(false);
+
+            return response?.AiQuotationList?
+                .Where(x => !string.IsNullOrWhiteSpace(x.MaterialId))
+                .GroupBy(x => BuildMaterialKey(x.MaterialId), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+                ?? new Dictionary<string, AiQuotationDto>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "GetCustomerAiQuotationAsync failed for soldToId {SoldToId}", soldToId);
+            return new Dictionary<string, AiQuotationDto>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static AiQuotationDto FindQuotation(Dictionary<string, AiQuotationDto> quotationLookup, string materialNumber)
+    {
+        if (quotationLookup == null || string.IsNullOrWhiteSpace(materialNumber))
+            return null;
+
+        return quotationLookup.GetValueOrDefault(BuildMaterialKey(materialNumber));
+    }
+
+    private static string FormatQuotationPrice(AiQuotationDto quotation)
+    {
+        if (quotation == null) return string.Empty;
+
+        var parts = new List<string>();
+
+        if (quotation.SjAiCost > 0)
+            parts.Add($"SJ价 {quotation.SjAiCost.Value:0.##}");
+
+        if (quotation.KfOrOsAiCost > 0)
+            parts.Add($"KF/OS价 {quotation.KfOrOsAiCost.Value:0.##}");
+
+        return string.Join("，", parts);
+    }
+
+    private async Task<Dictionary<string, string>> BuildGoodsStatusLookupAsync(List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems, string soldToId, CancellationToken cancellationToken)
+    {
+        var goodsStatusRequestItems = BuildGoodsStatusRequestItems(askItems, orderItems);
+
+        if (goodsStatusRequestItems.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var goodsStatusResponse = await _salesClient.QueryGoodsStatusAsync(new QueryGoodsStatusRequestDto { List = goodsStatusRequestItems }, cancellationToken).ConfigureAwait(false);
+
+        if (goodsStatusResponse?.ResultCode != 200 || goodsStatusResponse.ResultData == null)
+        {
+            Log.Warning("QueryGoodsStatusAsync returned non-success response for soldToId {SoldToId}. ResultCode: {ResultCode}, ResultMsg: {ResultMsg}", soldToId, goodsStatusResponse?.ResultCode, goodsStatusResponse?.ResultMsg);
+
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return goodsStatusResponse.ResultData.GroupBy(x => BuildGoodsStatusKey(x.Material, x.Plant, x.Rtype))
+            .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.Status ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static List<QueryGoodsStatusItemDto> BuildGoodsStatusRequestItems(List<VwAskDetail> askItems, List<SalesOrderHistoryDto> orderItems)
+    {
+        return askItems
+            .Where(x => !string.IsNullOrWhiteSpace(x.Material) && !string.IsNullOrWhiteSpace(x.Plant))
+            .Select(x => new QueryGoodsStatusItemDto
+            {
+                Material = x.Material,
+                Plant = x.Plant,
+                Rtype = x.MaterialType ?? string.Empty
+            })
+            .Concat(orderItems
+                .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber) && !string.IsNullOrWhiteSpace(x.Plant))
+                .Select(x => new QueryGoodsStatusItemDto
+                {
+                    Material = x.MaterialNumber,
+                    Plant = x.Plant,
+                    Rtype = x.MaterialType ?? string.Empty
+                }))
+            .DistinctBy(x => BuildGoodsStatusKey(x.Material, x.Plant, x.Rtype))
+            .ToList();
+    }
 }
