@@ -108,6 +108,10 @@ public partial class RealtimeAiService
                 
                 case RealtimeAiWssEventType.ResponseStarted:
                     ResetCurrentResponseState();
+                    // Without this the only per-turn line is the completion, so a turn that never
+                    // finishes leaves no trace that it began.
+                    Log.Information("[RealtimeAi] Turn started, SessionId: {SessionId}, Round: {Round}, TurnGeneration: {TurnGeneration}, OutputMode: {OutputMode}",
+                        _ctx.SessionId, _ctx.Round, Interlocked.Read(ref _ctx.CurrentTurnGeneration), _ctx.OutputMode);
                     await MarkProviderResponseStartedAsync().ConfigureAwait(false);
                     break;
 
