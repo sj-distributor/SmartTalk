@@ -83,23 +83,10 @@ public partial class PhoneOrderProcessJobService
                         Text: x.Alternatives[0].Content)));
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-            await TryCalculateRecordingDurationForSummaryAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
 
             await _phoneOrderService.ExtractPhoneOrderRecordAiMenuAsync(speakInfos, record, audioContent, cancellationToken).ConfigureAwait(false);
 
-            await SummarizeConversationContentByRecordingEvidenceAsync(
-                record,
-                audioContent,
-                hasExactlyOneSpeaker,
-                cancellationToken).ConfigureAwait(false);
-
-            await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(
-                record,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            _smartTalkBackgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(
-                x => x.CalculateRecordingDurationAsync(record, null, cancellationToken),
-                HangfireConstants.InternalHostingFfmpeg);
+            await ProcessRecordAudioAnalysisAsync(record, audioContent, hasExactlyOneSpeaker, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -131,7 +118,11 @@ public partial class PhoneOrderProcessJobService
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
 
-            await ProcessRecordAudioAnalysisAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+            await ProcessRecordAudioAnalysisAsync(
+                record,
+                audioContent,
+                hasExactlyOneSpeaker: false,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -145,9 +136,19 @@ public partial class PhoneOrderProcessJobService
         }
     }
 
-    private async Task ProcessRecordAudioAnalysisAsync(PhoneOrderRecord record, byte[] audioContent, CancellationToken cancellationToken)
+    private async Task ProcessRecordAudioAnalysisAsync(
+        PhoneOrderRecord record,
+        byte[] audioContent,
+        bool hasExactlyOneSpeaker,
+        CancellationToken cancellationToken)
     {
-        await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+        await TryCalculateRecordingDurationForSummaryAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+
+        await SummarizeConversationContentByRecordingEvidenceAsync(
+            record,
+            audioContent,
+            hasExactlyOneSpeaker,
+            cancellationToken).ConfigureAwait(false);
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
 
