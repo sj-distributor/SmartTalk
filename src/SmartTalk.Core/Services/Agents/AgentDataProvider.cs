@@ -250,12 +250,11 @@ public class AgentDataProvider : IAgentDataProvider
             from posAgent in _repository.Query<PosAgent>()
             join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
             where posAgent.StoreId == storeId
-                  && agent.SourceSystem == AgentSourceSystem.AiResource
                   && agent.Type == AgentType.Sales
                   && agent.Name == agentName
             orderby agent.CreatedDate descending
             select agent;
-
+        
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
@@ -277,4 +276,3 @@ public class AgentDataProvider : IAgentDataProvider
     }
 
 }
-
