@@ -52,6 +52,8 @@ public partial class RealtimeAiService
         // negotiator has run, and reporting it before that made every call look like Audio.
         _ctx.ProviderConnectedAt = Stopwatch.GetTimestamp();
 
+        StartProviderLivenessObserver();
+
         // Split so a slow connect points at a layer rather than just being slow.
         Log.Information(
             "[RealtimeAi] Connected to provider, SessionId: {SessionId}, Provider: {Provider}, OutputMode: {OutputMode}, TtsProvider: {TtsProvider}, " +

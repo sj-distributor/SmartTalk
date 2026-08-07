@@ -49,6 +49,10 @@ public class RealtimeAiSessionContext
     public long SessionStartedAt { get; set; }
     public long ProviderConnectedAt { get; set; }
     public long TurnStartedAt { get; set; }
+
+    /// <summary>Stopwatch stamp of the last frame from the provider; read with Interlocked because
+    /// the observer polls it from its own task while the receive loop writes it.</summary>
+    public long LastProviderMessageAt;
     public bool TurnFirstAudioReported { get; set; }
 
     // Runtime state

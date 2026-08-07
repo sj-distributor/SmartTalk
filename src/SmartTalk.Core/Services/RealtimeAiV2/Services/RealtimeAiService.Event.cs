@@ -28,6 +28,8 @@ public partial class RealtimeAiService
     {
         if (!IsProviderSessionActive) return;
 
+        Interlocked.Exchange(ref _ctx.LastProviderMessageAt, Stopwatch.GetTimestamp());
+
         var parsedEvent = _ctx.ProviderAdapter.ParseMessage(rawMessage);
         TryTrackLastAssistantItemId(parsedEvent);
 
