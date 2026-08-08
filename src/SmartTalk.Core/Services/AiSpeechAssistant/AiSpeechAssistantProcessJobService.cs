@@ -97,6 +97,18 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         if (existRecord != null ) return;
         
+        if (!CanRecordCall(context))
+        {
+            // Forwarded calls reach here with no assistant: ForwardIfRequiredAsync runs before
+            // BuildSessionConfigAsync ever loads one. Dereferencing it threw on every attempt, and
+            // Hangfire retried until the job dead-lettered — so the failure was invisible AND
+            // repeated. Skipping explicitly stops that; giving forwarded calls a history row of
+            // their own needs a record shape that does not require an assistant.
+            Log.Warning("[AiAssistant] Skipping call record: no assistant on the context, CallSid: {CallSid}, IsTransfer: {IsTransfer}", context?.CallSid, context?.IsTransfer);
+
+            return;
+        }
+
         var agentAssistant = await _speechAssistantDataProvider.GetAgentAssistantsAsync(assistantIds: [context.Assistant.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (agentAssistant == null || agentAssistant.Count == 0) throw new Exception("AgentAssistant is null");
@@ -109,7 +121,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             AgentId = agentAssistant.First().AgentId,
             SessionId = context.CallSid,
             Status = PhoneOrderRecordStatus.Transcription,
-            Tips = context.ConversationTranscription.FirstOrDefault().Item2,
+            Tips = context.ConversationTranscription?.FirstOrDefault().Item2,
             TranscriptionText = string.Empty,
             Language = TranscriptionLanguage.Chinese,
             CreatedDate = callInfo.StartTime ?? DateTimeOffset.Now,
@@ -117,13 +129,23 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             CustomerName = context.UserInfo?.UserName,
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
-            IncomingCallNumber = context.LastUserInfo.PhoneNumber,
+            IncomingCallNumber = context.LastUserInfo?.PhoneNumber,
             OrderRecordType = orderRecordType,
             ParentRecordId = parentRecordId
         };
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordsAsync([record], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Whether this context can produce a phone-order record. A record is keyed by an assistant, and
+    /// a forwarded call never had one — the forward decision happens before the assistant is loaded.
+    ///
+    /// <para>Public and static so the decision is testable without the job's data providers: it is
+    /// the part that used to throw, and the part worth pinning.</para>
+    /// </summary>
+    public static bool CanRecordCall(AiSpeechAssistantStreamContextDto context) =>
+        context?.Assistant != null && !string.IsNullOrEmpty(context.CallSid);
 
     public async Task SyncAiSpeechAssistantInfoToAgentAsync(SyncAiSpeechAssistantInfoToAgentCommand command, CancellationToken cancellationToken)
     {
