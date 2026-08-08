@@ -64,7 +64,6 @@ public partial class AiSpeechAssistantConnectService
             OnClientStopAsync = HandleClientStopAsync,
             OnSessionEndedAsync = HandleSessionEndedAsync,
             OnTranscriptionsCompletedAsync = HandleTranscriptionsCompletedAsync,
-            OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
             OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };

@@ -69,7 +69,9 @@ public class RealtimeAiServiceSessionOutcomeTests : RealtimeAiServiceTestBase
     {
         using var context = TestCorrelator.CreateContext();
 
-        var options = CreateDefaultOptions(o => o.MaxSessionDuration = TimeSpan.FromMilliseconds(200));
+        // Generous enough that scheduling jitter under a loaded test run cannot fire the ceiling
+        // before the session is even up, which would take a different teardown path entirely.
+        var options = CreateDefaultOptions(o => o.MaxSessionDuration = TimeSpan.FromMilliseconds(600));
         var sessionTask = await StartSessionInBackgroundAsync(options);
         await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
 

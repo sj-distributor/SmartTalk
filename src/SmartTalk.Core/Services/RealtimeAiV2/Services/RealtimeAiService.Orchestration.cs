@@ -332,7 +332,7 @@ public partial class RealtimeAiService
 
     private async Task HandleRecordingAsync()
     {
-        if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;
+        if (!_ctx.Options.EnableRecording) return;
         if (_ctx.AudioBuffer is null) return;
 
         var buffer = _ctx.AudioBuffer;
@@ -340,6 +340,11 @@ public partial class RealtimeAiService
 
         try
         {
+            // Extraction and encoding produce a byte[] the size of the whole call plus a second copy
+            // behind WaveFileWriter. With no consumer for the result that is pure garbage, so skip
+            // it — but skip it from INSIDE the try, or the buffer never gets disposed either.
+            if (_ctx.Options.OnRecordingCompleteAsync == null) return;
+
             var pcmBytes = await buffer.ExtractAsync().ConfigureAwait(false);
 
             if (pcmBytes.Length == 0)

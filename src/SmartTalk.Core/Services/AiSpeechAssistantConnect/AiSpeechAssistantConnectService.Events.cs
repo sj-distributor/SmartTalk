@@ -78,10 +78,4 @@ public partial class AiSpeechAssistantConnectService
         return Task.CompletedTask;
     }
 
-    private Task HandleRecordingCompleteAsync(string sessionId, byte[] wavBytes)
-    {
-        Log.Information("[AiAssistant] Recording complete, SessionId: {SessionId}, Size: {Size}bytes", sessionId, wavBytes.Length);
-
-        return Task.CompletedTask;
-    }
 }

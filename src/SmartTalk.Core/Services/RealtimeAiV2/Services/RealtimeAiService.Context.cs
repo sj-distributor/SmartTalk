@@ -6,6 +6,12 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    /// <summary>
+    /// Test-only seam (internal, not an operator surface): supplies the recording buffer so a test can
+    /// observe extraction and disposal. Null in production — RealtimeAiRecordingSettings decides.
+    /// </summary>
+    internal Func<IRecordingBuffer> RecordingBufferFactoryOverride { get; set; }
+
     private void BuildSessionContext(RealtimeSessionOptions options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -44,7 +50,7 @@ public partial class RealtimeAiService
         // RealtimeAiRecordingSettings.Create() picks UnboundedMemoryBuffer (default) or
         // RollingWindowBuffer based on the BufferMode env var. Default preserves the
         // pre-Phase-3 unbounded behaviour exactly.
-        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = RealtimeAiRecordingSettings.Create();
+        if (_ctx.Options.EnableRecording && _ctx.AudioBuffer == null) _ctx.AudioBuffer = RecordingBufferFactoryOverride?.Invoke() ?? RealtimeAiRecordingSettings.Create();
     }
 
     private void BuildSessionActions()
