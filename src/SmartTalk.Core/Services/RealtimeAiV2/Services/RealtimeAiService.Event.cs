@@ -118,7 +118,7 @@ public partial class RealtimeAiService
                     break;
                 
                 case RealtimeAiWssEventType.ResponseStarted:
-                    ResetCurrentResponseState();
+                    await ResetCurrentResponseStateAsync().ConfigureAwait(false);
                     // Without this the only per-turn line is the completion, so a turn that never
                     // finishes leaves no trace that it began.
                     Log.Information("[RealtimeAi] Turn started, SessionId: {SessionId}, Round: {Round}, TurnGeneration: {TurnGeneration}, OutputMode: {OutputMode}",
@@ -347,6 +347,7 @@ public partial class RealtimeAiService
 
         _ctx.CurrentResponseHasTextOutput = true;
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
+
         _ctx.CurrentResponseTextBuilder.Append(text);
 
         await (TextSynthesizer?.HandleProviderTextDeltaAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
@@ -391,21 +392,32 @@ public partial class RealtimeAiService
             }).ConfigureAwait(false);
     }
 
-    private void ResetCurrentResponseState()
+    /// <summary>
+    /// Starts a new turn. Taken under the gate's own lock so the generation bump and the flag reset
+    /// are one step: between them the gate would be readable with a new generation and the previous
+    /// turn's flags, which is the state a late signal exploits.
+    /// </summary>
+    private async Task ResetCurrentResponseStateAsync()
     {
-        _ctx.TurnStartedAt = Stopwatch.GetTimestamp();
-        _ctx.TurnFirstAudioReported = false;
+        await _ctx.TurnCompletionStateLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            _ctx.TurnStartedAt = Stopwatch.GetTimestamp();
+            _ctx.TurnFirstAudioReported = false;
 
-        // Bump the turn generation first so any TTS-synthesis watchdog still pending from the previous
-        // turn no-ops when it fires (it captured the old generation).
-        Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
+            Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
 
-        _ctx.CurrentResponseHasTextOutput = false;
-        _ctx.CurrentResponseTextDoneHandled = false;
-        _ctx.CurrentResponseProviderTurnCompleted = false;
-        _ctx.CurrentResponseTtsSynthesisCompleted = false;
-        _ctx.CurrentResponseTurnCompletedHandled = false;
-        _ctx.CurrentResponseTextBuilder.Clear();
+            _ctx.CurrentResponseHasTextOutput = false;
+            _ctx.CurrentResponseTextDoneHandled = false;
+            _ctx.CurrentResponseProviderTurnCompleted = false;
+            _ctx.CurrentResponseTtsSynthesisCompleted = false;
+            _ctx.CurrentResponseTurnCompletedHandled = false;
+            _ctx.CurrentResponseTextBuilder.Clear();
+        }
+        finally
+        {
+            _ctx.TurnCompletionStateLock.Release();
+        }
     }
 
     private async Task MarkProviderTurnCompletedAndCompleteWhenReadyAsync()
