@@ -24,8 +24,19 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 /// </summary>
 public class RealtimeAiServiceSessionOutcomeTests : RealtimeAiServiceTestBase
 {
-    private static LogEvent SessionEndedLine() =>
-        TestCorrelator.GetLogEventsFromCurrentContext().Single(e => e.MessageTemplate.Text.Contains("Session ended"));
+    private static LogEvent SessionEndedLine()
+    {
+        var captured = TestCorrelator.GetLogEventsFromCurrentContext().ToList();
+        var ended = captured.Where(e => e.MessageTemplate.Text.Contains("Session ended")).ToList();
+
+        // Says what it saw instead of just throwing on Single(): when this fails under a loaded run
+        // the useful question is whether cleanup ran at all, and that is not visible otherwise.
+        ended.Count.ShouldBe(1,
+            $"expected one Session ended line, saw {ended.Count} among {captured.Count} events: " +
+            string.Join(" | ", captured.Select(e => e.MessageTemplate.Text)));
+
+        return ended[0];
+    }
 
     private static string Outcome(LogEvent line) => line.Properties["Outcome"].ToString().Trim('"');
 
@@ -69,9 +80,11 @@ public class RealtimeAiServiceSessionOutcomeTests : RealtimeAiServiceTestBase
     {
         using var context = TestCorrelator.CreateContext();
 
-        // Generous enough that scheduling jitter under a loaded test run cannot fire the ceiling
-        // before the session is even up, which would take a different teardown path entirely.
-        var options = CreateDefaultOptions(o => o.MaxSessionDuration = TimeSpan.FromMilliseconds(600));
+        // The ceiling races the harness: it is armed when the context is built, while the session is
+        // still coming up. 600ms was not enough headroom under a loaded full-suite run — the ceiling
+        // fired before the session was up and teardown took a different path. Sized for several times
+        // the observed startup cost rather than trimmed to keep the test fast.
+        var options = CreateDefaultOptions(o => o.MaxSessionDuration = TimeSpan.FromSeconds(2));
         var sessionTask = await StartSessionInBackgroundAsync(options);
         await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
 
