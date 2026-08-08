@@ -127,4 +127,44 @@ public class MiniMaxTtsSettingsConfigGoldenTests
         Settings().BuildRealtimeAiTtsConfig(42, "Chinese (Mandarin)_News_Anchor", 24000)!
             .Voice.ShouldBe("Chinese (Mandarin)_News_Anchor");
     }
+
+    [Fact]
+    public void ResolveVoice_RelationUsesDifferentDefaultVoiceForEachAssistant()
+    {
+        var settings = Settings(d =>
+        {
+            d["MiniMaxTts:AssistantId"] = "";
+            d["MiniMaxTts:AssistantIdWithDefaultVoiceIdRelation"] =
+                "101#Chinese (Mandarin)_News_Anchor1;102#Chinese (Mandarin)_News_Anchor2";
+        });
+
+        settings.BuildRealtimeAiTtsConfig(101, "alloy", 24000)!.Voice
+            .ShouldBe("Chinese (Mandarin)_News_Anchor1");
+        settings.BuildRealtimeAiTtsConfig(102, "alloy", 24000)!.Voice
+            .ShouldBe("Chinese (Mandarin)_News_Anchor2");
+        settings.BuildRealtimeAiTtsConfig(103, "alloy", 24000).ShouldBeNull();
+    }
+
+    [Fact]
+    public void ResolveVoice_RelationDoesNotEnableMiniMax_WhenDisabled()
+    {
+        var settings = Settings(d =>
+        {
+            d["MiniMaxTts:Enabled"] = "false";
+            d["MiniMaxTts:AssistantId"] = "";
+            d["MiniMaxTts:AssistantIdWithDefaultVoiceIdRelation"] = "101#mapped-default";
+        });
+
+        settings.BuildRealtimeAiTtsConfig(101, "alloy", 24000).ShouldBeNull();
+    }
+
+    [Fact]
+    public void ResolveVoice_RelationTakesPriorityOverLegacyDefault_ButNotCustomMiniMaxVoice()
+    {
+        var settings = Settings(d =>
+            d["MiniMaxTts:AssistantIdWithDefaultVoiceIdRelation"] = "42#mapped-default");
+
+        settings.BuildRealtimeAiTtsConfig(42, "alloy", 24000)!.Voice.ShouldBe("mapped-default");
+        settings.BuildRealtimeAiTtsConfig(42, "custom-minimax-voice", 24000)!.Voice.ShouldBe("custom-minimax-voice");
+    }
 }
