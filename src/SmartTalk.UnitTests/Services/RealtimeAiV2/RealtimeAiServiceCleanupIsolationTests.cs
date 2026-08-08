@@ -152,17 +152,16 @@ public class RealtimeAiServiceCleanupIsolationTests : RealtimeAiServiceTestBase
     }
 
     /// <summary>
-    /// Pins a gap the hardening plan closes in P2.2: when the provider connect fails,
-    /// <c>ConnectAsync</c> rethrows after <c>DisconnectFromProviderAsync</c> and
-    /// <c>OrchestrateSessionAsync</c> never runs — so <c>CleanupSessionAsync</c>, and with it every
-    /// terminal consumer callback, is skipped entirely (RealtimeAiService.cs:33-43). A session that
-    /// dies at connect leaves no trace: no OnSessionEnded, no transcript, no recording.
+    /// Was <c>ProviderConnectFails_TerminalCallbacksAreSkipped</c>, deliberately pinned so this
+    /// change would surface as a reviewed edit rather than an invisible side effect.
     ///
-    /// <para>Pinned as current behaviour so that P2.2 — which moves cleanup into a finally — shows up
-    /// as a deliberate, reviewed change to this test rather than an invisible side effect.</para>
+    /// <para>Cleanup now runs from ConnectAsync's own finally, so a session that dies at connect
+    /// still notifies its consumer. Detailed coverage lives in
+    /// <c>RealtimeAiServiceConnectFailureCleanupTests</c>; this keeps the isolation suite's view of
+    /// the same path.</para>
     /// </summary>
     [Fact]
-    public async Task ProviderConnectFails_TerminalCallbacksAreSkipped()
+    public async Task ProviderConnectFails_TerminalCallbacksStillRun()
     {
         FakeWssClient.ShouldFailConnect = true;
 
@@ -171,6 +170,6 @@ public class RealtimeAiServiceCleanupIsolationTests : RealtimeAiServiceTestBase
 
         await Should.ThrowAsync<WebSocketException>(() => Sut.ConnectAsync(options, CancellationToken.None));
 
-        sessionEnded.ShouldBeFalse("current behaviour — P2.2 changes this to true and updates this test");
+        sessionEnded.ShouldBeTrue();
     }
 }

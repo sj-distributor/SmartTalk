@@ -136,6 +136,10 @@ public partial class RealtimeAiService
 
     private async Task CleanupSessionAsync(bool clientIsClose)
     {
+        // Reachable from the orchestration loop's finally and from ConnectAsync's, so the two cannot
+        // both run it — a session must not flush its transcript or notify its consumer twice.
+        if (Interlocked.Exchange(ref _ctx.CleanupClaimed, 1) == 1) return;
+
         var outcome = ResolveSessionOutcome(clientIsClose);
 
         if (clientIsClose)

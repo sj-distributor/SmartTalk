@@ -36,6 +36,12 @@ public class RealtimeAiSessionContext
     public int ProviderDisconnectClaimed;
 
     /// <summary>
+    /// Claim flag for session cleanup, taken with Interlocked. Cleanup is now reachable from two
+    /// places — the orchestration loop's finally and ConnectAsync's — and must run exactly once.
+    /// </summary>
+    public int CleanupClaimed;
+
+    /// <summary>
     /// Set when the engine itself decides to end the session, so teardown can report why instead of
     /// inferring it from the client socket's state. Null means the client ended it.
     /// </summary>

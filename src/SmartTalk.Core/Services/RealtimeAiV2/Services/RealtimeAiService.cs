@@ -42,15 +42,26 @@ public partial class RealtimeAiService : IRealtimeAiService
 
         try
         {
-            await ConnectToProviderAsync().ConfigureAwait(false);
-        }
-        catch
-        {
-            await DisconnectFromProviderAsync("Session start failed").ConfigureAwait(false);
-            throw;
-        }
+            try
+            {
+                await ConnectToProviderAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                await DisconnectFromProviderAsync("Session start failed").ConfigureAwait(false);
+                throw;
+            }
 
-        await OrchestrateSessionAsync().ConfigureAwait(false);
+            await OrchestrateSessionAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            // A session that dies at connect used to leave no trace at all: the throw skipped
+            // OrchestrateSessionAsync, and with it the only call to CleanupSessionAsync — so no
+            // OnSessionEnded, no transcript, no recording, and nothing for an operator to find.
+            // The claim inside makes this a no-op when the orchestration loop already ran it.
+            await CleanupSessionAsync(clientIsClose: false).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
