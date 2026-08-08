@@ -15,6 +15,7 @@ public class MiniMaxTtsSettings : IConfigurationSetting
         ApiKey = configuration.GetValue<string>("MiniMaxTts:ApiKey") ?? string.Empty;
         Model = configuration.GetValue<string>("MiniMaxTts:Model") ?? "speech-2.8-turbo";
         DefaultVoiceId = configuration.GetValue<string>("MiniMaxTts:DefaultVoiceId") ?? "Chinese (Mandarin)_News_Anchor";
+        AssistantIdWithDefaultVoiceIdRelation = configuration.GetValue<string>("MiniMaxTts:AssistantIdWithDefaultVoiceIdRelation") ?? string.Empty;
         SampleRate = configuration.GetValue<int>("MiniMaxTts:SampleRate", 8000);
         Speed = configuration.GetValue<double>("MiniMaxTts:Speed", 0.9);
         Volume = configuration.GetValue<double>("MiniMaxTts:Volume", 1.0);
@@ -35,6 +36,8 @@ public class MiniMaxTtsSettings : IConfigurationSetting
 
     public string DefaultVoiceId { get; set; }
 
+    public string AssistantIdWithDefaultVoiceIdRelation { get; set; }
+
     public int SampleRate { get; set; }
 
     public double Speed { get; set; }
@@ -50,8 +53,9 @@ public class MiniMaxTtsSettings : IConfigurationSetting
     public bool IsEnabledForAssistant(int assistantId)
     {
         return Enabled &&
-               !string.IsNullOrWhiteSpace(AssistantId) &&
-               string.Equals(AssistantId.Trim(), assistantId.ToString(), StringComparison.OrdinalIgnoreCase);
+               (TryGetMappedDefaultVoiceId(assistantId, out _) ||
+                (!string.IsNullOrWhiteSpace(AssistantId) &&
+                 string.Equals(AssistantId.Trim(), assistantId.ToString(), StringComparison.OrdinalIgnoreCase)));
     }
 
     // Inference-agnostic: building a MiniMax config does NOT depend on which inference provider runs.
@@ -72,7 +76,7 @@ public class MiniMaxTtsSettings : IConfigurationSetting
             ProviderType = RealtimeAiTtsProviderType.MiniMax,
             ServiceUrl = ServiceUrl,
             ApiKey = ApiKey,
-            Voice = ResolveMiniMaxVoiceId(modelVoice),
+            Voice = ResolveMiniMaxVoiceId(assistantId, modelVoice),
             TargetCodec = RealtimeAiAudioCodec.PCM16,
             SampleRate = sampleRate,
             ProviderSpecificConfig = new Dictionary<string, object>
@@ -87,12 +91,39 @@ public class MiniMaxTtsSettings : IConfigurationSetting
         };
     }
 
-    private string ResolveMiniMaxVoiceId(string modelVoice)
+    private string ResolveMiniMaxVoiceId(int assistantId, string modelVoice)
     {
-        if (string.IsNullOrWhiteSpace(modelVoice)) return DefaultVoiceId;
+        var defaultVoiceId = TryGetMappedDefaultVoiceId(assistantId, out var mappedDefaultVoiceId)
+            ? mappedDefaultVoiceId
+            : DefaultVoiceId;
+
+        if (string.IsNullOrWhiteSpace(modelVoice)) return defaultVoiceId;
 
         return OpenAiRealtimeAiProviderAdapter.SupportedVoices.Contains(modelVoice, StringComparer.OrdinalIgnoreCase)
-            ? DefaultVoiceId
+            ? defaultVoiceId
             : modelVoice;
+    }
+
+    private bool TryGetMappedDefaultVoiceId(int assistantId, out string defaultVoiceId)
+    {
+        defaultVoiceId = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(AssistantIdWithDefaultVoiceIdRelation)) return false;
+
+        foreach (var relation in AssistantIdWithDefaultVoiceIdRelation.Split(
+                     ';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = relation.Split(['#'], 2, StringSplitOptions.TrimEntries);
+
+            if (parts.Length != 2 ||
+                !int.TryParse(parts[0], out var configuredAssistantId) ||
+                configuredAssistantId != assistantId ||
+                string.IsNullOrWhiteSpace(parts[1])) continue;
+
+            defaultVoiceId = parts[1];
+            return true;
+        }
+
+        return false;
     }
 }

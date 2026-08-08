@@ -16,13 +16,25 @@ public class MiniMaxTtsSettingsTests
         NewSettings(enabled: true, assistantId: "43").IsEnabledForAssistant(42).ShouldBeFalse();
     }
 
-    private static MiniMaxTtsSettings NewSettings(bool enabled, string assistantId)
+    [Fact]
+    public void IsEnabledForAssistant_AcceptsAnyAssistantInVoiceRelation_WhenEnabled()
+    {
+        const string relation = "42#voice-1; 43#voice-2";
+
+        NewSettings(enabled: true, assistantId: "", relation).IsEnabledForAssistant(42).ShouldBeTrue();
+        NewSettings(enabled: true, assistantId: "", relation).IsEnabledForAssistant(43).ShouldBeTrue();
+        NewSettings(enabled: true, assistantId: "", relation).IsEnabledForAssistant(44).ShouldBeFalse();
+        NewSettings(enabled: false, assistantId: "", relation).IsEnabledForAssistant(42).ShouldBeFalse();
+    }
+
+    private static MiniMaxTtsSettings NewSettings(bool enabled, string assistantId, string relation = "")
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["MiniMaxTts:Enabled"] = enabled.ToString(),
-                ["MiniMaxTts:AssistantId"] = assistantId
+                ["MiniMaxTts:AssistantId"] = assistantId,
+                ["MiniMaxTts:AssistantIdWithDefaultVoiceIdRelation"] = relation
             })
             .Build();
 
