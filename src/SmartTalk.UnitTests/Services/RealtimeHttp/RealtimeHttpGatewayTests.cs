@@ -379,7 +379,7 @@ public class RealtimeHttpGatewayTests
     }
 
     [Fact]
-    public async Task TtsService_AlwaysRequestsPcmEvenWhenConfiguredOtherwise()
+    public async Task TtsService_RequestsDefaultVoiceInstructionsAndPcm()
     {
         var handler = new CapturingHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -403,7 +403,11 @@ public class RealtimeHttpGatewayTests
         var bytes = await service.SynthesizePcm16Async("hello", CancellationToken.None);
 
         bytes.ShouldBe([1, 2, 3, 4]);
-        handler.RequestBody.ShouldContain("\"response_format\":\"pcm\"");
+        using var requestDocument = JsonDocument.Parse(handler.RequestBody);
+        var requestBody = requestDocument.RootElement;
+        requestBody.GetProperty("voice").GetString().ShouldBe("onyx");
+        requestBody.GetProperty("instructions").GetString().ShouldBe(RealtimeHttpTtsSettings.DefaultInstructions);
+        requestBody.GetProperty("response_format").GetString().ShouldBe("pcm");
     }
 
     private static RealtimeHttpSession CreateSession(

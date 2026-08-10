@@ -65,13 +65,15 @@ public class RealtimeHttpTtsService : IRealtimeHttpTtsService
                     _settings.Tts.ResponseFormat);
             }
 
-            var requestPayload = new
+            var requestPayload = new Dictionary<string, object>
             {
-                model = _settings.Tts.Model,
-                voice = _settings.Tts.Voice,
-                input = text,
-                response_format = PcmResponseFormat
+                ["model"] = _settings.Tts.Model,
+                ["voice"] = _settings.Tts.Voice,
+                ["input"] = text,
+                ["response_format"] = PcmResponseFormat
             };
+            if (!string.IsNullOrWhiteSpace(_settings.Tts.Instructions))
+                requestPayload["instructions"] = _settings.Tts.Instructions;
 
             using var request = new HttpRequestMessage(HttpMethod.Post, OpenAiSpeechEndpoint)
             {

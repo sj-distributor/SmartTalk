@@ -29,7 +29,8 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
         {
             Enabled = ttsSection.GetValue<bool?>("Enabled") ?? true,
             Model = ttsSection.GetValue<string>("Model") ?? "gpt-4o-mini-tts",
-            Voice = ttsSection.GetValue<string>("Voice") ?? "alloy",
+            Voice = ttsSection.GetValue<string>("Voice") ?? RealtimeHttpTtsSettings.DefaultVoice,
+            Instructions = ttsSection.GetValue<string>("Instructions") ?? RealtimeHttpTtsSettings.DefaultInstructions,
             ResponseFormat = ttsSection.GetValue<string>("ResponseFormat") ?? "pcm",
             ChunkDurationMs = ttsSection.GetValue<int?>("ChunkDurationMs") ?? 20,
             AppendSilenceMs = ttsSection.GetValue<int?>("AppendSilenceMs") ?? 250,
@@ -95,11 +96,18 @@ public class RealtimeHttpGatewaySettings : IConfigurationSetting
 
 public class RealtimeHttpTtsSettings
 {
+    public const string DefaultVoice = "onyx";
+
+    public const string DefaultInstructions =
+        "Speak in an upbeat, enthusiastic, and encouraging cheerleader style. Use energetic pacing, bright intonation, and celebratory emphasis while keeping Mandarin pronunciation clear and natural.";
+
     public bool Enabled { get; set; } = true;
 
     public string Model { get; set; } = "gpt-4o-mini-tts";
 
-    public string Voice { get; set; } = "alloy";
+    public string Voice { get; set; } = DefaultVoice;
+
+    public string Instructions { get; set; } = DefaultInstructions;
 
     public string ResponseFormat { get; set; } = "pcm";
 
