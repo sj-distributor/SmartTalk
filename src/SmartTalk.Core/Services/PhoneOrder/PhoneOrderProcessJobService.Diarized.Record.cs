@@ -56,8 +56,7 @@ public partial class PhoneOrderProcessJobService
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
 
             var audioContent = await _smartTalkHttpClientFactory.GetAsync<byte[]>(record.Url, cancellationToken).ConfigureAwait(false);
-
-            await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
+            await TryCalculateRecordingDurationForSummaryAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
 
             var speakInfos = await TranscribePhoneOrderSegmentsByDiarizedAsync(audioContent, cancellationToken).ConfigureAwait(false);
             var normalizedSpeakInfos = NormalizeDiarizedSpeakInfos(speakInfos);
@@ -67,7 +66,20 @@ public partial class PhoneOrderProcessJobService
                 Log.Warning("Diarized transcription generated no valid segments. RecordId: {RecordId}", record.Id);
             }
 
-            await _phoneOrderService.ProcessPhoneOrderDiarizedTranscriptionAsync(normalizedSpeakInfos, record, cancellationToken).ConfigureAwait(false);
+            var hasExactlyOneSpeaker = HasExactlyOneMeaningfulSpeaker(
+                normalizedSpeakInfos.Select(x => (x.Speaker, x.Text)));
+
+            var usedFixedInvalidSummary = await SummarizeConversationContentByRecordingEvidenceAsync(
+                record,
+                audioContent,
+                hasExactlyOneSpeaker,
+                cancellationToken).ConfigureAwait(false);
+
+            await _phoneOrderService.ProcessPhoneOrderDiarizedTranscriptionAsync(
+                normalizedSpeakInfos,
+                record,
+                optimizeConversations: !usedFixedInvalidSummary && !hasExactlyOneSpeaker,
+                cancellationToken).ConfigureAwait(false);
 
             await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
 

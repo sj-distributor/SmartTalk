@@ -659,24 +659,34 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems = [];
 
-        var askInfoResponse = await _salesClient
-            .GetAskInfoDetailListByCustomerAsync(
-                new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken)
-            .ConfigureAwait(false);
-        var orderHistoryResponse = await _salesClient
-            .GetOrderHistoryByCustomerAsync(
-                new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() },
-                cancellationToken).ConfigureAwait(false);
+        var customerIds = soldToIds?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
 
-        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material))
-                .Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
+        foreach (var batch in customerIds.Chunk(10))
+        {
+            var batchCustomerIds = batch.ToList();
+            var askInfoResponse = await _salesClient
+                .GetAskInfoDetailListByCustomerAsync(
+                    new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = batchCustomerIds }, cancellationToken)
+                .ConfigureAwait(false);
+            var orderHistoryResponse = await _salesClient
+                .GetOrderHistoryByCustomerAsync(
+                    new GetOrderHistoryByCustomerRequestDto { CustomerNumbers = batchCustomerIds },
+                    cancellationToken).ConfigureAwait(false);
 
-        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            historyItems.AddRange(
-                orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
-                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ??
-                new List<(string, string, DateTime?)>());
+            if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
+                historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material))
+                    .Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
+
+            if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
+                historyItems.AddRange(
+                    orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
+                        .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ??
+                    new List<(string, string, DateTime?)>());
+        }
 
         return historyItems;
     }
@@ -695,6 +705,8 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             "現在是2026年。如果客戶只說月日、沒有說年份，DeliveryDate 必須使用2026年。\n" +
             "如果客戶只說明天送貨，不需要輸出 DeliveryDate，因為系統默認就是明天。\n" +
             "歷史物料列表中的日期只用於匹配 materialNumber，不能作為 DeliveryDate。\n" +
+            "範例 JSON 中的 DeliveryDate 只是格式示例，不是今天日期，也不是默認送貨日期，不能照抄或參照範例日期推斷。\n" +
+            "只有客戶分析報告中非常清楚地提到具體送貨日期（例如幾月幾日）時，才可以填入 DeliveryDate；否則 DeliveryDate 必須留空字符串。\n" +
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串），orders（数组，元素包含 name, quantity, unit, materialNumber, deliveryDate）。\n" +
             "範例：\n" +
             "{\n    \"stores\": [\n        {\n            \"StoreName\": \"HaiDiLao\",\n            \"StoreNumber\": \"1\",\n            \"DeliveryDate\": \"2026-07-10\",\n            \"orders\": [\n                {\n                    \"name\": \"雞胸肉\",\n                    \"quantity\": 1,\n                    \"unit\": \"箱\",\n                    \"materialNumber\": \"000000000010010253\"\n                }\n            ]\n        }\n    ]\n}" +
