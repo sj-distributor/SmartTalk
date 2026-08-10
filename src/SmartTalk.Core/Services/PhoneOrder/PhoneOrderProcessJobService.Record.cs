@@ -162,7 +162,7 @@ public partial class PhoneOrderProcessJobService
         bool hasExactlyOneSpeaker,
         CancellationToken cancellationToken)
     {
-        if (!ShouldUseFixedInvalidSummary(record.Duration, hasExactlyOneSpeaker))
+        if (!ShouldUseFixedInvalidSummary(record.Duration, hasExactlyOneSpeaker, record.OrderRecordType))
         {
             await SummarizeConversationContentAsync(record, audioContent, cancellationToken).ConfigureAwait(false);
             return false;
@@ -172,8 +172,12 @@ public partial class PhoneOrderProcessJobService
         return true;
     }
 
-    internal static bool ShouldUseFixedInvalidSummary(double? durationSeconds, bool hasExactlyOneSpeaker) =>
-        durationSeconds is <= InvalidRecordingDurationThresholdSeconds || hasExactlyOneSpeaker;
+    internal static bool ShouldUseFixedInvalidSummary(
+        double? durationSeconds,
+        bool hasExactlyOneSpeaker,
+        PhoneOrderRecordType orderRecordType) =>
+        durationSeconds is <= InvalidRecordingDurationThresholdSeconds ||
+        (hasExactlyOneSpeaker && orderRecordType != PhoneOrderRecordType.TestLink);
 
     internal static bool HasExactlyOneMeaningfulSpeaker(IEnumerable<(string Speaker, string Text)> segments)
     {

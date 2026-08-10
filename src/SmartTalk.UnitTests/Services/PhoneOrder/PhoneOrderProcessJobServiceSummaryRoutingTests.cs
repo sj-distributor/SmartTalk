@@ -1,5 +1,6 @@
 using Shouldly;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using Xunit;
 
 namespace SmartTalk.UnitTests.Services.PhoneOrder;
@@ -7,17 +8,20 @@ namespace SmartTalk.UnitTests.Services.PhoneOrder;
 public class PhoneOrderProcessJobServiceSummaryRoutingTests
 {
     [Theory]
-    [InlineData(4.99, false, true)]
-    [InlineData(5, false, true)]
-    [InlineData(5.01, false, false)]
-    [InlineData(90, true, true)]
+    [InlineData(4.99, false, PhoneOrderRecordType.InBound, true)]
+    [InlineData(5, false, PhoneOrderRecordType.InBound, true)]
+    [InlineData(5.01, false, PhoneOrderRecordType.InBound, false)]
+    [InlineData(90, true, PhoneOrderRecordType.InBound, true)]
+    [InlineData(90, true, PhoneOrderRecordType.TestLink, false)]
+    [InlineData(5, true, PhoneOrderRecordType.TestLink, true)]
     public void ShouldUseFixedInvalidSummary_ShouldApplyDurationOrSingleSpeakerRule(
         double durationSeconds,
         bool hasExactlyOneSpeaker,
+        PhoneOrderRecordType orderRecordType,
         bool expected)
     {
         PhoneOrderProcessJobService
-            .ShouldUseFixedInvalidSummary(durationSeconds, hasExactlyOneSpeaker)
+            .ShouldUseFixedInvalidSummary(durationSeconds, hasExactlyOneSpeaker, orderRecordType)
             .ShouldBe(expected);
     }
 
@@ -25,7 +29,7 @@ public class PhoneOrderProcessJobServiceSummaryRoutingTests
     public void ShouldUseFixedInvalidSummary_ShouldUseOriginalSummaryWhenDurationIsUnknown()
     {
         PhoneOrderProcessJobService
-            .ShouldUseFixedInvalidSummary(null, false)
+            .ShouldUseFixedInvalidSummary(null, false, PhoneOrderRecordType.InBound)
             .ShouldBeFalse();
     }
 

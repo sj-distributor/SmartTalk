@@ -120,6 +120,34 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     }
 
     [Fact]
+    public async Task HandleReleasedSpeechMaticsCallBackAsync_AboveThresholdSingleSpeakerTestLink_ShouldUseOriginalSummary()
+    {
+        const string jobId = "speechmatics-job-test-link";
+        var fixture = new FlowFixture("00:00:07.92", SingleSpeakerGreetingTranscription);
+        fixture.Record.OrderRecordType = PhoneOrderRecordType.TestLink;
+
+        fixture.SpeechMaticsDataProvider
+            .GetSpeechMaticsJobAsync(jobId, Arg.Any<CancellationToken>())
+            .Returns(new SpeechMaticsJob
+            {
+                JobId = jobId,
+                CallbackMessage = SingleSpeakerSpeechMaticsCallback
+            });
+        fixture.PhoneOrderDataProvider
+            .GetPhoneOrderRecordByTranscriptionJobIdAsync(jobId, Arg.Any<CancellationToken>())
+            .Returns(fixture.Record);
+
+        await fixture.Service.HandleReleasedSpeechMaticsCallBackAsync(jobId, CancellationToken.None);
+
+        fixture.Service.OriginalSummaryCallCount.ShouldBe(1);
+        fixture.Record.Duration.ShouldBe(7.92);
+        fixture.Record.Status.ShouldBe(PhoneOrderRecordStatus.Sent);
+        fixture.Record.TranscriptionText.ShouldBe(TestPhoneOrderProcessJobService.OriginalSummary);
+        await fixture.PhoneOrderDataProvider.DidNotReceiveWithAnyArgs()
+            .MarkRecordCompletedAsync(default);
+    }
+
+    [Fact]
     public async Task HandleReleasedDiarizedTranscribeAsync_LongTwoSpeakerCall_ShouldUseOriginalSummaryAndOptimization()
     {
         var fixture = new FlowFixture("00:01:30", TwoSpeakerTranscription);
