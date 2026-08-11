@@ -516,7 +516,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         IReadOnlyDictionary<string, CrmSalesAutoSyncCustomerGroup> customerIdLookup, AiResourceSyncStoreContext storeContext, 
         AiResourceSyncAssistantContext assistantContext, SourceSceneLookup sourceSceneLookup, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
-        var customerAssistantName = AiResourceSyncGrouping.BuildAssistantName(mergedGroup.CustomerIds, mergedGroup.Language);
+        var customerAssistantName = AiResourceSyncGrouping.BuildAssistantName(mergedGroup.CustomerIds);
         
         Log.Information(
             "Assistant ensure. Name={AssistantName}, StoreId={StoreId}, AgentId={SalesAgentId}, SalesKey={SalesKey}, Customers={CustomerIds}, Lang={Language}", 
@@ -552,7 +552,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
                 var createdAssistant = await CreateCustomerKnowledgeAssistantAsync(
                     serviceProviderId, initiatedByUserId, salesAgentId, storeId, customerKnowledgeAssistantName,
-                    CrmToAutoAddLanguageConverter.NormalizeToken(language), customerIds, sourceSceneLookup,
+                    language, customerIds, sourceSceneLookup,
                     customerKnowledgeAssistantCache, stats, cancellationToken).ConfigureAwait(false);
                 return new AssistantLockResult(createdAssistant, true);
             },
@@ -581,6 +581,8 @@ public class AiResourceSyncService : IAiResourceSyncService
         Dictionary<string, Core.Domain.AISpeechAssistant.AiSpeechAssistant> customerKnowledgeAssistantCache, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
         var assistantCacheKey = BuildStoreScopedCacheKey(storeId, customerKnowledgeAssistantName);
+        var normalizedLanguage = AiResourceSyncLanguageConverter.NormalizeToken(language);
+        var modelLanguage = AiResourceSyncLanguageConverter.ToModelLanguage(language);
         Log.Information("Assistant add request. Name={AssistantName}", customerKnowledgeAssistantName);
 
         var created = await _mediator.SendAsync<AddAiSpeechAssistantCommand, AddAiSpeechAssistantResponse>(new AddAiSpeechAssistantCommand
@@ -593,13 +595,13 @@ public class AiResourceSyncService : IAiResourceSyncService
             AgentType = AgentType.Sales,
             SourceSystem = AgentSourceSystem.AiResource,
             IsDisplay = true,
-            ModelLanguage = language,
+            ModelLanguage = modelLanguage,
             Channels = new List<AiSpeechAssistantChannel> { AiSpeechAssistantChannel.PhoneChat },
             Details = new List<AiSpeechAssistantKnowledgeDetailDto>()
         }, cancellationToken).ConfigureAwait(false);
 
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByIdAsync(created.Data.Id, cancellationToken).ConfigureAwait(false);
-        await AttachSceneToAssistantKnowledgeAsync(assistant.Id, language, customerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
+        await AttachSceneToAssistantKnowledgeAsync(assistant.Id, normalizedLanguage, customerIds, sourceSceneLookup, stats, cancellationToken).ConfigureAwait(false);
         customerKnowledgeAssistantCache[assistantCacheKey] = assistant;
         stats.CreatedKnowledgeCount++;
         return assistant;
@@ -669,18 +671,17 @@ public class AiResourceSyncService : IAiResourceSyncService
     private async Task EnsureAssistantKnowledgeLanguageAndSceneAsync(
         int assistantId, string language, IReadOnlyList<string> customerIds, SourceSceneLookup sourceSceneLookup, AiResourceSyncExecutionStatsDto stats, CancellationToken cancellationToken)
     {
-        var normalizedLanguage = CrmToAutoAddLanguageConverter.NormalizeToken(language);
+        var normalizedLanguage = AiResourceSyncLanguageConverter.NormalizeToken(language);
         var knowledge = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantKnowledgeAsync(assistantId: assistantId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (knowledge == null)
             return;
 
         Log.Information(
-            "Knowledge language sync. KnowledgeId={KnowledgeId}, AssistantId={AssistantId}, Customers={CustomerIds}, ExistingLanguage={ExistingLanguage}, TargetLanguage={TargetLanguage}", 
+            "Knowledge language sync. KnowledgeId={KnowledgeId}, AssistantId={AssistantId}, Customers={CustomerIds}, ExistingLanguage={ExistingLanguage}, TargetLanguage={TargetLanguage}",
             knowledge.Id, assistantId, string.Join("/", customerIds), knowledge.ModelLanguage ?? string.Empty, normalizedLanguage);
 
         if (!string.Equals(knowledge.ModelLanguage ?? string.Empty, normalizedLanguage, StringComparison.Ordinal))
         {
-      
             knowledge.ModelLanguage = normalizedLanguage;
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], true, cancellationToken).ConfigureAwait(false);
         }
@@ -811,7 +812,7 @@ public class AiResourceSyncService : IAiResourceSyncService
                     ReplaceAssistantCustomerMappings(assistantContext.AssistantCustomerIdsByAssistantId, assistantContext.AssistantIdsByCustomerId, crossStoreMatch.AssistantId,
                         retainedGroup.CustomerIds.ToHashSet(StringComparer.OrdinalIgnoreCase));
                     assistantContext.ExistingCrmAssistantsByName.Remove(crossStoreMatch.Name);
-                    crossStoreMatch.Name = AiResourceSyncGrouping.BuildAssistantName(retainedGroup.CustomerIds, retainedGroup.Language);
+                    crossStoreMatch.Name = AiResourceSyncGrouping.BuildAssistantName(retainedGroup.CustomerIds);
                     assistantContext.ExistingCrmAssistantsByName[crossStoreMatch.Name] = crossStoreMatch;
                 }
                 else
@@ -1017,7 +1018,7 @@ public class AiResourceSyncService : IAiResourceSyncService
                 continue;
             }
 
-            var targetGroupKey = $"{targetGroup.SalesKey}|{AiResourceSyncGrouping.BuildAssistantName(targetGroup.CustomerIds, targetGroup.Language)}";
+            var targetGroupKey = $"{targetGroup.SalesKey}|{AiResourceSyncGrouping.BuildAssistantName(targetGroup.CustomerIds)}";
             Log.Information("Split target. CustomerId={CustomerId}, TargetKey={TargetGroupKey}", removedCustomerId, targetGroupKey);
            
             if (!processedTargetGroups.Add(targetGroupKey))
@@ -1035,7 +1036,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
             var targetSalesAgent = await EnsureSalesAgentAsync(serviceProviderId, targetStore.Id, targetGroup.SalesKey, salesAgentCache, stats, cancellationToken).ConfigureAwait(false);
             
-            var targetAssistantName = AiResourceSyncGrouping.BuildAssistantName(targetGroup.CustomerIds, targetGroup.Language);
+            var targetAssistantName = AiResourceSyncGrouping.BuildAssistantName(targetGroup.CustomerIds);
             var copiedAssistant = await EnsureCustomerKnowledgeAssistantAsync(
                 serviceProviderId, initiatedByUserId, targetSalesAgent.Id, targetStore.Id, targetAssistantName, 
                 targetGroup.Language, targetGroup.CustomerIds, sourceSceneLookup,
@@ -1140,7 +1141,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         var targetSalesAgent = await EnsureSalesAgentAsync(
             serviceProviderId, targetStore.Id, targetGroup.SalesKey, salesAgentCache, stats, cancellationToken).ConfigureAwait(false);
 
-        var targetAssistantName = AiResourceSyncGrouping.BuildAssistantName(targetGroup.CustomerIds, targetGroup.Language);
+        var targetAssistantName = AiResourceSyncGrouping.BuildAssistantName(targetGroup.CustomerIds);
         if (assistantLocation.StoreId != targetStore.Id || assistantLocation.AgentId != targetSalesAgent.Id)
         {
             await TransferCustomerAssistantToSalesAgentAsync(
@@ -1227,7 +1228,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             if (remainingIds.Count == existingIds.Count)
                 continue;
 
-            var renamedAssistantName = AiResourceSyncGrouping.BuildAssistantName(remainingIds, language);
+            var renamedAssistantName = AiResourceSyncGrouping.BuildAssistantName(remainingIds);
             Log.Information("Assistant shrink. AssistantId={AssistantId}, From={FromName}, To={ToName}", assistant.AssistantId, assistant.Name, renamedAssistantName);
 
             if (assistantsById.TryGetValue(assistant.AssistantId, out var assistantToRename) &&
@@ -1335,7 +1336,7 @@ public class AiResourceSyncService : IAiResourceSyncService
     private KnowledgeScene ResolveSourceScene(SourceSceneLookup sourceSceneLookup, string language)
     {
         var rawLanguage = string.IsNullOrWhiteSpace(language) ? "英文" : language;
-        var normalizedLanguage = CrmToAutoAddLanguageConverter.TryResolve(rawLanguage, out var resolvedLanguage) ? resolvedLanguage : AutoAddLanguage.English;
+        var normalizedLanguage = AiResourceSyncLanguageConverter.TryResolve(rawLanguage, out var resolvedLanguage) ? resolvedLanguage : AutoAddLanguage.English;
 
         return sourceSceneLookup.MappingScenes.TryGetValue(normalizedLanguage, out var scene) ? scene : null;
     }

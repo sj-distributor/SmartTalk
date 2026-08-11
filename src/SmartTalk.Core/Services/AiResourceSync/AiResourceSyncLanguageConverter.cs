@@ -2,7 +2,7 @@ using SmartTalk.Messages.Enums.KnowledgeScenario;
 
 namespace SmartTalk.Core.Services.KnowledgeScenario;
 
-public static class CrmToAutoAddLanguageConverter
+public static class AiResourceSyncLanguageConverter
 {
     private static readonly Dictionary<string, AutoAddLanguage> AliasLookup =
         new(StringComparer.OrdinalIgnoreCase)
@@ -37,5 +37,27 @@ public static class CrmToAutoAddLanguageConverter
         return string.IsNullOrWhiteSpace(rawLanguage)
             ? AutoAddLanguage.English.ToString()
             : rawLanguage.Trim();
+    }
+
+    public static string ToModelLanguage(string rawLanguage)
+    {
+        var languageToken = rawLanguage?
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
+
+        if (!TryResolve(languageToken, out var language))
+            return "en";
+
+        return language switch
+        {
+            AutoAddLanguage.Chinese => "Zh",
+            AutoAddLanguage.English => "En",
+            AutoAddLanguage.Spanish => "Spanish",
+            AutoAddLanguage.Korean => "Korean",
+            AutoAddLanguage.Japanese => "Japanese",
+            AutoAddLanguage.Vietnamese => "Viet",
+            AutoAddLanguage.Thai => "Thai",
+            _ => "en"
+        };
     }
 }

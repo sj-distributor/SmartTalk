@@ -31,7 +31,7 @@ public static class AiResourceSyncGrouping
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    public static string BuildAssistantName(IReadOnlyList<string> customerIds, string language)
+    public static string BuildAssistantName(IReadOnlyList<string> customerIds)
     {
         var ids = customerIds
             .Where(x => !string.IsNullOrWhiteSpace(x))

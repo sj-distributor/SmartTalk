@@ -288,6 +288,7 @@ public class AiResourceSyncServiceTests
         Assert.NotNull(capturedAddAssistantCommand);
         Assert.Equal("100", capturedAddAssistantCommand!.AssistantName);
         Assert.Equal(888, capturedAddAssistantCommand.CreatedBy);
+        Assert.Equal("en", capturedAddAssistantCommand.ModelLanguage);
         Assert.Empty(capturedAddAssistantCommand.Details);
         await aiSpeechAssistantDataProvider.Received(1).AddAiSpeechAssistantKnowledgeSceneRelationsAsync(
             Arg.Is<List<SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistantKnowledgeSceneRelation>>(x =>
