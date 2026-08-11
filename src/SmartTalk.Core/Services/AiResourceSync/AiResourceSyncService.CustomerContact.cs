@@ -84,7 +84,7 @@ public partial class AiResourceSyncService
             if (!storeMap.TryGetValue(customerGroup.SalesKey, out var store))
                 continue;
 
-            var assistantName = AiResourceSyncGrouping.BuildAssistantName(customerGroup.CustomerIds, customerGroup.Language);
+            var assistantName = AiResourceSyncGrouping.BuildAssistantName(customerGroup.CustomerIds);
             var assistant = await _aiSpeechAssistantDataProvider
                 .GetCrmAutoSyncAssistantByStoreAndNameAsync(store.Id, assistantName, cancellationToken)
                 .ConfigureAwait(false);
