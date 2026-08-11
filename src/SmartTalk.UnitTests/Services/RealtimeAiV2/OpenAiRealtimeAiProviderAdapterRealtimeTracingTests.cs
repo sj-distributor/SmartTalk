@@ -41,7 +41,7 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                EnableRealtimeTracing = enableTracing
+                VendorOptions = new OpenAiRealtimeModelOptions { EnableRealtimeTracing = enableTracing }
             }
         };
 
@@ -67,7 +67,7 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
         // Load-bearing: every existing prod assistant has no RealtimeTracing row →
         // EnableRealtimeTracing is null → NullValueHandling.Ignore strips the
         // `tracing` key from session. OpenAI does not retain a trace.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["tracing"].ShouldBeNull();
     }
@@ -79,7 +79,7 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
         // persist a row with `{ "enabled": false }` to deliberately document
         // "we considered tracing and decided against it"; that must not surface
         // as an enabled trace.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(false), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(false), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["tracing"].ShouldBeNull();
     }
@@ -88,7 +88,7 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
     public void BuildSessionConfig_TracingNull_AdjacentSessionFieldsUnchanged()
     {
         // Sanity: null tracing must not perturb any adjacent session-level field.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["type"]!.Value<string>().ShouldBe("realtime");
@@ -102,7 +102,7 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
     [Fact]
     public void BuildSessionConfig_TracingTrue_EmitsAutoAtSessionLevel()
     {
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(true), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(true), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["tracing"]!.Value<string>().ShouldBe(OpenAiRealtimeAiProviderAdapter.EnabledTracingMode);
     }
@@ -112,7 +112,7 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
     {
         // Activating tracing must not silently shift any audio field —
         // tracing is purely an out-of-band metadata flag.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(true), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithTracing(true), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["audio"]!["input"]!["transcription"]!["model"]!.Value<string>()
@@ -137,14 +137,17 @@ public class OpenAiRealtimeAiProviderAdapterRealtimeTracingTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionLanguage = "yue",
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                MaxResponseOutputTokens = 1200,
-                EnableRealtimeTracing = true
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionLanguage = "yue",
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    MaxResponseOutputTokens = 1200,
+                    EnableRealtimeTracing = true
+                }
             }
         };
 
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["audio"]!["input"]!["transcription"]!["model"]!.Value<string>().ShouldBe("gpt-4o-mini-transcribe");

@@ -33,6 +33,14 @@ public class FakeRealtimeAiWssClient : IRealtimeAiWssClient
     public int ConnectCallCount { get; private set; }
     public int DisconnectCallCount { get; private set; }
 
+    /// <summary>
+    /// Optional hook: when set and it returns true for an outbound message, SendMessageAsync throws
+    /// (simulating a transport send failure) and the message is NOT recorded. The test owns any
+    /// one-shot semantics (e.g. flip a captured flag). Used to characterize the send-failure
+    /// rollback in the response-trigger state machine.
+    /// </summary>
+    public Func<string, bool>? ThrowOnSend { get; set; }
+
     public Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
         ConnectCallCount++;
@@ -47,6 +55,9 @@ public class FakeRealtimeAiWssClient : IRealtimeAiWssClient
 
     public Task SendMessageAsync(string message, CancellationToken cancellationToken)
     {
+        if (ThrowOnSend?.Invoke(message) == true)
+            throw new WebSocketException("Simulated send failure");
+
         SentMessages.Enqueue(message);
         return Task.CompletedTask;
     }

@@ -106,6 +106,17 @@ public class PhoneOrderController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("aixvolink/call-ended")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReceiveAixvolinkCallEndedAsync([FromBody] ReceiveAixvolinkPhoneOrderRecordCommand command)
+    {
+        Log.Information("Receive AIXVOLINK call-ended callback: {@Command}", command);
+
+        await _mediator.SendAsync(command).ConfigureAwait(false);
+
+        return Ok();
+    }
+
     [Route("manual/order"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AddOrUpdateManualOrderResponse))]
     public async Task<IActionResult> AddOrUpdateManualOrderAsync([FromBody] AddOrUpdateManualOrderCommand command)

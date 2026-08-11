@@ -2,8 +2,10 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -35,17 +37,21 @@ public partial class AiSpeechAssistantConnectService
                     .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
                     .ToList(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
-                InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
-                TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
-                TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel)),
-                MaxResponseOutputTokens = ParseMaxResponseOutputTokens(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens)),
-                OutputAudioSpeed = ParseOutputAudioSpeed(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.OutputAudioSpeed)),
-                EnableRealtimeTracing = ParseEnableRealtimeTracing(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.RealtimeTracing))
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                    TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
+                    TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel)),
+                    MaxResponseOutputTokens = ParseMaxResponseOutputTokens(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens)),
+                    OutputAudioSpeed = ParseOutputAudioSpeed(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.OutputAudioSpeed)),
+                    EnableRealtimeTracing = ParseEnableRealtimeTracing(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.RealtimeTracing))
+                }
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
                 ProfileId = _ctx.Assistant.Id.ToString()
             },
+            TtsConfig = BuildTtsConfig(assistant),
             WebSocket = _ctx.TwilioWebSocket,
             Region = RealtimeAiServerRegion.US,
             EnableRecording = true,
@@ -59,6 +65,15 @@ public partial class AiSpeechAssistantConnectService
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
             OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };
+    }
+
+    private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)
+    {
+        return _ttsConfigResolver.Resolve(new RealtimeAiTtsRequest
+        {
+            AssistantId = assistant.Id,
+            ModelVoice = assistant.ModelVoice
+        });
     }
 
     /// <summary>

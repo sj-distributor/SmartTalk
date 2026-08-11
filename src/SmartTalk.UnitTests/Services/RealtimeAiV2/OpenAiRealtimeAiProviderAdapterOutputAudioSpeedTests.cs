@@ -40,7 +40,7 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                OutputAudioSpeed = speed
+                VendorOptions = new OpenAiRealtimeModelOptions { OutputAudioSpeed = speed }
             }
         };
 
@@ -55,7 +55,7 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
         // Load-bearing: every existing prod assistant has no OutputAudioSpeed row →
         // ModelConfig.OutputAudioSpeed is null → NullValueHandling.Ignore strips the
         // key from `audio.output`. OpenAI uses 1.0 as before.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["output"]!["speed"].ShouldBeNull();
     }
@@ -64,7 +64,7 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
     public void BuildSessionConfig_OutputAudioSpeedNull_AdjacentOutputFieldsUnchanged()
     {
         // Null speed must not perturb voice or format inside audio.output.
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(null), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(null), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var output = json["session"]!["audio"]!["output"]!;
         output["voice"]!.Value<string>().ShouldBe("alloy");
@@ -85,7 +85,7 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
     {
         var speed = decimal.Parse(speedString, System.Globalization.CultureInfo.InvariantCulture);
 
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(speed), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(speed), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         json["session"]!["audio"]!["output"]!["speed"]!.Value<decimal>().ShouldBe(speed);
     }
@@ -95,7 +95,7 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
     {
         // Activating output speed must not silently shift any input-side field
         // (transcription / turn_detection / noise_reduction / format).
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(0.9m), RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(OptionsWithSpeed(0.9m), RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var input = json["session"]!["audio"]!["input"]!;
         input["transcription"]!["model"]!.Value<string>()
@@ -120,14 +120,17 @@ public class OpenAiRealtimeAiProviderAdapterOutputAudioSpeedTests
                 Prompt = "you are helpful",
                 Voice = "alloy",
                 Tools = new List<object>(),
-                TranscriptionLanguage = "yue",
-                TranscriptionModel = "gpt-4o-mini-transcribe",
-                MaxResponseOutputTokens = 1200,
-                OutputAudioSpeed = 0.9m
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    TranscriptionLanguage = "yue",
+                    TranscriptionModel = "gpt-4o-mini-transcribe",
+                    MaxResponseOutputTokens = 1200,
+                    OutputAudioSpeed = 0.9m
+                }
             }
         };
 
-        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(options, RealtimeAiAudioCodec.MULAW));
+        var json = SerializeAsProduction(NewAdapter().BuildSessionConfig(options, RealtimeAiOutputMode.Audio, RealtimeAiAudioCodec.MULAW));
 
         var session = json["session"]!;
         session["audio"]!["input"]!["transcription"]!["model"]!.Value<string>().ShouldBe("gpt-4o-mini-transcribe");

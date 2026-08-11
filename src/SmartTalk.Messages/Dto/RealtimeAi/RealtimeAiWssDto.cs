@@ -20,6 +20,11 @@ public class RealtimeAiWssTranscriptionData
     public string ItemId { get; set; }
 }
 
+public class RealtimeAiWssTextData
+{
+    public string Text { get; set; }
+}
+
 public class RealtimeAiWssFunctionCallData
 {
     public string CallId { get; set; }

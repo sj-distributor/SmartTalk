@@ -1,4 +1,5 @@
 using SmartTalk.Core.Services.RealtimeAiV2.Recording;
+using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -58,5 +59,6 @@ public partial class RealtimeAiService
         _ctx.WssClient = _realtimeAiSwitcher.WssClient(_ctx.Options.ModelConfig.Provider);
         _ctx.ClientAdapter = _realtimeAiSwitcher.ClientAdapter(_ctx.Options.ClientConfig.Client);
         _ctx.ProviderAdapter = _realtimeAiSwitcher.ProviderAdapter(_ctx.Options.ModelConfig.Provider);
+        _ctx.TtsProvider = _realtimeAiSwitcher.TtsProvider(_ctx.Options.TtsConfig?.ProviderType ?? RealtimeAiTtsProviderType.BuiltIn);
     }
 }

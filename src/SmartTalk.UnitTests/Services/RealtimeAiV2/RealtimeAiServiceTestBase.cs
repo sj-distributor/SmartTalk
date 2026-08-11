@@ -2,6 +2,8 @@ using System.Net.WebSockets;
 using NSubstitute;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.BuiltIn;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Dto.RealtimeAi;
@@ -21,6 +23,7 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
     protected readonly IRealtimeAiSwitcher Switcher;
     protected readonly IRealtimeAiProviderAdapter ProviderAdapter;
     protected readonly IRealtimeAiClientAdapter ClientAdapter;
+    protected readonly IRealtimeAiTtsProvider TtsProvider;
     protected readonly IInactivityTimerManager TimerManager;
     protected readonly RealtimeAiService Sut;
 
@@ -31,6 +34,7 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
 
         ProviderAdapter = Substitute.For<IRealtimeAiProviderAdapter>();
         ClientAdapter = Substitute.For<IRealtimeAiClientAdapter>();
+        TtsProvider = new BuiltInRealtimeAiTtsProvider();
         Switcher = Substitute.For<IRealtimeAiSwitcher>();
         TimerManager = Substitute.For<IInactivityTimerManager>();
 
@@ -38,11 +42,17 @@ public abstract class RealtimeAiServiceTestBase : IDisposable
         Switcher.WssClient(Arg.Any<RealtimeAiProvider>()).Returns(FakeWssClient);
         Switcher.ClientAdapter(Arg.Any<RealtimeAiClient>()).Returns(ClientAdapter);
         Switcher.ProviderAdapter(Arg.Any<RealtimeAiProvider>()).Returns(ProviderAdapter);
+        Switcher.TtsProvider(Arg.Any<RealtimeAiTtsProviderType>()).Returns(TtsProvider);
 
         // Default stubs for ProviderAdapter
         ProviderAdapter.GetHeaders(Arg.Any<RealtimeAiServerRegion>())
             .Returns(new Dictionary<string, string> { { "Authorization", "Bearer test" } });
-        ProviderAdapter.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiAudioCodec>())
+        ProviderAdapter.Capabilities.Returns(new RealtimeAiInferenceCapabilities
+        {
+            TextOutput = new RealtimeAiTextOutputSupport { CanEmitTextOnly = true, CanEmitTextAlongsideAudio = false },
+            SupportsAudioOutput = true
+        });
+        ProviderAdapter.BuildSessionConfig(Arg.Any<RealtimeSessionOptions>(), Arg.Any<RealtimeAiOutputMode>(), Arg.Any<RealtimeAiAudioCodec>())
             .Returns(new { type = "session.update" });
         ProviderAdapter.BuildAudioAppendMessage(Arg.Any<RealtimeAiWssAudioData>())
             .Returns("audio_append_msg");

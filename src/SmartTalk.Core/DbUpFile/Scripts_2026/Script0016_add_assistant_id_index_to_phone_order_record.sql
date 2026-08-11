@@ -1,0 +1,1 @@
+CREATE INDEX idx_assistant_id ON phone_order_record (assistant_id);

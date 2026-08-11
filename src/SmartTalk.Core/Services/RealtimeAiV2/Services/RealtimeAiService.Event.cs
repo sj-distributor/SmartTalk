@@ -1,6 +1,8 @@
 using System.Net.WebSockets;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
 using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
@@ -9,11 +11,24 @@ public partial class RealtimeAiService
 {
     private bool IsProviderSessionActive => _ctx.SessionCts is { IsCancellationRequested: false };
 
+    // The engine routes text-mode behaviour off the negotiated OutputMode (decided once at connect),
+    // not by re-inspecting the TTS provider's vendor type. Equivalent for any live session — the
+    // negotiator returns Text iff the TTS needs text input (i.e. a non-BuiltIn provider) — but it keeps
+    // OutputMode the single source of truth so a provider's type can't drift from the negotiated mode.
+    private bool UsesExternalTts => _ctx.OutputMode == RealtimeAiOutputMode.Text;
+
+    // The TTS provider implements exactly one direction sibling (audio passthrough vs text synthesizer);
+    // routing through these casts means a provider structurally cannot receive the half it doesn't own.
+    private IRealtimeAiAudioPassthrough AudioPassthrough => _ctx.TtsProvider as IRealtimeAiAudioPassthrough;
+
+    private IRealtimeAiTextSynthesizer TextSynthesizer => _ctx.TtsProvider as IRealtimeAiTextSynthesizer;
+
     private async Task OnWssMessageReceivedAsync(string rawMessage)
     {
         if (!IsProviderSessionActive) return;
 
         var parsedEvent = _ctx.ProviderAdapter.ParseMessage(rawMessage);
+        TryTrackLastAssistantItemId(parsedEvent);
 
         try
         {
@@ -26,7 +41,22 @@ public partial class RealtimeAiService
 
                 case RealtimeAiWssEventType.ResponseAudioDelta:
                     if (parsedEvent.Data is RealtimeAiWssAudioData audioData)
-                        await OnAiAudioOutputReadyAsync(audioData).ConfigureAwait(false);
+                    {
+                        if (!string.IsNullOrEmpty(audioData.ItemId))
+                            _ctx.LastAssistantItemId = audioData.ItemId;
+
+                        await (AudioPassthrough?.HandleProviderAudioAsync(audioData.Base64Payload, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
+                    }
+                    break;
+
+                case RealtimeAiWssEventType.ResponseTextDelta:
+                    if (parsedEvent.Data is RealtimeAiWssTextData textDeltaData)
+                        await ForwardProviderTextToTtsAsync(textDeltaData.Text).ConfigureAwait(false);
+                    break;
+
+                case RealtimeAiWssEventType.ResponseTextDone:
+                    if (!_ctx.CurrentResponseTextDoneHandled)
+                        await FlushProviderTextToTtsAsync((parsedEvent.Data as RealtimeAiWssTextData)?.Text).ConfigureAwait(false);
                     break;
 
                 case RealtimeAiWssEventType.InputAudioTranscriptionPartial:
@@ -45,11 +75,23 @@ public partial class RealtimeAiService
                 // FunctionCallSuggested when the response contains function calls, ResponseTurnCompleted otherwise.
                 case RealtimeAiWssEventType.FunctionCallSuggested:
                 case RealtimeAiWssEventType.ResponseTurnCompleted:
+                    // Only the external-TTS (text) path consumes the provider's response text. In audio
+                    // mode the BuiltIn provider's text handlers are no-ops and the transcript arrives via
+                    // output_audio_transcript events, so gating here keeps the audio path from running the
+                    // text-synthesis routing — production behaviour with BuiltIn is unchanged.
+                    if (UsesExternalTts)
+                    {
+                        if (parsedEvent.Data is RealtimeAiWssTextData completedTextData)
+                            await FlushProviderTextToTtsAsync(completedTextData.Text).ConfigureAwait(false);
+                        else if (_ctx.CurrentResponseHasTextOutput && !_ctx.CurrentResponseTextDoneHandled)
+                            await FlushProviderTextToTtsAsync().ConfigureAwait(false);
+                    }
+
                     if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
                         await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
                     if (parsedEvent.Usage != null)
                         await OnResponseUsageReceivedAsync(parsedEvent.Usage).ConfigureAwait(false);
-                    await OnAiTurnCompletedAsync().ConfigureAwait(false);
+                    await MarkProviderTurnCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
                     break;
 
                 case RealtimeAiWssEventType.Error:
@@ -57,9 +99,11 @@ public partial class RealtimeAiService
                     break;
 
                 case RealtimeAiWssEventType.ResponseAudioDone:
+                    await (AudioPassthrough?.HandleProviderAudioDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
                     break;
                 
                 case RealtimeAiWssEventType.ResponseStarted:
+                    ResetCurrentResponseState();
                     await MarkProviderResponseStartedAsync().ConfigureAwait(false);
                     break;
 
@@ -114,6 +158,48 @@ public partial class RealtimeAiService
         await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
     }
 
+    private void TryTrackLastAssistantItemId(ParsedRealtimeAiProviderEvent parsedEvent)
+    {
+        if (string.IsNullOrEmpty(parsedEvent.ItemId)) return;
+
+        if (parsedEvent.Type is RealtimeAiWssEventType.ResponseStarted
+            or RealtimeAiWssEventType.ResponseAudioDelta
+            or RealtimeAiWssEventType.ResponseAudioDone
+            or RealtimeAiWssEventType.ResponseTextDelta
+            or RealtimeAiWssEventType.ResponseTextDone
+            or RealtimeAiWssEventType.ResponseTurnCompleted
+            or RealtimeAiWssEventType.FunctionCallSuggested)
+        {
+            _ctx.LastAssistantItemId = parsedEvent.ItemId;
+        }
+    }
+
+    private Task OnTtsAudioChunkReadyAsync(string base64Payload)
+    {
+        return OnAiAudioOutputReadyAsync(new RealtimeAiWssAudioData { Base64Payload = base64Payload });
+    }
+
+    private async Task OnTtsSynthesisCompletedAsync()
+    {
+        _ctx.IsAiSpeaking = false;
+
+        if (UsesExternalTts)
+            await MarkTtsSynthesisCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
+    }
+
+    private async Task OnTtsSynthesisFailedAsync(RealtimeAiErrorData errorData)
+    {
+        await OnProviderErrorAsync(errorData ?? new RealtimeAiErrorData
+        {
+            Code = "TtsSynthesisFailed",
+            Message = "TTS synthesis failed.",
+            IsCritical = false
+        }).ConfigureAwait(false);
+
+        if (UsesExternalTts)
+            await MarkTtsSynthesisCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
+    }
+
     private async Task OnAiDetectedUserSpeechAsync()
     {
         _ctx.IsAiSpeaking = false;
@@ -124,6 +210,7 @@ public partial class RealtimeAiService
         // `clear` first (time-critical playback stop), truncate after (history correction).
         await SendToClientAsync(_ctx.ClientAdapter.BuildSpeechDetectedMessage(_ctx.SessionId)).ConfigureAwait(false);
         await SendBargeInTruncateIfApplicableAsync().ConfigureAwait(false);
+        await _ctx.TtsProvider.HandleInterruptAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -139,14 +226,21 @@ public partial class RealtimeAiService
 
         if (string.IsNullOrEmpty(itemId) || !clock.HasValue || !anchor.HasValue) return;
 
-        var elapsedMs = Math.Max(0L, clock.Value - anchor.Value);
-
-        var truncateMessage = _ctx.ProviderAdapter.BuildTruncateMessage(itemId, elapsedMs);
-
-        if (truncateMessage != null)
+        // External TTS runs the provider in text-only mode, so the assistant item carries no audio
+        // to truncate. Sending a truncate against a text item makes OpenAI return an error that the
+        // engine classifies as critical (→ session disconnect). The TTS provider's HandleInterruptAsync
+        // performs the actual playback stop, so we only correct provider history in built-in mode.
+        if (!UsesExternalTts)
         {
-            await SendToProviderAsync(truncateMessage).ConfigureAwait(false);
-            Log.Information("[RealtimeAi] Barge-in truncate sent, SessionId: {SessionId}, ItemId: {ItemId}, AudioEndMs: {AudioEndMs}", _ctx.SessionId, itemId, elapsedMs);
+            var elapsedMs = Math.Max(0L, clock.Value - anchor.Value);
+
+            var truncateMessage = _ctx.ProviderAdapter.BuildTruncateMessage(itemId, elapsedMs);
+
+            if (truncateMessage != null)
+            {
+                await SendToProviderAsync(truncateMessage).ConfigureAwait(false);
+                Log.Information("[RealtimeAi] Barge-in truncate sent, SessionId: {SessionId}, ItemId: {ItemId}, AudioEndMs: {AudioEndMs}", _ctx.SessionId, itemId, elapsedMs);
+            }
         }
 
         _ctx.LastAssistantItemId = null;
@@ -193,6 +287,137 @@ public partial class RealtimeAiService
         await SendToClientAsync(_ctx.ClientAdapter.BuildTurnCompletedMessage(_ctx.SessionId)).ConfigureAwait(false);
         
         Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}", _ctx.SessionId, _ctx.Round);
+    }
+
+    private async Task ForwardProviderTextToTtsAsync(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        // First text of this external turn → it will wait for the TTS gate; arm the absolute hard
+        // ceiling so the turn can never hang past it (covers a provider that streams text then stalls
+        // without ever sending response.done). Exactly-once is guaranteed by the same handled latch.
+        // Gated on external-TTS mode: in audio mode the turn completes on provider-done without waiting,
+        // so a hard-ceiling watchdog must never arm there (defensive — audio mode emits no text today).
+        if (UsesExternalTts && !_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
+
+        _ctx.CurrentResponseHasTextOutput = true;
+        _ctx.CurrentResponseTtsSynthesisCompleted = false;
+        _ctx.CurrentResponseTextBuilder.Append(text);
+
+        await (TextSynthesizer?.HandleProviderTextDeltaAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
+    }
+
+    private async Task FlushProviderTextToTtsAsync(string completedText = null)
+    {
+        if (_ctx.CurrentResponseTextDoneHandled) return;
+
+        if (!string.IsNullOrWhiteSpace(completedText) && !_ctx.CurrentResponseHasTextOutput)
+            await ForwardProviderTextToTtsAsync(completedText).ConfigureAwait(false);
+
+        _ctx.CurrentResponseTextDoneHandled = true;
+
+        await EmitAssistantTextTranscriptIfApplicableAsync(completedText).ConfigureAwait(false);
+
+        await (TextSynthesizer?.HandleProviderTextDoneAsync(_ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// In external-TTS mode the provider emits text only, so no <c>output_audio_transcript</c>
+    /// events arrive and the AI side of the transcript would otherwise be lost. Surface the
+    /// assistant's turn text through the normal transcription path so both the saved transcript
+    /// and the live client display still include it. No-op for the built-in audio path.
+    /// </summary>
+    private async Task EmitAssistantTextTranscriptIfApplicableAsync(string completedText)
+    {
+        if (!UsesExternalTts) return;
+
+        var transcript = (!string.IsNullOrWhiteSpace(completedText)
+            ? completedText
+            : _ctx.CurrentResponseTextBuilder.ToString())?.Trim();
+
+        if (string.IsNullOrWhiteSpace(transcript)) return;
+
+        await OnTranscriptionReceivedAsync(
+            RealtimeAiWssEventType.OutputAudioTranscriptionCompleted,
+            new RealtimeAiWssTranscriptionData
+            {
+                Transcript = transcript,
+                Speaker = AiSpeechAssistantSpeaker.Ai
+            }).ConfigureAwait(false);
+    }
+
+    private void ResetCurrentResponseState()
+    {
+        // Bump the turn generation first so any TTS-synthesis watchdog still pending from the previous
+        // turn no-ops when it fires (it captured the old generation).
+        Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
+
+        _ctx.CurrentResponseHasTextOutput = false;
+        _ctx.CurrentResponseTextDoneHandled = false;
+        _ctx.CurrentResponseProviderTurnCompleted = false;
+        _ctx.CurrentResponseTtsSynthesisCompleted = false;
+        _ctx.CurrentResponseTurnCompletedHandled = false;
+        _ctx.CurrentResponseTextBuilder.Clear();
+    }
+
+    private async Task MarkProviderTurnCompletedAndCompleteWhenReadyAsync()
+    {
+        if (await MarkProviderTurnCompletedAndShouldCompleteAsync().ConfigureAwait(false))
+            await OnAiTurnCompletedAsync().ConfigureAwait(false);
+        else
+            ArmTtsSynthesisWatchdog();   // provider turn done but external TTS hasn't signalled yet
+    }
+
+    private async Task MarkTtsSynthesisCompletedAndCompleteWhenReadyAsync()
+    {
+        if (await MarkTtsSynthesisCompletedAndShouldCompleteAsync().ConfigureAwait(false))
+            await OnAiTurnCompletedAsync().ConfigureAwait(false);
+    }
+
+    private async Task<bool> MarkProviderTurnCompletedAndShouldCompleteAsync()
+    {
+        var token = _ctx.SessionCts?.Token ?? CancellationToken.None;
+
+        await _ctx.TurnCompletionStateLock.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            _ctx.CurrentResponseProviderTurnCompleted = true;
+            return TryMarkCurrentResponseTurnCompletedLocked();
+        }
+        finally
+        {
+            _ctx.TurnCompletionStateLock.Release();
+        }
+    }
+
+    private async Task<bool> MarkTtsSynthesisCompletedAndShouldCompleteAsync()
+    {
+        var token = _ctx.SessionCts?.Token ?? CancellationToken.None;
+
+        await _ctx.TurnCompletionStateLock.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            _ctx.CurrentResponseTtsSynthesisCompleted = true;
+            return TryMarkCurrentResponseTurnCompletedLocked();
+        }
+        finally
+        {
+            _ctx.TurnCompletionStateLock.Release();
+        }
+    }
+
+    private bool TryMarkCurrentResponseTurnCompletedLocked()
+    {
+        if (!_ctx.CurrentResponseProviderTurnCompleted) return false;
+
+        var waitsForExternalTts = UsesExternalTts && _ctx.CurrentResponseHasTextOutput;
+        if (!waitsForExternalTts) return true;
+
+        if (_ctx.CurrentResponseTurnCompletedHandled) return false;
+        if (!_ctx.CurrentResponseTtsSynthesisCompleted) return false;
+
+        _ctx.CurrentResponseTurnCompletedHandled = true;
+        return true;
     }
 
     private async Task OnTranscriptionReceivedAsync(RealtimeAiWssEventType eventType, RealtimeAiWssTranscriptionData transcriptionData)

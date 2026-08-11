@@ -33,6 +33,13 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
 
         services.AddHangfireServer(opt =>
         {
+            opt.WorkerCount = 50;
+            opt.Queues = new[] { HangfireConstants.InternalHostingAixvolinkPhoneOrder };
+            opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingAixvolinkPhoneOrder.ToUpper()}-{Guid.NewGuid()}";
+        });
+
+        services.AddHangfireServer(opt =>
+        {
             opt.WorkerCount = 5;
             opt.Queues = new[] { HangfireConstants.InternalHostingSipServer };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingSipServer.ToUpper()}-{Guid.NewGuid()}";
@@ -75,7 +82,7 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
 
         services.AddHangfireServer(opt =>
         {
-            opt.WorkerCount = 30;
+            opt.WorkerCount = 10;
             opt.Queues = new[] { HangfireConstants.InternalHostingAutoTestCallRecordSync };
             opt.ServerName = $"DEPLOY-{HangfireConstants.InternalHostingAutoTestCallRecordSync.ToUpper()}-{Guid.NewGuid()}";
         });
@@ -94,7 +101,7 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
         
         var manager = new ThrottlingManager();
         
-        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 10));
+        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 5));
     }
 
     private static void ScanHangfireRecurringJobs(IApplicationBuilder app)
