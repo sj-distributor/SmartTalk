@@ -318,7 +318,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 Id = Record.AgentId,
                 Type = AgentType.Sales
             };
-            var assistant = new AiSpeechAssistantEntity
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
             {
                 Id = Record.AssistantId.Value,
                 AgentId = Record.AgentId,

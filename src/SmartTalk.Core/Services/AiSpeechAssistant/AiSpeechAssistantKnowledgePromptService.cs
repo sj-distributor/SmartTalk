@@ -262,7 +262,7 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
         if (string.IsNullOrWhiteSpace(modelLanguage))
             return false;
 
-        if (CrmToAutoAddLanguageConverter.TryResolve(modelLanguage, out var crmLanguage))
+        if (AiResourceSyncLanguageConverter.TryResolve(modelLanguage, out var crmLanguage))
         {
             language = crmLanguage;
             return true;

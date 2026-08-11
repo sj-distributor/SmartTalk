@@ -14,6 +14,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
@@ -189,21 +190,42 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
         if (crmToken == null) return;
         
         var updates = new List<Domain.AISpeechAssistant.AiSpeechAssistant>();
+        var rateLimitDelay = TimeSpan.FromMinutes(3);
 
         foreach (var assistant in assistants)
         {
-            if (string.IsNullOrWhiteSpace(assistant.Name)) continue;
+            if (!TryGetCustomerIds(assistant, out var customerIds)) continue;
+            var originalModelLanguage = assistant.ModelLanguage;
 
             try
             {
-                var contacts = await _crmClient.GetCustomerContactsAsync(assistant.Name, crmToken, cancellationToken).ConfigureAwait(false);
-                var language = BuildLanguageText(contacts);
+                var allContacts = new List<SmartTalk.Messages.Dto.Crm.CrmContactDto>();
+                foreach (var customerId in customerIds)
+                {
+                    var contacts = await _crmClient.GetCustomerContactsAsync(customerId, crmToken, cancellationToken).ConfigureAwait(false);
+                    if (contacts is { Count: > 0 })
+                        allContacts.AddRange(contacts);
+                }
 
-                if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal))
+                var language = BuildLanguageText(allContacts);
+                if (string.IsNullOrWhiteSpace(assistant.ModelLanguage))
+                {
+                    var customer = await _crmClient.GetSalesAutoSyncCustomerBySapIdAsync(customerIds[0], cancellationToken).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(customer?.Language))
+                        assistant.ModelLanguage = AiResourceSyncLanguageConverter.ToModelLanguage(customer.Language);
+                }
+
+                if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal) ||
+                    !string.Equals(originalModelLanguage ?? string.Empty, assistant.ModelLanguage ?? string.Empty, StringComparison.Ordinal))
                 {
                     assistant.Language = language;
                     updates.Add(assistant);
                 }
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                Log.Warning(ex, "Rate limited while syncing language for assistant {AssistantId} (CustomerIds: {CustomerIds})", assistant.Id, string.Join("/", customerIds));
+                await Task.Delay(rateLimitDelay, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -211,8 +233,28 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             }
         }
 
-        if (updates.Count > 0)
-            await _speechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(updates, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (updates.Count == 0) return;
+
+        await _speechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(updates, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        static bool TryGetCustomerIds(Domain.AISpeechAssistant.AiSpeechAssistant assistant, out List<string> customerIds)
+        {
+            customerIds = new List<string>();
+            if (string.IsNullOrWhiteSpace(assistant.Name))
+                return false;
+
+            var idsPart = assistant.Name
+                .Trim()
+                .Split(" (", 2, StringSplitOptions.TrimEntries)[0];
+
+            customerIds = idsPart
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => x.All(char.IsDigit))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return customerIds.Count > 0;
+        }
     }
 
     public async Task SyncAiSpeechAssistantKnowledgePromptAsync(SyncAiSpeechAssistantKnowledgePromptCommand command, CancellationToken cancellationToken)
