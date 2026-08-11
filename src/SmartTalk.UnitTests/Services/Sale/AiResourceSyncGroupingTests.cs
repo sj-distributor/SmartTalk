@@ -1,5 +1,6 @@
 using SmartTalk.Core.Services.AiResourceSync;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Services.KnowledgeScenario;
 using Xunit;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
@@ -43,7 +44,7 @@ public class AiResourceSyncGroupingTests
     [Fact]
     public void BuildAssistantName_JoinsIdsWithSlash()
     {
-        var name = AiResourceSyncGrouping.BuildAssistantName(["200", "100"], "English");
+        var name = AiResourceSyncGrouping.BuildAssistantName(["200", "100"]);
 
         Assert.Equal("100/200", name);
     }
@@ -108,6 +109,43 @@ public class AiResourceSyncGroupingTests
 
         Assert.Single(groups);
         Assert.Equal(new[] { "100", "200" }, groups[0].CustomerIds);
+    }
+
+    [Fact]
+    public void BuildCustomerGroups_UsesCustomerLanguageBeforeContactLanguage()
+    {
+        var customer = CreateCustomer("100", "Alice", "GroupA", "5551110001", null);
+        customer.Contacts![0].Language = "英文";
+        customer.Language = "中文";
+
+        var group = Assert.Single(AiResourceSyncGrouping.BuildCustomerGroups([customer]));
+
+        Assert.Equal("中文", group.Language);
+    }
+
+    [Fact]
+    public void BuildCustomerGroups_CombinesDistinctContactLanguages()
+    {
+        var customer = CreateCustomer("100", "Alice", "GroupA", "5551110001", null);
+        customer.Language = null;
+        customer.Contacts = new List<ContactDto>
+        {
+            new() { Phone = "5551110001", Language = "英文" },
+            new() { Phone = "5552220002", Language = "中文" },
+            new() { Phone = "5553330003", Language = "英文" }
+        };
+
+        var group = Assert.Single(AiResourceSyncGrouping.BuildCustomerGroups([customer]));
+
+        Assert.Equal("英文/中文", group.Language);
+    }
+
+    [Theory]
+    [InlineData("中文", "zh")]
+    [InlineData("English", "en")]
+    public void ToModelLanguage_MapsCrmLanguageToModelCode(string rawLanguage, string expected)
+    {
+        Assert.Equal(expected, AiResourceSyncLanguageConverter.ToModelLanguage(rawLanguage));
     }
 
     [Theory]
