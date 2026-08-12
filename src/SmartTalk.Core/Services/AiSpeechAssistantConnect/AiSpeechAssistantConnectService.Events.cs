@@ -9,18 +9,29 @@ public partial class AiSpeechAssistantConnectService
 {
     private async Task HandleSessionReadyAsync(RealtimeAiSessionActions actions)
     {
-        // 代客致电: 有本通 instruction 则以它驱动开场, 取代 DB 问候 —— 否则会讲到默认 assistant 的人设/问候
-        // (例如默认 AIXV Link demo assistant 会自报"我是智能电话服务")。instruction 已在 prompt 覆盖 DB prompt, 这里再以一条
-        // 开场指令显式触发首句, 保证 AI 一开口就按"代顾客来电"措辞。
-        if (!string.IsNullOrWhiteSpace(_ctx.Instruction))
+        await SendOpeningGreetingOnceAsync(_ctx, actions).ConfigureAwait(false);
+    }
+
+    internal static async Task SendOpeningGreetingOnceAsync(
+        AiSpeechAssistantConnectContext context,
+        RealtimeAiSessionActions actions)
+    {
+        // 代客致电: 有本通 instruction 则以它驱动开场, 取代 DB 问候 —— 否则会讲到默认 assistant 的人设/问候。
+        var openingMessage = !string.IsNullOrWhiteSpace(context.Instruction)
+            ? context.Instruction
+            : string.IsNullOrEmpty(context.Knowledge?.Greetings)
+                ? null
+                : $"Greet the user with: '{context.Knowledge.Greetings}'";
+
+        if (openingMessage == null) return;
+
+        if (Interlocked.CompareExchange(ref context.OpeningGreetingTriggered, 1, 0) != 0)
         {
-            await actions.SendTextToProviderAsync(_ctx.Instruction).ConfigureAwait(false);
+            Log.Debug("[AiAssistant] Opening greeting already triggered, CallSid: {CallSid}", context.CallSid);
             return;
         }
 
-        if (string.IsNullOrEmpty(_ctx.Knowledge?.Greetings)) return;
-
-        await actions.SendTextToProviderAsync($"Greet the user with: '{_ctx.Knowledge.Greetings}'").ConfigureAwait(false);
+        await actions.SendTextToProviderAsync(openingMessage).ConfigureAwait(false);
     }
 
     private Task HandleClientStartAsync(string sessionId, Dictionary<string, string> metadata)

@@ -48,6 +48,7 @@ public class AiSpeechAssistantConnectContext
     public bool IsEnableManualService { get; set; }
 
     // Call state
+    internal int OpeningGreetingTriggered;
     public bool IsTransfer { get; set; }
     public AiSpeechAssistantOrderDto OrderItems { get; set; }
     public AiSpeechAssistantComplaintInfoDto ComplaintInfo { get; set; } = new();
