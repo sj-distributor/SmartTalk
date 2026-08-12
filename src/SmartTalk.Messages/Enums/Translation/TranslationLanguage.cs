@@ -23,5 +23,8 @@ public enum TranslationLanguage
     Filipino,
 
     [Description("hi")]
-    Hindi
+    Hindi,
+
+    [Description("zh-Hant")]
+    TraditionalChinese
 }
