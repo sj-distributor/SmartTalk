@@ -113,7 +113,7 @@ public class MiniMaxTtsSettings : IConfigurationSetting
         foreach (var relation in AssistantIdWithDefaultVoiceIdRelation.Split(
                      ';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var parts = relation.Split(['#'], 2, StringSplitOptions.TrimEntries);
+            var parts = relation.Split(["#"], 2, StringSplitOptions.TrimEntries);
 
             if (parts.Length != 2 ||
                 !int.TryParse(parts[0], out var configuredAssistantId) ||
