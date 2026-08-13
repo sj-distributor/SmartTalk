@@ -4,6 +4,8 @@ using Serilog;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
+using SmartTalk.Core.Services.Caching;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Sales;
 
@@ -11,6 +13,23 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 
 public partial class PhoneOrderProcessJobService
 {
+    private async Task<bool> IsCompanyComplaintAnalysisEnabledAsync(Agent agent, CancellationToken cancellationToken)
+    {
+        if (agent == null) return false;
+
+        var enabled = await _cacheManager.GetOrAddAsync<object?>(
+            $"company_complaint_analysis_{agent.Id}",
+            async _ =>
+            {
+                var company = await _posDataProvider.GetPosCompanyByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
+                return company?.IsComplaintAnalysisEnabled;
+            },
+            new RedisCachingSetting(expiry: TimeSpan.FromMinutes(10)),
+            cancellationToken).ConfigureAwait(false);
+
+        return enabled is bool value && value;
+    }
+
     private async Task<string> BuildComplaintFeedbackAnalysisSectionAsync(
         string reportText,
         Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,

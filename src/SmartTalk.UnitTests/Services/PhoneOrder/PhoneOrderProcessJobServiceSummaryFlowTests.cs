@@ -7,6 +7,7 @@ using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -305,7 +306,9 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 AiSpeechAssistantDataProvider,
                 PosUtilService,
                 PhoneOrderUtilService,
-                SalesCustomerMatchService);
+                SalesCustomerMatchService,
+                PosDataProvider,
+                CacheManager);
         }
 
         public PhoneOrderRecord Record { get; }
@@ -349,6 +352,10 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         public IPhoneOrderUtilService PhoneOrderUtilService { get; } = Substitute.For<IPhoneOrderUtilService>();
 
         public ISalesCustomerMatchService SalesCustomerMatchService { get; } = Substitute.For<ISalesCustomerMatchService>();
+
+        public IPosDataProvider PosDataProvider { get; } = Substitute.For<IPosDataProvider>();
+
+        public ICacheManager CacheManager { get; } = Substitute.For<ICacheManager>();
     }
 
     private sealed class TestPhoneOrderProcessJobService : PhoneOrderProcessJobService
@@ -375,7 +382,9 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
             IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
             IPosUtilService posUtilService,
             IPhoneOrderUtilService phoneOrderUtilService,
-            ISalesCustomerMatchService salesCustomerMatchService)
+            ISalesCustomerMatchService salesCustomerMatchService,
+            IPosDataProvider posDataProvider,
+            ICacheManager cacheManager)
             : base(
                 salesClient,
                 ffmpegService,
@@ -396,7 +405,9 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 aiSpeechAssistantDataProvider,
                 posUtilService,
                 phoneOrderUtilService,
-                salesCustomerMatchService)
+                salesCustomerMatchService,
+                posDataProvider,
+                cacheManager)
         {
         }
 
