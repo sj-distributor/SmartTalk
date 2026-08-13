@@ -100,9 +100,6 @@ public class TranslationService : ITranslationService
             NetworkTimeout = TimeSpan.FromMinutes(2)
         };
 
-        if (!string.IsNullOrWhiteSpace(_openAiSettings.BaseUrl))
-            options.Endpoint = new Uri(_openAiSettings.BaseUrl);
-
         if (!string.IsNullOrWhiteSpace(_openAiSettings.Organization))
             options.OrganizationId = _openAiSettings.Organization;
 
