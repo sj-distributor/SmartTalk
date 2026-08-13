@@ -100,9 +100,6 @@ public class TranslationService : ITranslationService
             NetworkTimeout = TimeSpan.FromMinutes(2)
         };
 
-        if (!string.IsNullOrWhiteSpace(_openAiSettings.Organization))
-            options.OrganizationId = _openAiSettings.Organization;
-
         return new ChatClient(TranslationModel, new ApiKeyCredential(_openAiSettings.ApiKey), options);
     }
 
