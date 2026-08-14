@@ -23,6 +23,9 @@ public class Company : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("service_provider_id")]
     public int? ServiceProviderId { get; set; }
     
+    [Column("is_complaint_analysis_enabled")]
+    public bool IsComplaintAnalysisEnabled { get; set; }
+    
     [Column("created_by")]
     public int? CreatedBy { get; set; }
     
