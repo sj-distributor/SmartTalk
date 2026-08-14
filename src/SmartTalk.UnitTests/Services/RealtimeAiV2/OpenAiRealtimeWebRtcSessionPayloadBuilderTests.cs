@@ -14,6 +14,30 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 public class OpenAiRealtimeWebRtcSessionPayloadBuilderTests
 {
     [Fact]
+    public void Build_NullTtsConfig_UsesExistingBuiltInAudioConvention()
+    {
+        var adapter = new OpenAiRealtimeAiProviderAdapter(
+            new OpenAiSettings(new ConfigurationBuilder().Build()));
+        var options = new RealtimeSessionOptions
+        {
+            ModelConfig = new RealtimeAiModelConfig
+            {
+                Provider = RealtimeAiProvider.OpenAi,
+                ModelName = "gpt-realtime-test",
+                Prompt = "prompt",
+                Voice = "marin",
+                TurnDetection = new { type = "server_vad" }
+            },
+            TtsConfig = null
+        };
+
+        var session = JObject.Parse(OpenAiRealtimeWebRtcSessionPayloadBuilder.Build(options, adapter));
+
+        session["output_modalities"]?[0]?.Value<string>().ShouldBe("audio");
+        session["audio"]?["output"]?.Value<string>("voice").ShouldBe("marin");
+    }
+
+    [Fact]
     public void Build_PreservesBusinessConfigAndEnablesNativeBargeIn()
     {
         var adapter = new OpenAiRealtimeAiProviderAdapter(

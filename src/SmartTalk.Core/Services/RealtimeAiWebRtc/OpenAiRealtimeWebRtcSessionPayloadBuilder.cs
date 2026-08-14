@@ -17,7 +17,10 @@ internal static class OpenAiRealtimeWebRtcSessionPayloadBuilder
         if (options.ModelConfig.Provider != RealtimeAiProvider.OpenAi)
             throw new NotSupportedException("The WebRTC POC only supports the OpenAI realtime provider.");
 
-        if (options.TtsConfig?.ProviderType != RealtimeAiTtsProviderType.BuiltIn)
+        // The existing resolver represents the default BuiltIn audio path as null.
+        // A non-null config means an explicit TTS provider was selected.
+        if (options.TtsConfig != null &&
+            options.TtsConfig.ProviderType != RealtimeAiTtsProviderType.BuiltIn)
             throw new NotSupportedException("The WebRTC POC only supports BuiltIn TTS.");
 
         var updatePayload = providerAdapter.BuildSessionConfig(

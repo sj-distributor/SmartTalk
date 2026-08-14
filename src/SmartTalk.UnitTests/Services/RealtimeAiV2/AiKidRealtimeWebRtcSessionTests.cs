@@ -14,6 +14,25 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 public class AiKidRealtimeWebRtcSessionTests
 {
     [Fact]
+    public async Task Initialize_AlwaysUsesBuiltInAudioForInterviewWebRtc()
+    {
+        var fixture = CreateFixture();
+        fixture.Options.TtsConfig = new RealtimeAiTtsConfig
+        {
+            ProviderType = RealtimeAiTtsProviderType.MiniMax
+        };
+
+        await fixture.Session.InitializeAsync(625, RealtimeAiServerRegion.HK, "offer", CancellationToken.None);
+
+        Assert.Null(fixture.Options.TtsConfig);
+        fixture.CallClient.Received(1).CreateCallAsync(
+            "offer",
+            Arg.Any<string>(),
+            "wss://api.openai.com/v1/realtime?model=gpt-realtime-test",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task FunctionCall_IsExecutedOnServerAndReplyTriggersNextResponse()
     {
         var fixture = CreateFixture();
@@ -156,13 +175,14 @@ public class AiKidRealtimeWebRtcSessionTests
             });
 
         var session = new AiKidRealtimeWebRtcSession(aiKid, switcher, callClient, sideband, timer);
-        return new Fixture(session, options, adapter, sideband, timer);
+        return new Fixture(session, options, adapter, callClient, sideband, timer);
     }
 
     private sealed record Fixture(
         AiKidRealtimeWebRtcSession Session,
         RealtimeSessionOptions Options,
         IRealtimeAiProviderAdapter Adapter,
+        IOpenAiRealtimeWebRtcCallClient CallClient,
         IOpenAiRealtimeWebRtcSidebandClient Sideband,
         IInactivityTimerManager Timer);
 }

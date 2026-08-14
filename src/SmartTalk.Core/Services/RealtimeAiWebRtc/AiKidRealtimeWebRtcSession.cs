@@ -83,6 +83,10 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
         // receive PCM frames and must not invoke the legacy recording buffer/callback.
         _options.EnableRecording = false;
 
+        // Interview WebRTC always uses OpenAI's native audio. Keep external TTS settings scoped
+        // to the existing WSS/telephony paths, even if MiniMax is enabled for this assistant.
+        _options.TtsConfig = null;
+
         _providerAdapter = _realtimeAiSwitcher.ProviderAdapter(_options.ModelConfig.Provider);
         var sessionJson = OpenAiRealtimeWebRtcSessionPayloadBuilder.Build(_options, _providerAdapter);
         var call = await _callClient.CreateCallAsync(
