@@ -14,19 +14,8 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial class PhoneOrderProcessJobService
 {
     internal virtual async Task<bool> ShouldRunComplaintAnalysisAsync(
-        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,
         Agent agent,
         CancellationToken cancellationToken)
-    {
-        if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true }) return true;
-        if (aiSpeechAssistant?.IsComplaintAnalysisEnabled != null) return false;
-
-        return await IsCompanyComplaintAnalysisEnabledAsync(agent, cancellationToken).ConfigureAwait(false);
-    }
-
-    private const string CompanyComplaintAnalysisSettingKey = "is_complaint_analysis_enabled";
-
-    private async Task<bool> IsCompanyComplaintAnalysisEnabledAsync(Agent agent, CancellationToken cancellationToken)
     {
         if (agent == null) return false;
 
@@ -42,6 +31,8 @@ public partial class PhoneOrderProcessJobService
 
         return value is string s && (s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase));
     }
+
+    private const string CompanyComplaintAnalysisSettingKey = "is_complaint_analysis_enabled";
 
     private async Task<string> BuildComplaintFeedbackAnalysisSectionAsync(
         string reportText,
