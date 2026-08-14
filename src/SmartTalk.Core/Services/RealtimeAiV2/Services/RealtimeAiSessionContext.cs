@@ -32,6 +32,10 @@ public class RealtimeAiSessionContext
 
     // Runtime state
     public int Round { get; set; }
+    public long ProviderAudioSequence;
+    public long LastProviderAudioReceivedAtUnixMs;
+    public long OutboundAudioSequence;
+    internal AsyncLocal<RealtimeAiProviderAudioDeliveryContext> ProviderAudioDeliveryScope { get; } = new();
     public volatile bool IsAiSpeaking;
     public volatile bool IsClientAudioToProviderSuspended;
     public bool IsProviderResponseInProgress;
@@ -70,4 +74,11 @@ public class RealtimeAiSessionContext
 
     // Actions exposed to consumer callbacks
     public RealtimeAiSessionActions SessionActions { get; set; }
+}
+
+internal sealed class RealtimeAiProviderAudioDeliveryContext
+{
+    public long ProviderSeq { get; init; }
+
+    public long ServerReceivedAtUnixMs { get; init; }
 }

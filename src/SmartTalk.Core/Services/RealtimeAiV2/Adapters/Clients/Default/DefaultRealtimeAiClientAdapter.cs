@@ -4,7 +4,7 @@ using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Adapters.Clients.Default;
 
-public class DefaultRealtimeAiClientAdapter : IRealtimeAiClientAdapter
+public class DefaultRealtimeAiClientAdapter : IRealtimeAiClientAdapter, IRealtimeAiAudioDeliveryDiagnostics
 {
     public RealtimeAiClient Client => RealtimeAiClient.Default;
 
@@ -48,6 +48,26 @@ public class DefaultRealtimeAiClientAdapter : IRealtimeAiClientAdapter
     public object BuildAudioDeltaMessage(string base64Payload, string sessionId)
     {
         return new { type = "ResponseAudioDelta", Data = new { Base64Payload = base64Payload }, session_id = sessionId };
+    }
+
+    public object BuildAudioDeltaMessage(string base64Payload, string sessionId, RealtimeAiAudioDeliveryMetadata metadata)
+    {
+        return new
+        {
+            type = "ResponseAudioDelta",
+            Data = new
+            {
+                Base64Payload = base64Payload,
+                metadata.Seq,
+                metadata.ProviderSeq,
+                metadata.ServerReceivedAtUnixMs,
+                metadata.ServerSendStartedAtUnixMs,
+                metadata.AudioReadyDelayMs,
+                metadata.TranscodeDurationMs,
+                metadata.SendLockWaitMs
+            },
+            session_id = sessionId
+        };
     }
 
     public object BuildSpeechDetectedMessage(string sessionId)

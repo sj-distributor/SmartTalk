@@ -122,11 +122,19 @@ public partial class RealtimeAiService
     private async Task CleanupSessionAsync(bool clientIsClose)
     {
         if (clientIsClose)
+        {
+            Log.Information(
+                "[RealtimeAi] Client close frame received, SessionId: {SessionId}, CloseStatus: {CloseStatus}, CloseDescription: {CloseDescription}",
+                _ctx.SessionId, _ctx.WebSocket.CloseStatus, _ctx.WebSocket.CloseStatusDescription);
+
             await SafeExecuteAsync(
                 () => _ctx.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close acknowledged", CancellationToken.None), "acknowledge client close");
+        }
         else
         {
-            Log.Warning("[RealtimeAi] Client disconnected abnormally, SessionId: {SessionId}, WebSocketState: {WebSocketState}", _ctx.SessionId, GetWebSocketStateSafe());
+            Log.Warning(
+                "[RealtimeAi] Client disconnected abnormally, SessionId: {SessionId}, WebSocketState: {WebSocketState}, CloseStatus: {CloseStatus}, CloseDescription: {CloseDescription}",
+                _ctx.SessionId, GetWebSocketStateSafe(), _ctx.WebSocket.CloseStatus, _ctx.WebSocket.CloseStatusDescription);
 
             if (_ctx.Options.MaxSessionDuration.HasValue)
                 await SafeExecuteAsync(
