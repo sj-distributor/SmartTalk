@@ -24,21 +24,23 @@ public partial class PhoneOrderProcessJobService
         return await IsCompanyComplaintAnalysisEnabledAsync(agent, cancellationToken).ConfigureAwait(false);
     }
 
+    private const string CompanyComplaintAnalysisSettingKey = "is_complaint_analysis_enabled";
+
     private async Task<bool> IsCompanyComplaintAnalysisEnabledAsync(Agent agent, CancellationToken cancellationToken)
     {
         if (agent == null) return false;
 
-        var enabled = await _cacheManager.GetOrAddAsync<object?>(
-            $"company_complaint_analysis_{agent.Id}",
+        var value = await _cacheManager.GetOrAddAsync<object?>(
+            $"company_setting_{agent.Id}_{CompanyComplaintAnalysisSettingKey}",
             async _ =>
             {
-                var company = await _posDataProvider.GetPosCompanyByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
-                return company?.IsComplaintAnalysisEnabled;
+                var setting = await _posDataProvider.GetCompanySettingByAgentIdAsync(agent.Id, CompanyComplaintAnalysisSettingKey, cancellationToken).ConfigureAwait(false);
+                return setting?.SettingValue;
             },
             new RedisCachingSetting(expiry: TimeSpan.FromMinutes(10)),
             cancellationToken).ConfigureAwait(false);
 
-        return enabled is bool value && value;
+        return value is string s && (s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<string> BuildComplaintFeedbackAnalysisSectionAsync(

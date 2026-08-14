@@ -198,7 +198,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         result.ShouldBeTrue();
         await fixture.CacheManager.DidNotReceiveWithAnyArgs().GetOrAddAsync<object?>(
             default!, default(Func<string, Task<object?>>), default!, default);
-        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetPosCompanyByAgentIdAsync(default);
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default);
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         result.ShouldBeFalse();
         await fixture.CacheManager.DidNotReceiveWithAnyArgs().GetOrAddAsync<object?>(
             default!, default(Func<string, Task<object?>>), default!, default);
-        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetPosCompanyByAgentIdAsync(default);
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default);
     }
 
     [Fact]
@@ -234,13 +234,13 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 Arg.Any<Func<string, Task<object?>>>(),
                 Arg.Any<ICachingSetting>(),
                 Arg.Any<CancellationToken>())
-            .Returns(true);
+            .Returns("1");
 
         var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
             assistant, new Agent { Id = 7 }, CancellationToken.None);
 
         result.ShouldBeTrue();
-        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetPosCompanyByAgentIdAsync(default);
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default);
     }
 
     [Fact]
@@ -254,13 +254,13 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 Arg.Any<Func<string, Task<object?>>>(),
                 Arg.Any<ICachingSetting>(),
                 Arg.Any<CancellationToken>())
-            .Returns(false);
+            .Returns("0");
 
         var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
             assistant, new Agent { Id = 7 }, CancellationToken.None);
 
         result.ShouldBeFalse();
-        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetPosCompanyByAgentIdAsync(default);
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default);
     }
 
     [Fact]
@@ -276,14 +276,15 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 Arg.Any<CancellationToken>())
             .Returns(callInfo => callInfo.Arg<Func<string, Task<object?>>>()(callInfo.Arg<string>()));
         fixture.PosDataProvider
-            .GetPosCompanyByAgentIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new Company { IsComplaintAnalysisEnabled = true });
+            .GetCompanySettingByAgentIdAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new CompanySetting { SettingValue = "1" });
 
         var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
             assistant, new Agent { Id = 7 }, CancellationToken.None);
 
         result.ShouldBeTrue();
-        await fixture.PosDataProvider.Received(1).GetPosCompanyByAgentIdAsync(7, Arg.Any<CancellationToken>());
+        await fixture.PosDataProvider.Received(1)
+            .GetCompanySettingByAgentIdAsync(7, "is_complaint_analysis_enabled", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -299,8 +300,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 Arg.Any<CancellationToken>())
             .Returns(callInfo => callInfo.Arg<Func<string, Task<object?>>>()(callInfo.Arg<string>()));
         fixture.PosDataProvider
-            .GetPosCompanyByAgentIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new Company { IsComplaintAnalysisEnabled = false });
+            .GetCompanySettingByAgentIdAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new CompanySetting { SettingValue = "0" });
 
         var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
             assistant, new Agent { Id = 7 }, CancellationToken.None);
@@ -337,7 +338,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         result.ShouldBeFalse();
         await fixture.CacheManager.DidNotReceiveWithAnyArgs().GetOrAddAsync<object?>(
             default!, default(Func<string, Task<object?>>), default!, default);
-        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetPosCompanyByAgentIdAsync(default);
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default);
     }
 
     private const string TwoSpeakerTranscription = """
