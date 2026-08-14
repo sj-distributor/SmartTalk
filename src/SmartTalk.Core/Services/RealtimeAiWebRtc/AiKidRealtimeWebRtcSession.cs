@@ -89,7 +89,6 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
             offerSdp,
             sessionJson,
             _options.ModelConfig.ServiceUrl,
-            region,
             cancellationToken).ConfigureAwait(false);
 
         _callId = call.CallId;

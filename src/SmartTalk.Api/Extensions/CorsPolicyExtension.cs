@@ -26,8 +26,7 @@ public static class CorsPolicyExtension
                 policy => policy
                     .AllowAnyOrigin()
                     .AllowAnyHeader()
-                    .AllowAnyMethod()
-                    .WithExposedHeaders("X-Realtime-Call-Id"));
+                    .AllowAnyMethod());
         });
         
         return services;

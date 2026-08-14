@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 using SmartTalk.Api.Extensions;
 using SmartTalk.Core.Services.RealtimeAiWebRtc;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -24,7 +25,7 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
 
     [HttpPost("session/{assistantId:int}/{region}")]
     [Consumes("application/sdp", "text/plain")]
-    [Produces("application/sdp")]
+    [Produces("application/json")]
     public async Task<IActionResult> CreateSessionAsync(
         int assistantId,
         RealtimeAiServerRegion region,
@@ -38,15 +39,34 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         if (string.IsNullOrWhiteSpace(offerSdp) || offerSdp.Length > MaxSdpLength)
             return BadRequest(new { error = "Invalid SDP offer." });
 
-        var result = await _registry.CreateAsync(
-            assistantId,
-            region,
-            offerSdp,
-            cancellationToken).ConfigureAwait(false);
+        RealtimeAiWebRtcCallResult result;
+        try
+        {
+            result = await _registry.CreateAsync(
+                assistantId,
+                region,
+                offerSdp,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(
+                ex,
+                "[RealtimeAiWebRtc] Failed to create session, AssistantId: {AssistantId}, Region: {Region}",
+                assistantId,
+                region);
+
+            // The application's global exception filter converts exceptions to HTTP 200.
+            // Keep this diagnostic endpoint honest so the static client can surface the cause.
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
+        }
 
         Response.Headers.CacheControl = "no-store";
-        Response.Headers.Append("X-Realtime-Call-Id", result.CallId);
-        return Content(result.AnswerSdp, "application/sdp");
+        return Ok(new
+        {
+            callId = result.CallId,
+            sdp = result.AnswerSdp
+        });
     }
 
     [HttpPost("session/{callId}/ready")]

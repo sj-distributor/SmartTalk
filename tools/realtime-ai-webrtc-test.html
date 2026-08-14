@@ -198,11 +198,27 @@
         headers: { "Content-Type": "application/sdp" },
         body: pc.localDescription.sdp
       });
-      const answerSdp = await response.text();
-      if (!response.ok) throw new Error(`SDP HTTP ${response.status}: ${answerSdp.slice(0, 500)}`);
+      const responseBody = await response.text();
+      if (!response.ok) throw new Error(`SDP HTTP ${response.status}: ${responseBody.slice(0, 500)}`);
 
-      callId = response.headers.get("X-Realtime-Call-Id");
-      if (!callId) throw new Error("Server response is missing X-Realtime-Call-Id");
+      let session;
+      try {
+        session = JSON.parse(responseBody);
+      } catch {
+        throw new Error(`Server returned invalid session JSON: ${responseBody.slice(0, 500)}`);
+      }
+
+      const payload = session.data || session.Data || session.result || session;
+      const answerSdp = payload.sdp || payload.Sdp;
+      callId = payload.callId || payload.CallId;
+      if (!answerSdp || !callId) {
+        const serverCode = session.code ?? session.Code ?? "unknown";
+        const serverMessage = session.error || session.Error || session.msg || session.Msg;
+        const fields = Object.keys(session).join(",") || "none";
+        throw new Error(serverMessage
+          ? `Server session error code=${serverCode}: ${serverMessage}`
+          : `Server response is missing sdp or callId; fields=${fields}`);
+      }
 
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
       setStatus("connected");

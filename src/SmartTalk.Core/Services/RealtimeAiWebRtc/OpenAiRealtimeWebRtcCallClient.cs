@@ -3,7 +3,6 @@ using System.Text;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Settings.OpenAi;
-using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiWebRtc;
 
@@ -24,7 +23,6 @@ public interface IOpenAiRealtimeWebRtcCallClient : IScopedDependency
         string offerSdp,
         string sessionJson,
         string providerServiceUrl,
-        RealtimeAiServerRegion region,
         CancellationToken cancellationToken);
 }
 
@@ -45,13 +43,12 @@ public sealed class OpenAiRealtimeWebRtcCallClient : IOpenAiRealtimeWebRtcCallCl
         string offerSdp,
         string sessionJson,
         string providerServiceUrl,
-        RealtimeAiServerRegion region,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(offerSdp))
             throw new ArgumentException("SDP offer cannot be empty.", nameof(offerSdp));
 
-        var (baseUrl, apiKey) = ResolveEndpoint(providerServiceUrl, region);
+        var (baseUrl, apiKey) = ResolveEndpoint(providerServiceUrl);
         var requestUri = new Uri($"{baseUrl.TrimEnd('/')}/v1/realtime/calls", UriKind.Absolute);
 
         using var multipart = new MultipartFormDataContent();
@@ -142,14 +139,12 @@ public sealed class OpenAiRealtimeWebRtcCallClient : IOpenAiRealtimeWebRtcCallCl
         return builder.Uri.ToString().TrimEnd('/');
     }
 
-    private (string BaseUrl, string ApiKey) ResolveEndpoint(
-        string providerServiceUrl,
-        RealtimeAiServerRegion region)
+    private (string BaseUrl, string ApiKey) ResolveEndpoint(string providerServiceUrl)
     {
-        var apiKey = region == RealtimeAiServerRegion.US ? _settings.ApiKey : _settings.HkApiKey;
+        var apiKey = _settings.ApiKey;
 
         if (string.IsNullOrWhiteSpace(apiKey))
-            throw new InvalidOperationException($"OpenAI API key is not configured for region {region}.");
+            throw new InvalidOperationException("OpenAI API key is not configured.");
 
         return (ResolveBaseUrl(providerServiceUrl), apiKey);
     }

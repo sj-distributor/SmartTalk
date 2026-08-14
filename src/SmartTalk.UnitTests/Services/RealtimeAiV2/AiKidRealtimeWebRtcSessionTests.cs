@@ -146,7 +146,6 @@ public class AiKidRealtimeWebRtcSessionTests
                 "offer",
                 Arg.Any<string>(),
                 "wss://api.openai.com/v1/realtime?model=gpt-realtime-test",
-                RealtimeAiServerRegion.HK,
                 Arg.Any<CancellationToken>())
             .Returns(new RealtimeAiWebRtcCallResult
             {
