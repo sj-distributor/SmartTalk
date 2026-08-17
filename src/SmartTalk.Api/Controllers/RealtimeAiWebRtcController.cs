@@ -1,9 +1,10 @@
+using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 using SmartTalk.Api.Extensions;
-using SmartTalk.Core.Services.RealtimeAiWebRtc;
+using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Api.Controllers;
@@ -16,11 +17,11 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
 {
     private const int MaxSdpLength = 64 * 1024;
 
-    private readonly IRealtimeAiWebRtcSessionRegistry _registry;
+    private readonly IMediator _mediator;
 
-    public RealtimeAiWebRtcController(IRealtimeAiWebRtcSessionRegistry registry)
+    public RealtimeAiWebRtcController(IMediator mediator)
     {
-        _registry = registry;
+        _mediator = mediator;
     }
 
     [HttpPost("session/{assistantId:int}/{region}")]
@@ -39,14 +40,17 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         if (string.IsNullOrWhiteSpace(offerSdp) || offerSdp.Length > MaxSdpLength)
             return BadRequest(new { error = "Invalid SDP offer." });
 
-        RealtimeAiWebRtcCallResult result;
+        CreateRealtimeAiWebRtcSessionResponse response;
         try
         {
-            result = await _registry.CreateAsync(
-                assistantId,
-                region,
-                offerSdp,
-                cancellationToken).ConfigureAwait(false);
+            response = await _mediator.SendAsync<
+                CreateRealtimeAiWebRtcSessionCommand,
+                CreateRealtimeAiWebRtcSessionResponse>(new CreateRealtimeAiWebRtcSessionCommand
+                {
+                    AssistantId = assistantId,
+                    Region = region,
+                    OfferSdp = offerSdp
+                }, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -64,23 +68,37 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         Response.Headers.CacheControl = "no-store";
         return Ok(new
         {
-            callId = result.CallId,
-            sdp = result.AnswerSdp
+            callId = response.CallId,
+            sdp = response.AnswerSdp
         });
     }
 
     [HttpPost("session/{callId}/ready")]
-    public async Task<IActionResult> MarkClientReadyAsync(string callId)
+    public async Task<IActionResult> MarkClientReadyAsync(string callId, CancellationToken cancellationToken)
     {
-        return await _registry.MarkClientReadyAsync(callId).ConfigureAwait(false)
+        var response = await _mediator.SendAsync<
+            MarkRealtimeAiWebRtcClientReadyCommand,
+            MarkRealtimeAiWebRtcClientReadyResponse>(new MarkRealtimeAiWebRtcClientReadyCommand
+            {
+                CallId = callId
+            }, cancellationToken).ConfigureAwait(false);
+
+        return response.IsFound
             ? NoContent()
             : NotFound();
     }
 
     [HttpDelete("session/{callId}")]
-    public async Task<IActionResult> StopSessionAsync(string callId)
+    public async Task<IActionResult> StopSessionAsync(string callId, CancellationToken cancellationToken)
     {
-        return await _registry.StopAsync(callId).ConfigureAwait(false)
+        var response = await _mediator.SendAsync<
+            StopRealtimeAiWebRtcSessionCommand,
+            StopRealtimeAiWebRtcSessionResponse>(new StopRealtimeAiWebRtcSessionCommand
+            {
+                CallId = callId
+            }, cancellationToken).ConfigureAwait(false);
+
+        return response.IsFound
             ? NoContent()
             : NotFound();
     }
