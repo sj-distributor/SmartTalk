@@ -42,10 +42,14 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
         try
         {
             var session = scope.ServiceProvider.GetRequiredService<IAiKidRealtimeWebRtcSession>();
+            using var initializationCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                sessionCts.Token);
             var result = await session.InitializeAsync(
                 assistantId,
                 region,
                 offerSdp,
+                initializationCts.Token,
                 sessionCts.Token).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -70,19 +74,14 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
     {
         if (!_sessions.TryGetValue(callId, out var active)) return false;
 
-        await active.Session.MarkClientReadyAsync().ConfigureAwait(false);
-        return true;
+        return await active.MarkClientReadyAsync().ConfigureAwait(false);
     }
 
     public async Task<bool> StopAsync(string callId)
     {
         if (!_sessions.TryGetValue(callId, out var active)) return false;
 
-        active.Cancellation.Cancel();
-        if (active.Completion != null)
-            await active.Completion.ConfigureAwait(false);
-
-        return true;
+        return await active.StopAsync().ConfigureAwait(false);
     }
 
     private async Task RunAndCleanupAsync(string callId, ActiveSession active)
@@ -94,19 +93,21 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
         finally
         {
             _sessions.TryRemove(callId, out _);
-            active.Cancellation.Dispose();
-            active.Scope.Dispose();
+            await active.DisposeAsync().ConfigureAwait(false);
         }
     }
 
     public void Dispose()
     {
         foreach (var active in _sessions.Values)
-            active.Cancellation.Cancel();
+            active.Cancel();
     }
 
     private sealed class ActiveSession
     {
+        private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
+        private bool _disposed;
+
         public ActiveSession(
             IServiceScope scope,
             IAiKidRealtimeWebRtcSession session,
@@ -124,5 +125,73 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
         public CancellationTokenSource Cancellation { get; }
 
         public Task Completion { get; set; }
+
+        public async Task<bool> MarkClientReadyAsync()
+        {
+            await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_disposed) return false;
+
+                await Session.MarkClientReadyAsync().ConfigureAwait(false);
+                return true;
+            }
+            finally
+            {
+                _lifecycleGate.Release();
+            }
+        }
+
+        public async Task<bool> StopAsync()
+        {
+            Task completion;
+
+            await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_disposed) return false;
+
+                Cancellation.Cancel();
+                completion = Completion;
+            }
+            finally
+            {
+                _lifecycleGate.Release();
+            }
+
+            if (completion != null)
+                await completion.ConfigureAwait(false);
+
+            return true;
+        }
+
+        public void Cancel()
+        {
+            try
+            {
+                Cancellation.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The background cleanup won the shutdown race.
+            }
+        }
+
+        public async Task DisposeAsync()
+        {
+            await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_disposed) return;
+
+                _disposed = true;
+                Cancellation.Dispose();
+                Scope.Dispose();
+            }
+            finally
+            {
+                _lifecycleGate.Release();
+            }
+        }
     }
 }

@@ -19,14 +19,15 @@ public interface IAiKidRealtimeWebRtcSession : IScopedDependency
         int assistantId,
         RealtimeAiServerRegion region,
         string offerSdp,
-        CancellationToken cancellationToken);
+        CancellationToken initializationCancellationToken,
+        CancellationToken sessionCancellationToken);
 
     Task RunAsync(CancellationToken cancellationToken);
 
     Task MarkClientReadyAsync();
 }
 
-public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
+public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, IDisposable
 {
     private readonly IAiKidRealtimeServiceV2 _aiKidRealtimeService;
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
@@ -36,6 +37,7 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
 
     private readonly ConcurrentQueue<(AiSpeechAssistantSpeaker Speaker, string Text)> _transcriptions = new();
     private readonly SemaphoreSlim _responseStateLock = new(1, 1);
+    private readonly CancellationTokenSource _stopCts = new();
 
     private RealtimeSessionOptions _options;
     private IRealtimeAiProviderAdapter _providerAdapter;
@@ -65,11 +67,10 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
         int assistantId,
         RealtimeAiServerRegion region,
         string offerSdp,
-        CancellationToken cancellationToken)
+        CancellationToken initializationCancellationToken,
+        CancellationToken sessionCancellationToken)
     {
-        _sessionToken = cancellationToken;
-        // These callbacks run after the HTTP SDP request has completed and during shutdown.
-        // Do not capture the request/session cancellation token into the shared AiKid callbacks.
+        _sessionToken = sessionCancellationToken;
         _options = await _aiKidRealtimeService.BuildSessionOptionsAsync(
             new AiKidRealtimeCommand
             {
@@ -77,6 +78,7 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
                 Region = region,
                 OrderRecordType = PhoneOrderRecordType.TestLink
             },
+            initializationCancellationToken,
             CancellationToken.None).ConfigureAwait(false);
 
         // The WebRTC media flows directly between browser and OpenAI, so the server does not
@@ -93,10 +95,13 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
             offerSdp,
             sessionJson,
             _options.ModelConfig.ServiceUrl,
-            cancellationToken).ConfigureAwait(false);
+            initializationCancellationToken).ConfigureAwait(false);
 
         _callId = call.CallId;
-        await _sidebandClient.ConnectAsync(call.SidebandUri, call.SidebandHeaders, cancellationToken).ConfigureAwait(false);
+        await _sidebandClient.ConnectAsync(
+            call.SidebandUri,
+            call.SidebandHeaders,
+            initializationCancellationToken).ConfigureAwait(false);
 
         Log.Information(
             "[RealtimeAiWebRtc] Session initialized, CallId: {CallId}, AssistantId: {AssistantId}, Region: {Region}, Provider: {Provider}, Model: {Model}",
@@ -107,11 +112,13 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        using var runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+
         try
         {
-            await _sidebandClient.RunReceiveLoopAsync(ProcessProviderMessageAsync, cancellationToken).ConfigureAwait(false);
+            await _sidebandClient.RunReceiveLoopAsync(ProcessProviderMessageAsync, runCts.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (runCts.IsCancellationRequested)
         {
             Log.Information("[RealtimeAiWebRtc] Session cancelled, CallId: {CallId}", _callId);
         }
@@ -178,19 +185,7 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
                 case RealtimeAiWssEventType.Error:
                     var error = parsedEvent.Data as RealtimeAiErrorData
                         ?? new RealtimeAiErrorData { Message = "Unknown provider error", IsCritical = true };
-
-                    if (error.IsCritical)
-                    {
-                        Log.Error(
-                            "[RealtimeAiWebRtc] Critical provider error, CallId: {CallId}, Code: {Code}, Message: {Message}",
-                            _callId, error.Code, error.Message);
-                    }
-                    else
-                    {
-                        Log.Warning(
-                            "[RealtimeAiWebRtc] Recoverable provider error, CallId: {CallId}, Code: {Code}, Message: {Message}",
-                            _callId, error.Code, error.Message);
-                    }
+                    await HandleProviderErrorAsync(error).ConfigureAwait(false);
                     break;
 
                 case RealtimeAiWssEventType.Unknown:
@@ -314,6 +309,7 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
                 return;
             }
 
+            _hasPendingResponseTrigger = false;
             _isResponseInProgress = true;
             shouldSend = true;
         }
@@ -323,7 +319,7 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
         }
 
         if (shouldSend)
-            await SendToProviderAsync(_providerAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+            await SendResponseTriggerAsync().ConfigureAwait(false);
     }
 
     private async Task CompleteResponseAndDrainAsync()
@@ -349,7 +345,85 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
         _round += 1;
 
         if (shouldSend)
+            await SendResponseTriggerAsync().ConfigureAwait(false);
+    }
+
+    private async Task HandleProviderErrorAsync(RealtimeAiErrorData error)
+    {
+        if (error.IsCritical)
+        {
+            Log.Error(
+                "[RealtimeAiWebRtc] Critical provider error, CallId: {CallId}, Code: {Code}, Message: {Message}",
+                _callId, error.Code, error.Message);
+        }
+        else
+        {
+            Log.Warning(
+                "[RealtimeAiWebRtc] Recoverable provider error, CallId: {CallId}, Code: {Code}, Message: {Message}",
+                _callId, error.Code, error.Message);
+        }
+
+        if (IsActiveResponseInProgressError(error))
+        {
+            await QueueResponseTriggerRetryAsync().ConfigureAwait(false);
+            return;
+        }
+
+        if (error.IsCritical)
+            _stopCts.Cancel();
+    }
+
+    private static bool IsActiveResponseInProgressError(RealtimeAiErrorData error)
+    {
+        if (string.Equals(
+                error.Code,
+                "conversation_already_has_active_response",
+                StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return !string.IsNullOrWhiteSpace(error.Message) &&
+               error.Message.Contains("active response in progress", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task QueueResponseTriggerRetryAsync()
+    {
+        await _responseStateLock.WaitAsync(_sessionToken).ConfigureAwait(false);
+        try
+        {
+            _hasPendingResponseTrigger = true;
+            _isResponseInProgress = true;
+        }
+        finally
+        {
+            _responseStateLock.Release();
+        }
+
+        Log.Information(
+            "[RealtimeAiWebRtc] Queued response trigger retry after provider active-response conflict, CallId: {CallId}",
+            _callId);
+    }
+
+    private async Task SendResponseTriggerAsync()
+    {
+        try
+        {
             await SendToProviderAsync(_providerAdapter.BuildTriggerResponseMessage()).ConfigureAwait(false);
+        }
+        catch
+        {
+            await _responseStateLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                _isResponseInProgress = false;
+                _hasPendingResponseTrigger = true;
+            }
+            finally
+            {
+                _responseStateLock.Release();
+            }
+
+            throw;
+        }
     }
 
     private void StartIdleFollowUpIfApplicable()
@@ -389,5 +463,10 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession
         Log.Information(
             "[RealtimeAiWebRtc] Session ended, CallId: {CallId}, Rounds: {Rounds}, Transcriptions: {TranscriptionCount}",
             _callId, _round, _transcriptions.Count);
+    }
+
+    public void Dispose()
+    {
+        _stopCts.Dispose();
     }
 }

@@ -65,6 +65,12 @@
   const stopMicBtn = document.getElementById("stopMic");
   const pingBtn = document.getElementById("ping");
 
+  const NORMAL_AUDIO_BITRATE = 48000;
+  const CONSTRAINED_AUDIO_BITRATE = 24000;
+  const DISCONNECTED_GRACE_MS = 8000;
+  const CONNECTION_TIMEOUT_MS = 15000;
+  const MAX_RECONNECT_ATTEMPTS = 3;
+
   let pc = null;
   let dc = null;
   let audioSender = null;
@@ -72,6 +78,20 @@
   let callId = null;
   let statsTimer = null;
   let disconnecting = false;
+  let reconnecting = false;
+  let manualDisconnect = true;
+  let reconnectAttempts = 0;
+  let reconnectTimer = null;
+  let disconnectedTimer = null;
+  let connectionTimer = null;
+  let connectAbortController = null;
+  let previousInboundStats = null;
+  let poorNetworkSamples = 0;
+  let healthyNetworkSamples = 0;
+  let targetAudioBitrate = NORMAL_AUDIO_BITRATE;
+  let appliedAudioBitrate = null;
+  let connectionStatus = "disconnected";
+  let networkQuality = "unknown";
 
   function log(message, type = "") {
     const line = document.createElement("div");
@@ -83,23 +103,57 @@
   }
 
   function setStatus(value) {
-    statusEl.textContent = `${value}${callId ? ` | callId=${callId}` : ""}`;
+    connectionStatus = value;
+    statusEl.textContent = `${connectionStatus}${networkQuality === "unknown" ? "" : ` | network=${networkQuality}`}${callId ? ` | callId=${callId}` : ""}`;
+  }
+
+  function setNetworkQuality(value) {
+    if (networkQuality === value) return;
+    networkQuality = value;
+    setStatus(connectionStatus);
   }
 
   function setButtons(connected) {
-    connectBtn.disabled = connected;
-    disconnectBtn.disabled = !connected;
-    startMicBtn.disabled = !connected || !!micStream;
+    connectBtn.disabled = connected || reconnecting || disconnecting;
+    disconnectBtn.disabled = !connected && !reconnecting;
+    startMicBtn.disabled = !connected || reconnecting || !!micStream;
     stopMicBtn.disabled = !micStream;
-    pingBtn.disabled = !connected || dc?.readyState !== "open";
+    pingBtn.disabled = !connected || reconnecting || dc?.readyState !== "open";
   }
 
-  function controlUrl(suffix = "") {
+  function controlUrl(suffix = "", id = callId) {
     const endpoint = endpointEl.value.trim();
     const marker = "/session/";
     const index = endpoint.indexOf(marker);
-    if (index < 0 || !callId) throw new Error("Endpoint format or callId is invalid");
-    return endpoint.slice(0, index + marker.length) + encodeURIComponent(callId) + suffix;
+    if (index < 0 || !id) throw new Error("Endpoint format or callId is invalid");
+    return endpoint.slice(0, index + marker.length) + encodeURIComponent(id) + suffix;
+  }
+
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function postSessionOffer(endpoint, sdp) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+    connectAbortController = controller;
+    try {
+      return await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp" },
+        body: sdp,
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+      if (connectAbortController === controller) connectAbortController = null;
+    }
   }
 
   function summarizeEvent(raw) {
@@ -131,7 +185,7 @@
       log("DATA_CHANNEL open", "in");
       pingBtn.disabled = false;
       try {
-        const response = await fetch(controlUrl("/ready"), { method: "POST" });
+        const response = await fetchWithTimeout(controlUrl("/ready"), { method: "POST" }, 8000);
         if (!response.ok) throw new Error(`ready HTTP ${response.status}`);
         log("CLIENT_READY acknowledged; server greeting may now start", "out");
       } catch (error) {
@@ -162,10 +216,143 @@
     });
   }
 
-  async function connect() {
-    if (pc) return;
+  function preferOpus(transceiver) {
+    if (!transceiver.setCodecPreferences || typeof RTCRtpReceiver === "undefined" || !RTCRtpReceiver.getCapabilities) return;
+    try {
+      const codecs = RTCRtpReceiver.getCapabilities("audio")?.codecs;
+      if (!codecs?.length) return;
+      const opus = codecs.filter(codec => codec.mimeType.toLowerCase() === "audio/opus");
+      if (!opus.length) return;
+      transceiver.setCodecPreferences([
+        ...opus,
+        ...codecs.filter(codec => codec.mimeType.toLowerCase() !== "audio/opus")
+      ]);
+      log("AUDIO codec preference=Opus", "out");
+    } catch (error) {
+      log(`AUDIO codec preference unavailable: ${error.message}`, "error");
+    }
+  }
+
+  function tuneOpusSdp(sdp, maxAverageBitrate) {
+    const opusMatch = sdp.match(/^a=rtpmap:(\d+) opus\/48000\/2\r?$/mi);
+    if (!opusMatch) return sdp;
+
+    const payloadType = opusMatch[1];
+    const fmtpPattern = new RegExp(`^a=fmtp:${payloadType} (.*)$`, "mi");
+    const required = {
+      useinbandfec: "1",
+      usedtx: "1",
+      maxaveragebitrate: String(maxAverageBitrate)
+    };
+
+    if (fmtpPattern.test(sdp)) {
+      return sdp.replace(fmtpPattern, (_, rawParameters) => {
+        const parameters = new Map(rawParameters.split(";").map(value => {
+          const [key, ...rest] = value.trim().split("=");
+          return [key.toLowerCase(), rest.join("=")];
+        }).filter(([key]) => key));
+        Object.entries(required).forEach(([key, value]) => parameters.set(key, value));
+        return `a=fmtp:${payloadType} ${[...parameters].map(([key, value]) => value ? `${key}=${value}` : key).join(";")}`;
+      });
+    }
+
+    return sdp.replace(opusMatch[0], `${opusMatch[0]}\r\na=fmtp:${payloadType} useinbandfec=1;usedtx=1;maxaveragebitrate=${maxAverageBitrate}`);
+  }
+
+  function hasLiveMicrophone() {
+    return !!micStream?.getAudioTracks().some(track => track.readyState === "live");
+  }
+
+  async function applyAudioBitrate(maxBitrate, reason) {
+    if (!audioSender || appliedAudioBitrate === maxBitrate) return;
+    try {
+      const parameters = audioSender.getParameters();
+      if (!parameters.encodings?.length) parameters.encodings = [{}];
+      parameters.encodings.forEach(encoding => { encoding.maxBitrate = maxBitrate; });
+      await audioSender.setParameters(parameters);
+      appliedAudioBitrate = maxBitrate;
+      log(`AUDIO maxBitrate=${Math.round(maxBitrate / 1000)}kbps reason=${reason}`, "out");
+    } catch (error) {
+      log(`AUDIO bitrate adaptation unavailable: ${error.message}`, "error");
+    }
+  }
+
+  function clearPeerTimers() {
+    clearTimeout(disconnectedTimer);
+    clearTimeout(connectionTimer);
+    disconnectedTimer = null;
+    connectionTimer = null;
+  }
+
+  function cancelReconnect() {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function waitForDisconnectedRecovery(peer, source) {
+    if (disconnectedTimer || manualDisconnect || disconnecting || reconnecting) return;
+    setStatus("network interrupted; waiting for ICE recovery");
+    disconnectedTimer = setTimeout(() => {
+      disconnectedTimer = null;
+      if (pc !== peer) return;
+      const stillDisconnected = peer.connectionState === "disconnected"
+        || peer.iceConnectionState === "disconnected";
+      if (stillDisconnected) scheduleReconnect(`${source} remained disconnected`);
+    }, DISCONNECTED_GRACE_MS);
+  }
+
+  function scheduleReconnect(reason) {
+    if (manualDisconnect || disconnecting || reconnecting || reconnectTimer) return;
+    clearPeerTimers();
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      log(`RECONNECT exhausted after ${MAX_RECONNECT_ATTEMPTS} attempts`, "error");
+      manualDisconnect = true;
+      void disconnect();
+      return;
+    }
+
+    const delayMs = Math.min(1000 * 2 ** reconnectAttempts, 4000);
+    setStatus(`reconnecting in ${delayMs / 1000}s`);
+    setButtons(!!pc);
+    log(`RECONNECT scheduled reason=${reason} delayMs=${delayMs}`, "error");
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      void recoverConnection(reason);
+    }, delayMs);
+  }
+
+  async function recoverConnection(reason) {
+    if (manualDisconnect || disconnecting || reconnecting) return;
+    reconnecting = true;
+    const attempt = ++reconnectAttempts;
+    setStatus(`reconnecting ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
+    setButtons(!!pc);
+    log(`RECONNECT attempt=${attempt} reason=${reason}`, "out");
+
+    const preserveMic = hasLiveMicrophone();
+    await disconnect(true, preserveMic, true);
+    if (manualDisconnect) {
+      reconnecting = false;
+      setButtons(false);
+      return;
+    }
+
+    const connected = await connect(true);
+    reconnecting = false;
+    setButtons(connected);
+    if (!connected) scheduleReconnect("connection attempt failed");
+  }
+
+  async function connect(isReconnect = false) {
+    if (pc || disconnecting) return false;
     const endpoint = endpointEl.value.trim();
-    if (!endpoint) return;
+    if (!endpoint) return false;
+
+    if (!isReconnect) {
+      manualDisconnect = false;
+      reconnectAttempts = 0;
+      targetAudioBitrate = NORMAL_AUDIO_BITRATE;
+    }
 
     connectBtn.disabled = true;
     setStatus("connecting");
@@ -173,31 +360,59 @@
 
     try {
       pc = new RTCPeerConnection();
+      const peer = pc;
       const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+      preferOpus(audioTransceiver);
       audioSender = audioTransceiver.sender;
+      appliedAudioBitrate = null;
+      const existingMicTrack = micStream?.getAudioTracks().find(track => track.readyState === "live");
+      if (existingMicTrack) await audioSender.replaceTrack(existingMicTrack);
       bindDataChannel(pc.createDataChannel("oai-events"));
 
       pc.addEventListener("track", event => {
+        if (pc !== peer) return;
         audioEl.srcObject = event.streams[0] || new MediaStream([event.track]);
         audioEl.play().catch(error => log(`AUDIO autoplay blocked: ${error.message}`, "error"));
         log(`REMOTE_TRACK kind=${event.track.kind} id=${event.track.id}`, "in");
       });
       pc.addEventListener("connectionstatechange", () => {
-        log(`PC connectionState=${pc?.connectionState}`, pc?.connectionState === "failed" ? "error" : "in");
-        setStatus(pc?.connectionState || "closed");
-        if (["failed", "closed"].includes(pc?.connectionState) && !disconnecting) disconnect();
+        if (pc !== peer) return;
+        const state = peer.connectionState;
+        log(`PC connectionState=${state}`, state === "failed" ? "error" : "in");
+        if (state === "connected") {
+          clearPeerTimers();
+          cancelReconnect();
+          reconnectAttempts = 0;
+          setStatus("connected");
+          setButtons(true);
+        } else if (state === "disconnected") {
+          waitForDisconnectedRecovery(peer, "peer connection");
+        } else if (state === "failed" || state === "closed") {
+          scheduleReconnect(`peer connection ${state}`);
+        } else {
+          setStatus(state);
+        }
       });
-      pc.addEventListener("iceconnectionstatechange", () => log(`PC iceConnectionState=${pc?.iceConnectionState}`, "in"));
+      pc.addEventListener("iceconnectionstatechange", () => {
+        if (pc !== peer) return;
+        const state = peer.iceConnectionState;
+        log(`PC iceConnectionState=${state}`, state === "failed" ? "error" : "in");
+        if (state === "connected" || state === "completed") {
+          clearTimeout(disconnectedTimer);
+          disconnectedTimer = null;
+        } else if (state === "disconnected") {
+          waitForDisconnectedRecovery(peer, "ICE");
+        } else if (state === "failed") {
+          scheduleReconnect("ICE failed");
+        }
+      });
 
       const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await waitForIceGathering(pc);
+      offer.sdp = tuneOpusSdp(offer.sdp, targetAudioBitrate);
+      await peer.setLocalDescription(offer);
+      await waitForIceGathering(peer);
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/sdp" },
-        body: pc.localDescription.sdp
-      });
+      const response = await postSessionOffer(endpoint, peer.localDescription.sdp);
       const responseBody = await response.text();
       if (!response.ok) throw new Error(`SDP HTTP ${response.status}: ${responseBody.slice(0, 500)}`);
 
@@ -220,21 +435,30 @@
           : `Server response is missing sdp or callId; fields=${fields}`);
       }
 
-      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      if (pc !== peer || (isReconnect && manualDisconnect)) throw new Error("Connection attempt was cancelled");
+      await peer.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      await applyAudioBitrate(targetAudioBitrate, isReconnect ? "reconnect" : "initial connection");
       setStatus("connected");
       setButtons(true);
-      startStats();
+      startStats(peer);
+      connectionTimer = setTimeout(() => {
+        connectionTimer = null;
+        if (pc === peer && peer.connectionState !== "connected")
+          scheduleReconnect("connection establishment timeout");
+      }, CONNECTION_TIMEOUT_MS);
       log(`CONNECTED callId=${callId} answerChars=${answerSdp.length}`, "in");
+      return true;
     } catch (error) {
       log(`CONNECT failed: ${error.stack || error.message}`, "error");
-      await disconnect(false);
+      await disconnect(true, isReconnect && hasLiveMicrophone(), isReconnect);
+      return false;
     }
   }
 
-  async function startMic() {
+  async function startMic(isRecovery = false) {
     if (!pc || !audioSender || micStream) return;
     startMicBtn.disabled = true;
-    log("MIC permission request started", "out");
+    log(isRecovery ? "MIC recovery started" : "MIC permission request started", "out");
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -242,23 +466,37 @@
       });
       const track = micStream.getAudioTracks()[0];
       await audioSender.replaceTrack(track);
+      await applyAudioBitrate(targetAudioBitrate, isRecovery ? "microphone recovery" : "microphone started");
       setButtons(true);
       log(`MIC started id=${track.id} readyState=${track.readyState}`, "out");
-      track.addEventListener("ended", () => log("MIC track ended by browser/OS", "error"));
+      track.addEventListener("ended", () => {
+        if (!micStream?.getTracks().includes(track)) return;
+        micStream = null;
+        setButtons(!!pc);
+        log("MIC track ended by browser/OS", "error");
+        if (!manualDisconnect && pc) setTimeout(() => void startMic(true), 1000);
+      }, { once: true });
     } catch (error) {
+      micStream?.getTracks().forEach(track => track.stop());
       micStream = null;
-      setButtons(true);
+      setButtons(!!pc);
       log(`MIC failed: ${error.name}: ${error.message}`, "error");
     }
   }
 
   async function stopMic() {
     if (!micStream) return;
-    await audioSender?.replaceTrack(null);
-    micStream.getTracks().forEach(track => track.stop());
+    const stream = micStream;
     micStream = null;
-    setButtons(!!pc);
-    log("MIC stopped", "out");
+    try {
+      await audioSender?.replaceTrack(null);
+    } catch (error) {
+      log(`MIC detach failed: ${error.message}`, "error");
+    } finally {
+      stream.getTracks().forEach(track => track.stop());
+      setButtons(!!pc);
+      log("MIC stopped", "out");
+    }
   }
 
   function sendTextPing() {
@@ -272,25 +510,89 @@
     log("TEXT_PING conversation.item.create + response.create", "out");
   }
 
-  function startStats() {
+  function startStats(peer) {
     clearInterval(statsTimer);
+    previousInboundStats = null;
+    poorNetworkSamples = 0;
+    healthyNetworkSamples = 0;
+    setNetworkQuality("unknown");
     statsTimer = setInterval(async () => {
-      if (!pc) return;
+      if (pc !== peer) return;
       try {
-        const stats = await pc.getStats();
+        const stats = await peer.getStats();
         const values = [];
+        let inbound = null;
+        let remoteInbound = null;
+        let rttMs = null;
+        let availableOutgoingKbps = null;
         stats.forEach(report => {
           if (report.type === "inbound-rtp" && report.kind === "audio") {
             const avgJitterBufferMs = report.jitterBufferEmittedCount
               ? Math.round(report.jitterBufferDelay / report.jitterBufferEmittedCount * 1000)
               : 0;
-            values.push(`IN packets=${report.packetsReceived || 0} lost=${report.packetsLost || 0} jitterMs=${Math.round((report.jitter || 0) * 1000)} avgJbMs=${avgJitterBufferMs} concealed=${report.concealedSamples || 0}`);
+            inbound = {
+              packetsReceived: report.packetsReceived || 0,
+              packetsLost: report.packetsLost || 0,
+              jitterMs: Math.round((report.jitter || 0) * 1000),
+              avgJitterBufferMs,
+              concealedSamples: report.concealedSamples || 0
+            };
+            values.push(`IN packets=${inbound.packetsReceived} lost=${inbound.packetsLost} jitterMs=${inbound.jitterMs} avgJbMs=${avgJitterBufferMs} concealed=${inbound.concealedSamples}`);
           }
           if (report.type === "outbound-rtp" && report.kind === "audio")
             values.push(`OUT packets=${report.packetsSent || 0} bytes=${report.bytesSent || 0}`);
-          if (report.type === "candidate-pair" && report.state === "succeeded" && report.nominated)
-            values.push(`NET rttMs=${Math.round((report.currentRoundTripTime || 0) * 1000)} availableOutKbps=${Math.round((report.availableOutgoingBitrate || 0) / 1000)}`);
+          if (report.type === "remote-inbound-rtp" && (report.kind === "audio" || report.mediaType === "audio")) {
+            remoteInbound = {
+              lossPercent: Math.max(0, report.fractionLost || 0) * 100,
+              jitterMs: Math.round((report.jitter || 0) * 1000),
+              rttMs: Math.round((report.roundTripTime || 0) * 1000)
+            };
+            values.push(`REMOTE_IN loss=${remoteInbound.lossPercent.toFixed(1)}% jitterMs=${remoteInbound.jitterMs} rttMs=${remoteInbound.rttMs}`);
+          }
+          if (report.type === "candidate-pair" && report.state === "succeeded" && report.nominated) {
+            rttMs = Math.round((report.currentRoundTripTime || 0) * 1000);
+            availableOutgoingKbps = Math.round((report.availableOutgoingBitrate || 0) / 1000);
+            values.push(`NET rttMs=${rttMs} availableOutKbps=${availableOutgoingKbps}`);
+          }
         });
+
+        if (inbound && previousInboundStats) {
+          const receivedDelta = Math.max(0, inbound.packetsReceived - previousInboundStats.packetsReceived);
+          const lostDelta = Math.max(0, inbound.packetsLost - previousInboundStats.packetsLost);
+          const packetDelta = receivedDelta + lostDelta;
+          const lossPercent = packetDelta ? lostDelta / packetDelta * 100 : 0;
+          const concealedDelta = Math.max(0, inbound.concealedSamples - previousInboundStats.concealedSamples);
+          const constrained = (packetDelta >= 20 && lossPercent >= 8)
+            || inbound.jitterMs >= 80
+            || inbound.avgJitterBufferMs >= 120
+            || (remoteInbound && remoteInbound.lossPercent >= 8)
+            || (remoteInbound && remoteInbound.jitterMs >= 80)
+            || (remoteInbound && remoteInbound.rttMs >= 800)
+            || (rttMs !== null && rttMs >= 800)
+            || (availableOutgoingKbps !== null && availableOutgoingKbps > 0 && availableOutgoingKbps < 24);
+          values.push(`QUALITY loss=${lossPercent.toFixed(1)}% concealedDelta=${concealedDelta}`);
+
+          if (constrained) {
+            poorNetworkSamples++;
+            healthyNetworkSamples = 0;
+            if (poorNetworkSamples >= 3) {
+              setNetworkQuality("poor");
+              if (targetAudioBitrate !== CONSTRAINED_AUDIO_BITRATE) {
+                targetAudioBitrate = CONSTRAINED_AUDIO_BITRATE;
+                await applyAudioBitrate(targetAudioBitrate, "sustained weak network");
+              }
+            }
+          } else {
+            healthyNetworkSamples++;
+            poorNetworkSamples = 0;
+            if (healthyNetworkSamples >= 3) setNetworkQuality("good");
+            if (healthyNetworkSamples >= 6 && targetAudioBitrate !== NORMAL_AUDIO_BITRATE) {
+              targetAudioBitrate = NORMAL_AUDIO_BITRATE;
+              await applyAudioBitrate(targetAudioBitrate, "network recovered");
+            }
+          }
+        }
+        if (inbound) previousInboundStats = inbound;
         if (values.length) log(`STATS ${values.join(" | ")}`);
       } catch (error) {
         log(`STATS failed: ${error.message}`, "error");
@@ -298,20 +600,36 @@
     }, 5000);
   }
 
-  async function disconnect(notifyServer = true) {
+  async function disconnect(notifyServer = true, preserveMic = false, forReconnect = false) {
     if (disconnecting) return;
     disconnecting = true;
+    connectAbortController?.abort();
+    connectAbortController = null;
     const previousCallId = callId;
     try {
+      clearPeerTimers();
       clearInterval(statsTimer);
       statsTimer = null;
-      await stopMic();
+      previousInboundStats = null;
+      if (preserveMic) {
+        try {
+          await audioSender?.replaceTrack(null);
+        } catch (error) {
+          log(`MIC detach failed: ${error.message}`, "error");
+        }
+      } else {
+        await stopMic();
+      }
       if (notifyServer && previousCallId) {
         try {
-          await fetch(controlUrl(), { method: "DELETE", keepalive: true });
+          await fetchWithTimeout(controlUrl("", previousCallId), { method: "DELETE", keepalive: true }, 3000);
         } catch (error) {
           log(`SERVER disconnect failed: ${error.message}`, "error");
         }
+      }
+      if (preserveMic && manualDisconnect && micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
       }
       dc?.close();
       pc?.close();
@@ -322,15 +640,21 @@
       audioSender = null;
       callId = null;
       disconnecting = false;
-      setStatus("disconnected");
+      appliedAudioBitrate = null;
+      setNetworkQuality("unknown");
+      setStatus(forReconnect && !manualDisconnect ? "reconnecting" : "disconnected");
       setButtons(false);
-      log("DISCONNECTED", "out");
+      log(forReconnect && !manualDisconnect ? "PEER connection released for reconnect" : "DISCONNECTED", "out");
     }
   }
 
-  connectBtn.addEventListener("click", connect);
-  disconnectBtn.addEventListener("click", () => disconnect());
-  startMicBtn.addEventListener("click", startMic);
+  connectBtn.addEventListener("click", () => void connect());
+  disconnectBtn.addEventListener("click", () => {
+    manualDisconnect = true;
+    cancelReconnect();
+    void disconnect();
+  });
+  startMicBtn.addEventListener("click", () => void startMic());
   stopMicBtn.addEventListener("click", stopMic);
   pingBtn.addEventListener("click", sendTextPing);
   document.getElementById("clear").addEventListener("click", () => { logEl.textContent = ""; });
