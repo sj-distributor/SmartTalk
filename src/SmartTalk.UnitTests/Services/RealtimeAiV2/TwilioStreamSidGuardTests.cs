@@ -1,6 +1,4 @@
-using System.Text.Json;
 using Shouldly;
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Clients.Twilio;
 using Xunit;
 
@@ -61,24 +59,6 @@ public class TwilioStreamSidGuardTests
         // Reflect on the anonymous shape to assert streamSid: { @event = "media", streamSid, media = { payload } }
         var streamSid = message.GetType().GetProperty("streamSid")!.GetValue(message)!.ToString();
         streamSid.ShouldBe("MZ-real-stream-sid");
-    }
-
-    [Fact]
-    public void BuildAudioDeltaMessage_DoesNotIncludeBrowserDeliveryDiagnostics()
-    {
-        var adapter = NewAdapter();
-        SimulateTwilioStart(adapter, "MZ-real-stream-sid");
-
-        adapter.ShouldNotBeAssignableTo<IRealtimeAiAudioDeliveryDiagnostics>();
-        var json = JsonSerializer.Serialize(adapter.BuildAudioDeltaMessage("base64", SessionIdFallback));
-
-        json.ShouldNotContain("Seq");
-        json.ShouldNotContain("ProviderSeq");
-        json.ShouldNotContain("ServerReceivedAtUnixMs");
-        json.ShouldNotContain("ServerSendStartedAtUnixMs");
-        json.ShouldNotContain("AudioReadyDelayMs");
-        json.ShouldNotContain("TranscodeDurationMs");
-        json.ShouldNotContain("SendLockWaitMs");
     }
 
     [Fact]

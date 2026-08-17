@@ -1,10 +1,7 @@
-using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text.Json;
 using Serilog;
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Dto.RealtimeAi;
-using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
@@ -53,102 +50,7 @@ public partial class RealtimeAiService
 
     private async Task SendAudioToClientAsync(string base64Payload)
     {
-        await SendAudioToClientAsync(
-            base64Payload,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            providerSeq: null,
-            audioReadyDelayMs: 0,
-            transcodeDurationMs: null).ConfigureAwait(false);
-    }
-
-    private async Task SendAudioToClientAsync(
-        string base64Payload,
-        long serverReceivedAtUnixMs,
-        long? providerSeq,
-        double audioReadyDelayMs,
-        double? transcodeDurationMs)
-    {
-        if (string.IsNullOrEmpty(base64Payload)) return;
-        if (_ctx.WebSocket is not { State: WebSocketState.Open }) return;
-
-        var token = _ctx.SessionCts?.Token ?? CancellationToken.None;
-        var sendLockStopwatch = Stopwatch.StartNew();
-        await _ctx.WsSendLock.WaitAsync(token).ConfigureAwait(false);
-        sendLockStopwatch.Stop();
-
-        var seq = Interlocked.Increment(ref _ctx.OutboundAudioSequence);
-        var serverSendStartedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var metadata = new RealtimeAiAudioDeliveryMetadata
-        {
-            Seq = seq,
-            ProviderSeq = providerSeq,
-            ServerReceivedAtUnixMs = serverReceivedAtUnixMs,
-            ServerSendStartedAtUnixMs = serverSendStartedAtUnixMs,
-            AudioReadyDelayMs = audioReadyDelayMs,
-            TranscodeDurationMs = transcodeDurationMs,
-            SendLockWaitMs = sendLockStopwatch.Elapsed.TotalMilliseconds
-        };
-
-        var stopwatch = Stopwatch.StartNew();
-
-        try
-        {
-            var deliveryDiagnostics = _ctx.ClientAdapter as IRealtimeAiAudioDeliveryDiagnostics;
-            var payload = deliveryDiagnostics != null
-                ? deliveryDiagnostics.BuildAudioDeltaMessage(base64Payload, _ctx.SessionId, metadata)
-                : _ctx.ClientAdapter.BuildAudioDeltaMessage(base64Payload, _ctx.SessionId);
-
-            if (payload == null) return;
-
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-
-            await _ctx.WebSocket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Text, true, token).ConfigureAwait(false);
-
-            stopwatch.Stop();
-            var serverSendCompletedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var audioBytes = EstimateBase64DecodedLength(base64Payload);
-            var audioDurationMs = EstimateAudioDurationMs(audioBytes, _ctx.ClientAdapter.NativeAudioCodec);
-
-            if (deliveryDiagnostics != null)
-                Log.Information(
-                    "[RealtimeAi][AudioDelivery] Sent audio chunk, SessionId: {SessionId}, Seq: {Seq}, ProviderSeq: {ProviderSeq}, PayloadBytes: {PayloadBytes}, WireBytes: {WireBytes}, AudioDurationMs: {AudioDurationMs}, ServerReceivedAtUnixMs: {ServerReceivedAtUnixMs}, ServerSendStartedAtUnixMs: {ServerSendStartedAtUnixMs}, ServerSendCompletedAtUnixMs: {ServerSendCompletedAtUnixMs}, AudioReadyDelayMs: {AudioReadyDelayMs}, TranscodeDurationMs: {TranscodeDurationMs}, SendLockWaitMs: {SendLockWaitMs}, InternalDelayMs: {InternalDelayMs}, SendDurationMs: {SendDurationMs}",
-                    _ctx.SessionId, seq, providerSeq, audioBytes, bytes.Length, audioDurationMs, serverReceivedAtUnixMs, serverSendStartedAtUnixMs,
-                    serverSendCompletedAtUnixMs, audioReadyDelayMs, transcodeDurationMs, sendLockStopwatch.Elapsed.TotalMilliseconds,
-                    serverSendStartedAtUnixMs - serverReceivedAtUnixMs, stopwatch.Elapsed.TotalMilliseconds);
-        }
-        catch (OperationCanceledException)
-        {
-            Log.Information(
-                "[RealtimeAi][AudioDelivery] Audio send cancelled, SessionId: {SessionId}, Seq: {Seq}, ProviderSeq: {ProviderSeq}, SendLockWaitMs: {SendLockWaitMs}, SendDurationMs: {SendDurationMs}, WebSocketState: {WebSocketState}",
-                _ctx.SessionId, seq, providerSeq, sendLockStopwatch.Elapsed.TotalMilliseconds,
-                stopwatch.Elapsed.TotalMilliseconds, _ctx.WebSocket?.State);
-        }
-        catch (WebSocketException ex)
-        {
-            Log.Warning(ex,
-                "[RealtimeAi][AudioDelivery] Failed to send audio chunk, SessionId: {SessionId}, Seq: {Seq}, ProviderSeq: {ProviderSeq}, SendLockWaitMs: {SendLockWaitMs}, SendDurationMs: {SendDurationMs}, WebSocketState: {WebSocketState}",
-                _ctx.SessionId, seq, providerSeq, sendLockStopwatch.Elapsed.TotalMilliseconds,
-                stopwatch.Elapsed.TotalMilliseconds, _ctx.WebSocket?.State);
-        }
-        finally
-        {
-            _ctx.WsSendLock.Release();
-        }
-    }
-
-    private static int EstimateBase64DecodedLength(string base64Payload)
-    {
-        var padding = base64Payload.EndsWith("==", StringComparison.Ordinal) ? 2
-            : base64Payload.EndsWith("=", StringComparison.Ordinal) ? 1
-            : 0;
-
-        return base64Payload.Length * 3 / 4 - padding;
-    }
-
-    private static double EstimateAudioDurationMs(int audioBytes, RealtimeAiAudioCodec codec)
-    {
-        var bytesPerSample = codec == RealtimeAiAudioCodec.PCM16 ? 2 : 1;
-        return audioBytes * 1000d / (AudioCodecConverter.GetSampleRate(codec) * bytesPerSample);
+        await SendToClientAsync(_ctx.ClientAdapter.BuildAudioDeltaMessage(base64Payload, _ctx.SessionId)).ConfigureAwait(false);
     }
 
     private async Task SendAudioToProviderAsync(string base64Payload)

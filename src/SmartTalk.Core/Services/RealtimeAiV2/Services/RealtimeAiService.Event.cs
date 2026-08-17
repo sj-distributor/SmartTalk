@@ -1,7 +1,5 @@
-using System.Diagnostics;
 using System.Net.WebSockets;
 using Serilog;
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -29,7 +27,6 @@ public partial class RealtimeAiService
     {
         if (!IsProviderSessionActive) return;
 
-        var serverReceivedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var parsedEvent = _ctx.ProviderAdapter.ParseMessage(rawMessage);
         TryTrackLastAssistantItemId(parsedEvent);
 
@@ -45,40 +42,10 @@ public partial class RealtimeAiService
                 case RealtimeAiWssEventType.ResponseAudioDelta:
                     if (parsedEvent.Data is RealtimeAiWssAudioData audioData)
                     {
-                        if (string.IsNullOrEmpty(audioData.Base64Payload)) break;
-
                         if (!string.IsNullOrEmpty(audioData.ItemId))
                             _ctx.LastAssistantItemId = audioData.ItemId;
 
-                        var providerSeq = Interlocked.Increment(ref _ctx.ProviderAudioSequence);
-                        var previousReceivedAtUnixMs = Interlocked.Exchange(
-                            ref _ctx.LastProviderAudioReceivedAtUnixMs,
-                            serverReceivedAtUnixMs);
-                        var providerGapMs = previousReceivedAtUnixMs > 0
-                            ? serverReceivedAtUnixMs - previousReceivedAtUnixMs
-                            : (long?)null;
-
-                        if (_ctx.ClientAdapter is IRealtimeAiAudioDeliveryDiagnostics)
-                            Log.Information(
-                                "[RealtimeAi][AudioDelivery] Provider audio received, SessionId: {SessionId}, ProviderSeq: {ProviderSeq}, PayloadBytes: {PayloadBytes}, ServerReceivedAtUnixMs: {ServerReceivedAtUnixMs}, ProviderGapMs: {ProviderGapMs}",
-                                _ctx.SessionId, providerSeq, EstimateBase64DecodedLength(audioData.Base64Payload),
-                                serverReceivedAtUnixMs, providerGapMs);
-
-                        var previousScope = _ctx.ProviderAudioDeliveryScope.Value;
-                        _ctx.ProviderAudioDeliveryScope.Value = new RealtimeAiProviderAudioDeliveryContext
-                        {
-                            ProviderSeq = providerSeq,
-                            ServerReceivedAtUnixMs = serverReceivedAtUnixMs
-                        };
-
-                        try
-                        {
-                            await (AudioPassthrough?.HandleProviderAudioAsync(audioData.Base64Payload, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
-                        }
-                        finally
-                        {
-                            _ctx.ProviderAudioDeliveryScope.Value = previousScope;
-                        }
+                        await (AudioPassthrough?.HandleProviderAudioAsync(audioData.Base64Payload, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
                     }
                     break;
 
@@ -176,10 +143,6 @@ public partial class RealtimeAiService
     {
         if (aiAudioData == null || string.IsNullOrEmpty(aiAudioData.Base64Payload)) return;
 
-        var audioReadyAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var providerDelivery = _ctx.ProviderAudioDeliveryScope.Value;
-        var serverReceivedAtUnixMs = providerDelivery?.ServerReceivedAtUnixMs ?? audioReadyAtUnixMs;
-        var audioReadyDelayMs = audioReadyAtUnixMs - serverReceivedAtUnixMs;
         _ctx.IsAiSpeaking = true;
 
         // Empty item_id must not clobber a previously-tracked id from earlier in the same turn.
@@ -190,16 +153,9 @@ public partial class RealtimeAiService
         if (!_ctx.ResponseStartTimestampTwilio.HasValue && _ctx.LatestMediaTimestamp.HasValue)
             _ctx.ResponseStartTimestampTwilio = _ctx.LatestMediaTimestamp;
 
-        var transcodeStopwatch = Stopwatch.StartNew();
         var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
-        transcodeStopwatch.Stop();
 
-        await SendAudioToClientAsync(
-            clientBase64,
-            serverReceivedAtUnixMs,
-            providerDelivery?.ProviderSeq,
-            audioReadyDelayMs,
-            transcodeStopwatch.Elapsed.TotalMilliseconds).ConfigureAwait(false);
+        await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
     }
 
     private void TryTrackLastAssistantItemId(ParsedRealtimeAiProviderEvent parsedEvent)

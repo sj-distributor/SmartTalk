@@ -1,9 +1,7 @@
 using NSubstitute;
 using Shouldly;
-using System.Text.Json;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
-using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Clients.Default;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -105,55 +103,6 @@ public class RealtimeAiServiceSessionLifecycleTests : RealtimeAiServiceTestBase
 
         ClientAdapter.Received().BuildAudioDeltaMessage(validBase64, Arg.Any<string>());
         FakeWs.GetSentTextMessages().ShouldNotBeEmpty();
-    }
-
-    [Fact]
-    public async Task Session_DefaultClientAudioDelta_IncludesMonotonicDeliveryDiagnostics()
-    {
-        var defaultClientAdapter = new DefaultRealtimeAiClientAdapter();
-        Switcher.ClientAdapter(Arg.Any<RealtimeAiClient>()).Returns(defaultClientAdapter);
-
-        ProviderAdapter.ParseMessage(Arg.Any<string>())
-            .Returns(_ => new ParsedRealtimeAiProviderEvent
-            {
-                Type = RealtimeAiWssEventType.ResponseAudioDelta,
-                Data = new RealtimeAiWssAudioData
-                {
-                    Base64Payload = Convert.ToBase64String(new byte[] { 10, 20, 30 })
-                }
-            });
-
-        var sessionTask = await StartSessionInBackgroundAsync();
-        var testStartedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.audio.delta\"}");
-        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.audio.delta\"}");
-
-        FakeWs.EnqueueClose();
-        await sessionTask;
-
-        var audioMessages = FakeWs.GetSentTextMessages()
-            .Select(message => JsonDocument.Parse(message))
-            .Where(document => document.RootElement.GetProperty("type").GetString() == "ResponseAudioDelta")
-            .ToList();
-
-        audioMessages.Count.ShouldBe(2);
-        audioMessages[0].RootElement.GetProperty("Data").GetProperty("Seq").GetInt64().ShouldBe(1);
-        audioMessages[1].RootElement.GetProperty("Data").GetProperty("Seq").GetInt64().ShouldBe(2);
-        audioMessages[0].RootElement.GetProperty("Data").GetProperty("ProviderSeq").GetInt64().ShouldBe(1);
-        audioMessages[1].RootElement.GetProperty("Data").GetProperty("ProviderSeq").GetInt64().ShouldBe(2);
-
-        foreach (var document in audioMessages)
-        {
-            var data = document.RootElement.GetProperty("Data");
-            var serverReceivedAtUnixMs = data.GetProperty("ServerReceivedAtUnixMs").GetInt64();
-            serverReceivedAtUnixMs.ShouldBeGreaterThanOrEqualTo(testStartedAtUnixMs);
-            data.GetProperty("ServerSendStartedAtUnixMs").GetInt64().ShouldBeGreaterThanOrEqualTo(serverReceivedAtUnixMs);
-            data.GetProperty("AudioReadyDelayMs").GetDouble().ShouldBeGreaterThanOrEqualTo(0);
-            data.GetProperty("TranscodeDurationMs").GetDouble().ShouldBeGreaterThanOrEqualTo(0);
-            data.GetProperty("SendLockWaitMs").GetDouble().ShouldBeGreaterThanOrEqualTo(0);
-            document.Dispose();
-        }
     }
 
     [Theory]

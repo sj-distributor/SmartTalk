@@ -47,25 +47,3 @@ public interface IRealtimeAiClientAdapter : IScopedDependency
     
     object BuildErrorMessage(string code, string message, string sessionId);
 }
-
-public class RealtimeAiAudioDeliveryMetadata
-{
-    public long Seq { get; set; }
-
-    public long? ProviderSeq { get; set; }
-
-    public long ServerReceivedAtUnixMs { get; set; }
-
-    public long ServerSendStartedAtUnixMs { get; set; }
-
-    public double AudioReadyDelayMs { get; set; }
-
-    public double? TranscodeDurationMs { get; set; }
-
-    public double SendLockWaitMs { get; set; }
-}
-
-public interface IRealtimeAiAudioDeliveryDiagnostics
-{
-    object BuildAudioDeltaMessage(string base64Payload, string sessionId, RealtimeAiAudioDeliveryMetadata metadata);
-}
