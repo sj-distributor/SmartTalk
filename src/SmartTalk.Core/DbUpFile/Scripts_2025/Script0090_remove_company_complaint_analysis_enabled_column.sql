@@ -1,1 +1,0 @@
-ALTER TABLE `company` DROP COLUMN `is_complaint_analysis_enabled`;
