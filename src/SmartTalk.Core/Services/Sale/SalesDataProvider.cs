@@ -47,8 +47,6 @@ public interface ISalesDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeVariableCache> GetDeliveryInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
 
     Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default);
-
-    Task<bool> HasSuccessfulCrmSalesAutoSyncRunAsync(CancellationToken cancellationToken = default);
 }
 
 public class SalesDataProvider : ISalesDataProvider
@@ -270,11 +268,6 @@ public class SalesDataProvider : ISalesDataProvider
             .OrderByDescending(x => x.CreatedDate)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    public async Task<bool> HasSuccessfulCrmSalesAutoSyncRunAsync(CancellationToken cancellationToken = default)
-    {
-        return await _repository.Query<CrmSalesAutoSyncRun>().AnyAsync(x => x.IsSuccess, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task UpsertPhoneScopedCacheAsync(
