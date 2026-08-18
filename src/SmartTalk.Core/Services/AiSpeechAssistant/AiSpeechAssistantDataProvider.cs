@@ -187,7 +187,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task UpdateCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledgeDetail>> UpdateAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
-
+    
+    Task<bool> HasCrmCustomerContactPhoneMapsAsync(CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -1043,5 +1044,10 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return details;
+    }
+    
+    public async Task<bool> HasCrmCustomerContactPhoneMapsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _repository.Query<CrmCustomerContactPhoneMap>().AnyAsync(cancellationToken).ConfigureAwait(false);
     }
 }
