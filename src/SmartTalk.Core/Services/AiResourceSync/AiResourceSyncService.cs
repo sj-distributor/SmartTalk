@@ -44,7 +44,7 @@ public partial interface IAiResourceSyncService : IScopedDependency
     Task SendNotifyAsync(bool isSuccess, bool isManual, CancellationToken cancellationToken);
 }
 
-public class AiResourceSyncService : IAiResourceSyncService
+public partial class AiResourceSyncService : IAiResourceSyncService
 {
     private const int MaxWarningEntriesToPersist = 100;
     private const int MaxDetailEntriesPerCategoryToPersist = 50;
