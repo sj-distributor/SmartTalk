@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Crm;
+using SmartTalk.Messages.Dto.AiResourceSync;
 using SmartTalk.Messages.Dto.AutoTest;
 using SmartTalk.Messages.Dto.Crm;
 
@@ -23,11 +24,16 @@ public interface ICrmClient : IScopedDependency
     Task<List<CrmContactDto>> GetCustomerContactsAsync(string customerId, string token = null, CancellationToken cancellationToken = default);
 
     Task<List<GetDeliveryInfoByPhoneNumberResponseDto>> GetDeliveryInfoByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
+    
+    Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default);
+
+    Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(CancellationToken cancellationToken = default);
 }
 
 public class CrmClient : ICrmClient
 {
     private const string CustomerIdsByShopNamePath = "/api/external/get-customers-by-shop-name?shop_name={0}";
+    private static readonly TimeSpan SyncRequestTimeout = TimeSpan.FromMinutes(5);
     private readonly CrmSetting _crmSetting;
     private readonly ISmartTalkHttpClientFactory _httpClient;
 
@@ -149,5 +155,87 @@ public class CrmClient : ICrmClient
         };
 
         return await _httpClient.GetAsync<List<GetDeliveryInfoByPhoneNumberResponseDto>>(url, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
+    }
+    
+     public async Task<(List<CrmSalesAutoSyncCustomerDto> Customers, int? TotalCount)> GetSalesAutoSyncCustomersAsync(int startPage = 1, CancellationToken cancellationToken = default)
+    {
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info";
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        var page = startPage > 0 ? startPage : 1;
+        var result = new List<CrmSalesAutoSyncCustomerDto>();
+
+        while (true)
+        {
+            var pagedUrl = $"{url}?page={page}";
+
+            CrmSalesAutoSyncPagedResponseDto? response = null;
+            const int maxRetry = 3;
+
+            for (var retry = 1; retry <= maxRetry; retry++)
+            {
+                try
+                {
+                    response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, timeout: SyncRequestTimeout, headers: headers).ConfigureAwait(false);
+
+                    if (response?.Data is { Count: > 0 })
+                        break;
+
+                    response = null;
+                    if (retry < maxRetry)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                        continue;
+                    }
+
+                    break;
+                }
+                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested && retry < maxRetry)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                }
+                catch (HttpRequestException) when (retry < maxRetry)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                }
+            }
+
+            if (response == null)
+                throw new InvalidOperationException($"Failed to load CRM sales auto sync customers. Url={pagedUrl}");
+
+            result.AddRange(response.Data);
+
+            if (response.CurrentPage >= response.LastPage)
+                break;
+
+            page++;
+        }
+
+        return (result, result.Count > 0 ? null : 0);
+    }
+    
+    public async Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(CancellationToken cancellationToken = default)
+    {
+        Log.Information("GetChangedSalesAutoSyncCustomersAsync");
+
+        var url = $"{_crmSetting.SyncBaseUrl}/api/external/get-customers-sales-follow-info-by-start-date";
+        var headers = new Dictionary<string, string>
+        {
+            { "X-API-KEY", _crmSetting.ApiKey },
+            { "Accept", "application/json" }
+        };
+
+        var changedCustomers = await _httpClient
+            .GetAsync<List<CrmSalesAutoSyncCustomerDto>>(url, cancellationToken: cancellationToken, timeout: SyncRequestTimeout, headers: headers)
+            .ConfigureAwait(false);
+
+        if (changedCustomers == null)
+            throw new InvalidOperationException($"Failed to load changed CRM sales auto sync customers. Url={url}");
+
+        return changedCustomers;
     }
 }

@@ -167,6 +167,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantKnowledgeDetail>> GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgeAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
+
+    Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetCrmAutoSyncAssistantByStoreAndNameAsync(int storeId, string assistantName, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -934,5 +936,23 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             return new List<AiSpeechAssistantKnowledge>();
 
         return await _repository.Query<AiSpeechAssistantKnowledge>().Where(k => knowledgeIds.Contains(k.Id)).ToListAsync(cancellationToken);
+    }
+    
+    public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetCrmAutoSyncAssistantByStoreAndNameAsync(int storeId, string assistantName, CancellationToken cancellationToken = default)
+    {
+        if (storeId <= 0 || string.IsNullOrWhiteSpace(assistantName))
+            return null;
+
+        var query =
+            from posAgent in _repository.Query<PosAgent>()
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
+            where posAgent.StoreId == storeId
+                  && assistant.Name == assistantName
+            orderby assistant.CreatedDate descending
+            select assistant;
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
