@@ -829,9 +829,7 @@ public class AiResourceSyncServiceTests
             });
         aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
             .Returns([]);
-
-        var salesDataProvider = Substitute.For<ISalesDataProvider>();
-        salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>())
+        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>())
             .Returns(false);
 
         List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap> capturedMappings = null;
@@ -841,7 +839,6 @@ public class AiResourceSyncServiceTests
 
         var sut = CreateSut(
             crmClient: crmClient,
-            salesDataProvider: salesDataProvider,
             posDataProvider: posDataProvider,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider);
 
@@ -859,7 +856,7 @@ public class AiResourceSyncServiceTests
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4152182467" && x.ContactName == "NICOLE");
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4155357933" && x.ContactName == "JINGXIAN");
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4154076788" && x.ContactName == "STEVEN");
-        await salesDataProvider.Received(1).HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>());
+        await aiSpeechAssistantDataProvider.Received(1).HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -908,14 +905,11 @@ public class AiResourceSyncServiceTests
             });
         aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
             .Returns([]);
-
-        var salesDataProvider = Substitute.For<ISalesDataProvider>();
-        salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>())
+        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>())
             .Returns(true);
 
         var sut = CreateSut(
             crmClient: crmClient,
-            salesDataProvider: salesDataProvider,
             posDataProvider: posDataProvider,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider);
 
@@ -985,14 +979,11 @@ public class AiResourceSyncServiceTests
             });
         aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
             .Returns([existingMapping]);
-
-        var salesDataProvider = Substitute.For<ISalesDataProvider>();
-        salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(Arg.Any<CancellationToken>())
+        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>())
             .Returns(true);
 
         var sut = CreateSut(
             crmClient: crmClient,
-            salesDataProvider: salesDataProvider,
             posDataProvider: posDataProvider,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider);
 

@@ -19,7 +19,7 @@ public partial class AiResourceSyncService
         if (company == null)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
 
-        var isFullSync = !await _salesDataProvider.HasSuccessfulCrmSalesAutoSyncRunAsync(cancellationToken).ConfigureAwait(false);
+        var isFullSync = !await _aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(cancellationToken).ConfigureAwait(false);
         var syncCustomers = await LoadCrmCustomerContactPhoneMapCustomersAsync(isFullSync, cancellationToken).ConfigureAwait(false);
         syncCustomers ??= [];
 

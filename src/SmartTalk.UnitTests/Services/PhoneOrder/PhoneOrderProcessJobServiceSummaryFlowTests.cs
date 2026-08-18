@@ -246,7 +246,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     public async Task ShouldRunComplaintAnalysisAsync_AssistantExplicitlyEnabled_ShouldReturnTrueWithoutCompanyLookup()
     {
         var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
-        var assistant = new AiSpeechAssistant { Id = 8, AgentId = 7, IsComplaintAnalysisEnabled = true };
+        var assistant = new AiSpeechAssistantEntity { Id = 8, AgentId = 7, IsComplaintAnalysisEnabled = true };
 
         var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
             assistant, new Agent { Id = 7 }, CancellationToken.None);
@@ -261,7 +261,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     public async Task ShouldRunComplaintAnalysisAsync_AssistantExplicitlyDisabled_ShouldReturnFalseEvenWhenCompanyEnabled()
     {
         var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
-        var assistant = new AiSpeechAssistant { Id = 8, AgentId = 7, IsComplaintAnalysisEnabled = false };
+        var assistant = new AiSpeechAssistantEntity { Id = 8, AgentId = 7, IsComplaintAnalysisEnabled = false };
         fixture.CacheManager
             .GetOrAddAsync<object?>(
                 Arg.Any<string>(),
@@ -283,7 +283,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     public async Task ShouldRunComplaintAnalysisAsync_AssistantInherits_CompanyEnabledFromCache_ShouldReturnTrue()
     {
         var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
-        var assistant = new AiSpeechAssistant { Id = 8, AgentId = 7 };
+        var assistant = new AiSpeechAssistantEntity { Id = 8, AgentId = 7 };
         fixture.CacheManager
             .GetOrAddAsync<object?>(
                 Arg.Any<string>(),
@@ -303,7 +303,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     public async Task ShouldRunComplaintAnalysisAsync_AssistantInherits_CompanyDisabledFromCache_ShouldReturnFalse()
     {
         var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
-        var assistant = new AiSpeechAssistant { Id = 8, AgentId = 7 };
+        var assistant = new AiSpeechAssistantEntity { Id = 8, AgentId = 7 };
         fixture.CacheManager
             .GetOrAddAsync<object?>(
                 Arg.Any<string>(),
@@ -323,7 +323,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     public async Task ShouldRunComplaintAnalysisAsync_AssistantInherits_CacheMiss_CompanyEnabled_ShouldReturnTrue()
     {
         var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
-        var assistant = new AiSpeechAssistant { Id = 8, AgentId = 7 };
+        var assistant = new AiSpeechAssistantEntity { Id = 8, AgentId = 7 };
         fixture.CacheManager
             .GetOrAddAsync<object?>(
                 Arg.Any<string>(),
@@ -346,7 +346,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     public async Task ShouldRunComplaintAnalysisAsync_AssistantInherits_CacheMiss_CompanyDisabled_ShouldReturnFalse()
     {
         var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
-        var assistant = new AiSpeechAssistant { Id = 8, AgentId = 7 };
+        var assistant = new AiSpeechAssistantEntity { Id = 8, AgentId = 7 };
         fixture.CacheManager
             .GetOrAddAsync<object?>(
                 Arg.Any<string>(),
@@ -368,7 +368,7 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
     public async Task ShouldRunComplaintAnalysisAsync_AssistantInherits_CacheMiss_NoCompany_ShouldReturnFalse()
     {
         var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
-        var assistant = new AiSpeechAssistant { Id = 8, AgentId = 7 };
+        var assistant = new AiSpeechAssistantEntity { Id = 8, AgentId = 7 };
         fixture.CacheManager
             .GetOrAddAsync<object?>(
                 Arg.Any<string>(),
