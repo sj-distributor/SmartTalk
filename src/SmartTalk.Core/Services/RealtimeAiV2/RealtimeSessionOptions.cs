@@ -107,6 +107,13 @@ public class RealtimeSessionOptions
 {
     // --- Configuration ---
 
+    /// <summary>
+    /// Optional correlation id for the session. When the consumer sets this, its own log lines from
+    /// before <c>ConnectAsync</c> — resolving the agent, building the prompt — carry the same value
+    /// as the engine's, so one call is filterable end to end. Left null, the engine generates one.
+    /// </summary>
+    public string SessionId { get; set; }
+
     public RealtimeAiClientConfig ClientConfig { get; set; }
     
     public RealtimeAiModelConfig ModelConfig { get; set; }

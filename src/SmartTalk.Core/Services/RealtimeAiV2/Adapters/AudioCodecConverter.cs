@@ -32,12 +32,62 @@ public static class AudioCodecConverter
 
     public static byte[] ConvertForRecording(byte[] audio, RealtimeAiAudioCodec sourceCodec, int sourceSampleRate)
     {
-        var pcm = sourceCodec == RealtimeAiAudioCodec.PCM16
-            ? audio
-            : Convert(audio, sourceCodec, RealtimeAiAudioCodec.PCM16);
+        if (sourceCodec == RealtimeAiAudioCodec.PCM16) return Resample(audio, sourceSampleRate, RecordingSampleRate);
 
-        return Resample(pcm, sourceSampleRate, RecordingSampleRate);
+        if (sourceSampleRate == RecordingSampleRate) return Convert(audio, sourceCodec, RealtimeAiAudioCodec.PCM16);
+
+        return ResampleDecoding(audio, sourceCodec, sourceSampleRate, RecordingSampleRate);
     }
+
+    /// <summary>
+    /// Decodes and resamples in one pass. This runs on every inbound frame — fifty a second per call
+    /// — and the separate decode existed only to be read back sample by sample immediately
+    /// afterwards, so it was one whole-frame allocation per frame with no other purpose.
+    ///
+    /// <para>Output is bit-for-bit what decode-then-resample produced: the interpolation reads the
+    /// same sample values in the same order, it just decodes them on demand rather than up front.
+    /// Proven against the previous composition in AudioCodecConverterRecordingEquivalenceTests.</para>
+    /// </summary>
+    private static byte[] ResampleDecoding(byte[] encoded, RealtimeAiAudioCodec codec, int fromRate, int toRate)
+    {
+        // One byte per sample: both telephony codecs this handles are 8-bit companded.
+        var sampleCount = encoded.Length;
+        var newSampleCount = (int)((long)sampleCount * toRate / fromRate);
+        var result = new byte[newSampleCount * 2];
+        var ratio = (double)fromRate / toRate;
+
+        for (var i = 0; i < newSampleCount; i++)
+        {
+            var srcPos = i * ratio;
+            var srcIndex = (int)srcPos;
+            var frac = srcPos - srcIndex;
+
+            short sample;
+
+            if (srcIndex >= sampleCount - 1)
+            {
+                sample = DecodeSample(encoded, sampleCount - 1, codec);
+            }
+            else
+            {
+                var s1 = DecodeSample(encoded, srcIndex, codec);
+                var s2 = DecodeSample(encoded, srcIndex + 1, codec);
+                sample = (short)(s1 + (s2 - s1) * frac);
+            }
+
+            result[i * 2] = (byte)(sample & 0xFF);
+            result[i * 2 + 1] = (byte)((sample >> 8) & 0xFF);
+        }
+
+        return result;
+    }
+
+    private static short DecodeSample(byte[] encoded, int index, RealtimeAiAudioCodec codec) => codec switch
+    {
+        RealtimeAiAudioCodec.MULAW => MuLawDecoder.MuLawToLinearSample(encoded[index]),
+        RealtimeAiAudioCodec.ALAW => ALawDecoder.ALawToLinearSample(encoded[index]),
+        _ => throw new NotSupportedException($"Cannot decode {codec} one sample at a time.")
+    };
 
     public static int GetSampleRate(RealtimeAiAudioCodec codec) => codec switch
     {

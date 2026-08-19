@@ -1,5 +1,7 @@
 using System.Net.WebSockets;
 using Serilog;
+using Serilog.Context;
+using SmartTalk.Core.Logging;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.System;
@@ -96,12 +98,22 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
+        _ctx = BuildContext(command);
+
+        // Opened before the first log line so every step of the call is correlated, including the
+        // ones that run before the engine exists. CallSid only arrives on Twilio's start frame, so
+        // the scope is deferred and HandleClientStartAsync fills it in then.
+        _ctx.LogScope = new DeferredLogScope()
+            .Set(LogProperties.RealtimeSessionId, _ctx.SessionId)
+            .Set(LogProperties.From, command.From)
+            .Set(LogProperties.To, command.To);
+
+        using var callScope = LogContext.Push(_ctx.LogScope);
+
         Log.Information("[AiAssistant] Call connected, From: {From}, To: {To}", command.From, command.To);
 
         try
         {
-            _ctx = BuildContext(command);
-
             var agent = await ResolveActiveAgentAsync(cancellationToken).ConfigureAwait(false);
 
             EnsureServiceAvailable(agent);

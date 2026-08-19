@@ -7,6 +7,11 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    private const int TextPreviewMaxChars = 120;
+
+    private static string Preview(string text) =>
+        text is null || text.Length <= TextPreviewMaxChars ? text : text[..TextPreviewMaxChars] + "…";
+
     // ── Low-level ───────────────────────────────────────────────
 
     private async Task SendToClientAsync(object payload)
@@ -69,7 +74,10 @@ public partial class RealtimeAiService
 
     private async Task SendTextToProviderAsync(string text)
     {
-        Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, Text: {Text}", _ctx.SessionId, text);
+        // Length-capped: a consumer may send anything through here, and the line has to stay
+        // diagnostic without becoming a transcript of it.
+        Log.Information("[RealtimeAi] Sending text to provider, SessionId: {SessionId}, TextChars: {TextChars}, TextPreview: {TextPreview}",
+            _ctx.SessionId, text?.Length ?? 0, Preview(text));
 
         await SendToProviderAsync(_ctx.ProviderAdapter.BuildTextUserMessage(text, _ctx.SessionId)).ConfigureAwait(false);
         await QueueOrTriggerProviderResponseAsync("text input").ConfigureAwait(false);

@@ -293,6 +293,17 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
             switch (eventType)
             {
+                // Recognised chatter the engine has no action for. Kept out of Unknown so Warning
+                // stays a level worth alerting on — OpenAI GA emits several of these per round trip.
+                case "session.created":
+                case "conversation.item.created":
+                case "conversation.item.added":
+                case "response.output_item.added":
+                case "input_audio_buffer.committed":
+                case "input_audio_buffer.speech_stopped":
+                case "rate_limits.updated":
+                    return Result(RealtimeAiWssEventType.Ignored, eventType);
+
                 case "session.updated":
                     return Result(RealtimeAiWssEventType.SessionInitialized, rawMessage);
 

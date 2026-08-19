@@ -27,7 +27,10 @@ public partial class AiSpeechAssistantConnectService
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
 
-        Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
+        // Describes the prompt rather than reproducing it: the resolved text carries the caller's
+        // number, their CRM record and the menu, and this ran on every inbound call. The engine's
+        // session-start line logs the same length and hash, so the two are cross-checkable.
+        Log.Information("[AiAssistant] Prompt resolved, PromptChars: {PromptChars}", _ctx.Prompt?.Length ?? 0);
     }
 
     private async Task LoadAssistantInfoAsync(CancellationToken cancellationToken)

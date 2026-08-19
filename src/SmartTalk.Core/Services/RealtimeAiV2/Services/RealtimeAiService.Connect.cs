@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.WebSockets;
 using Newtonsoft.Json;
 using Serilog;
@@ -29,7 +30,12 @@ public partial class RealtimeAiService
             ttsConfig.TargetCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
         }
 
+        var ttsInitStartedAt = Stopwatch.GetTimestamp();
+
         await _ctx.TtsProvider.InitializeAsync(ttsConfig, _ctx.SessionCts.Token).ConfigureAwait(false);
+
+        var ttsInitMs = (long)Stopwatch.GetElapsedTime(ttsInitStartedAt).TotalMilliseconds;
+        var handshakeStartedAt = Stopwatch.GetTimestamp();
 
         if (_ctx.WssClient.CurrentState != WebSocketState.Open || _ctx.WssClient.EndpointUri != serviceUri)
             await _ctx.WssClient.ConnectAsync(serviceUri, headers, _ctx.SessionCts.Token).ConfigureAwait(false);
@@ -42,11 +48,32 @@ public partial class RealtimeAiService
 
         await _ctx.WssClient.SendMessageAsync(configJson, _ctx.SessionCts.Token).ConfigureAwait(false);
 
-        Log.Information("[RealtimeAi] Connected to provider, SessionId: {SessionId}, Provider: {Provider}", _ctx.SessionId, _ctx.Options.ModelConfig.Provider);
+        // OutputMode belongs here rather than on the session-start line: it is only known once the
+        // negotiator has run, and reporting it before that made every call look like Audio.
+        _ctx.ProviderConnectedAt = Stopwatch.GetTimestamp();
+
+        StartProviderLivenessObserver();
+
+        // Split so a slow connect points at a layer rather than just being slow.
+        Log.Information(
+            "[RealtimeAi] Connected to provider, SessionId: {SessionId}, Provider: {Provider}, OutputMode: {OutputMode}, TtsProvider: {TtsProvider}, " +
+            "ElapsedConnectMs: {ElapsedConnectMs}, ElapsedTtsInitMs: {ElapsedTtsInitMs}, ElapsedProviderHandshakeMs: {ElapsedProviderHandshakeMs}",
+            _ctx.SessionId, _ctx.Options.ModelConfig.Provider, _ctx.OutputMode, _ctx.TtsProvider.TtsProviderType,
+            (long)Stopwatch.GetElapsedTime(_ctx.SessionStartedAt).TotalMilliseconds, ttsInitMs,
+            (long)Stopwatch.GetElapsedTime(handshakeStartedAt).TotalMilliseconds);
     }
 
     private async Task DisconnectFromProviderAsync(string reason)
     {
+        // Claimed atomically rather than inferred from SessionCts being null: both callers pass a
+        // null check, and the loser then throws on the Dispose the winner already did. Exactly one
+        // caller performs the teardown; the other returns, as it did before minus the exception.
+        if (Interlocked.Exchange(ref _ctx.ProviderDisconnectClaimed, 1) == 1)
+        {
+            Log.Debug("[RealtimeAi] Provider teardown already in progress, SessionId: {SessionId}", _ctx.SessionId);
+            return;
+        }
+
         if (_ctx.SessionCts == null)
         {
             Log.Debug("[RealtimeAi] Already disconnected, SessionId: {SessionId}", _ctx.SessionId);

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.WebSockets;
 using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
@@ -27,6 +28,8 @@ public partial class RealtimeAiService
     {
         if (!IsProviderSessionActive) return;
 
+        Interlocked.Exchange(ref _ctx.LastProviderMessageAt, Stopwatch.GetTimestamp());
+
         var parsedEvent = _ctx.ProviderAdapter.ParseMessage(rawMessage);
         TryTrackLastAssistantItemId(parsedEvent);
 
@@ -35,7 +38,10 @@ public partial class RealtimeAiService
             switch (parsedEvent.Type)
             {
                 case RealtimeAiWssEventType.SessionInitialized:
-                    Log.Information("[RealtimeAi] Provider session initialized, SessionId: {SessionId}", _ctx.SessionId);
+                    // "Connected" only means the socket opened; this is the provider actually
+                    // accepting the session config, which is the point the call can start.
+                    Log.Information("[RealtimeAi] Provider session initialized, SessionId: {SessionId}, ElapsedProviderReadyMs: {ElapsedProviderReadyMs}",
+                        _ctx.SessionId, (long)Stopwatch.GetElapsedTime(_ctx.ProviderConnectedAt).TotalMilliseconds);
                     await OnSessionInitializedAsync().ConfigureAwait(false);
                     break;
 
@@ -87,11 +93,20 @@ public partial class RealtimeAiService
                             await FlushProviderTextToTtsAsync().ConfigureAwait(false);
                     }
 
-                    if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
-                        await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
-                    if (parsedEvent.Usage != null)
-                        await OnResponseUsageReceivedAsync(parsedEvent.Usage).ConfigureAwait(false);
-                    await MarkProviderTurnCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
+                    try
+                    {
+                        if (parsedEvent.Data is List<RealtimeAiWssFunctionCallData> functionCalls)
+                            await OnFunctionCallsReceivedAsync(functionCalls).ConfigureAwait(false);
+                        if (parsedEvent.Usage != null)
+                            await OnResponseUsageReceivedAsync(parsedEvent.Usage).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        // The turn must complete even when handling its payload failed. Skipping this
+                        // leaves the turn open forever: no idle timer, nothing to move the call on,
+                        // and the caller waiting on an AI that will never speak again.
+                        await MarkProviderTurnCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
+                    }
                     break;
 
                 case RealtimeAiWssEventType.Error:
@@ -103,12 +118,22 @@ public partial class RealtimeAiService
                     break;
                 
                 case RealtimeAiWssEventType.ResponseStarted:
-                    ResetCurrentResponseState();
+                    await ResetCurrentResponseStateAsync().ConfigureAwait(false);
+                    // Without this the only per-turn line is the completion, so a turn that never
+                    // finishes leaves no trace that it began.
+                    Log.Information("[RealtimeAi] Turn started, SessionId: {SessionId}, Round: {Round}, TurnGeneration: {TurnGeneration}, OutputMode: {OutputMode}",
+                        _ctx.SessionId, _ctx.Round, Interlocked.Read(ref _ctx.CurrentTurnGeneration), _ctx.OutputMode);
                     await MarkProviderResponseStartedAsync().ConfigureAwait(false);
                     break;
 
+                case RealtimeAiWssEventType.Ignored:
+                    Log.Debug("[RealtimeAi] Ignored provider event, SessionId: {SessionId}, ProviderEventType: {ProviderEventType}", _ctx.SessionId, parsedEvent.Data);
+                    break;
+
                 case RealtimeAiWssEventType.Unknown:
-                    Log.Warning("[RealtimeAi] Unknown provider event, SessionId: {SessionId}, Data: {Data}, Raw: {RawJson}", _ctx.SessionId, parsedEvent.Data, parsedEvent.RawJson);
+                    // The raw frame is deliberately absent: it carries function-call arguments, i.e.
+                    // the customer's order, name and phone. The event type is the diagnostic part.
+                    Log.Warning("[RealtimeAi] Unknown provider event, SessionId: {SessionId}, ProviderEventType: {ProviderEventType}", _ctx.SessionId, parsedEvent.Data);
                     break;
             }
         }
@@ -153,9 +178,26 @@ public partial class RealtimeAiService
         if (!_ctx.ResponseStartTimestampTwilio.HasValue && _ctx.LatestMediaTimestamp.HasValue)
             _ctx.ResponseStartTimestampTwilio = _ctx.LatestMediaTimestamp;
 
+        ReportFirstAudioOfTurnIfNeeded();
+
         var clientBase64 = await TranscodeAudioAsync(aiAudioData.Base64Payload, AudioSource.Provider).ConfigureAwait(false);
 
         await SendAudioToClientAsync(clientBase64).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Time from the provider starting a response to the first audio actually leaving for the
+    /// caller — the number that maps onto what a caller experiences as a pause. Once per turn: the
+    /// deltas that follow are the same turn still speaking.
+    /// </summary>
+    private void ReportFirstAudioOfTurnIfNeeded()
+    {
+        if (_ctx.TurnFirstAudioReported || _ctx.TurnStartedAt == 0) return;
+
+        _ctx.TurnFirstAudioReported = true;
+
+        Log.Information("[RealtimeAi] First audio of turn, SessionId: {SessionId}, Round: {Round}, ElapsedToFirstAudioMs: {ElapsedToFirstAudioMs}",
+            _ctx.SessionId, _ctx.Round, (long)Stopwatch.GetElapsedTime(_ctx.TurnStartedAt).TotalMilliseconds);
     }
 
     private void TryTrackLastAssistantItemId(ParsedRealtimeAiProviderEvent parsedEvent)
@@ -286,7 +328,10 @@ public partial class RealtimeAiService
 
         await SendToClientAsync(_ctx.ClientAdapter.BuildTurnCompletedMessage(_ctx.SessionId)).ConfigureAwait(false);
         
-        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}", _ctx.SessionId, _ctx.Round);
+        // Feeds the absolute turn ceiling the hardening plan adds later: without the real p99.9
+        // that threshold would be a guess.
+        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}, ElapsedTurnMs: {ElapsedTurnMs}",
+            _ctx.SessionId, _ctx.Round, _ctx.TurnStartedAt == 0 ? 0 : (long)Stopwatch.GetElapsedTime(_ctx.TurnStartedAt).TotalMilliseconds);
     }
 
     private async Task ForwardProviderTextToTtsAsync(string text)
@@ -302,6 +347,7 @@ public partial class RealtimeAiService
 
         _ctx.CurrentResponseHasTextOutput = true;
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
+
         _ctx.CurrentResponseTextBuilder.Append(text);
 
         await (TextSynthesizer?.HandleProviderTextDeltaAsync(text, _ctx.SessionCts?.Token ?? CancellationToken.None) ?? Task.CompletedTask).ConfigureAwait(false);
@@ -346,18 +392,32 @@ public partial class RealtimeAiService
             }).ConfigureAwait(false);
     }
 
-    private void ResetCurrentResponseState()
+    /// <summary>
+    /// Starts a new turn. Taken under the gate's own lock so the generation bump and the flag reset
+    /// are one step: between them the gate would be readable with a new generation and the previous
+    /// turn's flags, which is the state a late signal exploits.
+    /// </summary>
+    private async Task ResetCurrentResponseStateAsync()
     {
-        // Bump the turn generation first so any TTS-synthesis watchdog still pending from the previous
-        // turn no-ops when it fires (it captured the old generation).
-        Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
+        await _ctx.TurnCompletionStateLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            _ctx.TurnStartedAt = Stopwatch.GetTimestamp();
+            _ctx.TurnFirstAudioReported = false;
 
-        _ctx.CurrentResponseHasTextOutput = false;
-        _ctx.CurrentResponseTextDoneHandled = false;
-        _ctx.CurrentResponseProviderTurnCompleted = false;
-        _ctx.CurrentResponseTtsSynthesisCompleted = false;
-        _ctx.CurrentResponseTurnCompletedHandled = false;
-        _ctx.CurrentResponseTextBuilder.Clear();
+            Interlocked.Increment(ref _ctx.CurrentTurnGeneration);
+
+            _ctx.CurrentResponseHasTextOutput = false;
+            _ctx.CurrentResponseTextDoneHandled = false;
+            _ctx.CurrentResponseProviderTurnCompleted = false;
+            _ctx.CurrentResponseTtsSynthesisCompleted = false;
+            _ctx.CurrentResponseTurnCompletedHandled = false;
+            _ctx.CurrentResponseTextBuilder.Clear();
+        }
+        finally
+        {
+            _ctx.TurnCompletionStateLock.Release();
+        }
     }
 
     private async Task MarkProviderTurnCompletedAndCompleteWhenReadyAsync()
@@ -453,22 +513,49 @@ public partial class RealtimeAiService
         if (_ctx.Options.OnFunctionCallAsync == null) return;
 
         var shouldTriggerResponse = false;
-        var replies = new List<(RealtimeAiWssFunctionCallData FunctionCall, string Output)>();
+        var repliesSent = 0;
 
+        // Per handler, not per batch: this chain has seventeen tools doing POS lookups and HTTP
+        // calls, and one of them failing must not discard its siblings' replies.
         foreach (var functionCall in functionCalls)
         {
-            Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, Function: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
+            Log.Information("[RealtimeAi] Function call received, SessionId: {SessionId}, FunctionName: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
 
-            var result = await _ctx.Options.OnFunctionCallAsync(functionCall, _ctx.SessionActions).ConfigureAwait(false);
+            var handlerStartedAt = Stopwatch.GetTimestamp();
 
-            if (!string.IsNullOrEmpty(result?.Output)) replies.Add((functionCall, result.Output));
+            RealtimeAiFunctionCallResult result;
+
+            try
+            {
+                result = await _ctx.Options.OnFunctionCallAsync(functionCall, _ctx.SessionActions).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Named against the tool that failed — "a function call failed" is not actionable
+                // across seventeen of them.
+                Log.Error(ex, "[RealtimeAi] Function call failed, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}",
+                    _ctx.SessionId, functionCall.FunctionName, (long)Stopwatch.GetElapsedTime(handlerStartedAt).TotalMilliseconds);
+
+                continue;
+            }
+
+            // Handlers run inline on the provider receive loop, so this doubles as the measure of how
+            // long that loop was blocked — and it is where the per-call timeout gets its value from.
+            Log.Information("[RealtimeAi] Function call completed, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}",
+                _ctx.SessionId, functionCall.FunctionName, (long)Stopwatch.GetElapsedTime(handlerStartedAt).TotalMilliseconds);
+
             if (result?.ShouldTriggerResponse == true) shouldTriggerResponse = true;
+
+            if (string.IsNullOrEmpty(result?.Output)) continue;
+
+            // Sent as each handler finishes rather than accumulated, so a later failure cannot
+            // discard a reply that was already produced.
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, result.Output)).ConfigureAwait(false);
+
+            repliesSent++;
         }
 
-        foreach (var (functionCall, output) in replies)
-            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
-
-        if (replies.Count > 0 || shouldTriggerResponse)
+        if (repliesSent > 0 || shouldTriggerResponse)
             await QueueOrTriggerProviderResponseAsync("function call").ConfigureAwait(false);
     }
 
@@ -488,7 +575,13 @@ public partial class RealtimeAiService
         await SendToClientAsync(_ctx.ClientAdapter.BuildErrorMessage(errorData.Code, errorData.Message, _ctx.SessionId)).ConfigureAwait(false);
 
         if (errorData.IsCritical)
+        {
+            // Recorded at the point of decision. Teardown cannot tell afterwards whether the socket
+            // closed because the caller hung up or because the engine gave up on the provider.
+            _ctx.TerminationCause ??= RealtimeAiSessionOutcome.ProviderFault;
+
             await DisconnectFromProviderAsync($"Critical provider error: {errorData.Message}").ConfigureAwait(false);
+        }
     }
 
     private static bool IsActiveResponseInProgressError(RealtimeAiErrorData errorData)

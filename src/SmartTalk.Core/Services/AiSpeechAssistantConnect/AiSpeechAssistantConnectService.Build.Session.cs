@@ -20,6 +20,9 @@ public partial class AiSpeechAssistantConnectService
 
         return new RealtimeSessionOptions
         {
+            // Same id the consumer pushed onto its own log scope, so consumer and engine lines share
+            // one correlation key instead of needing a two-hop join in Seq.
+            SessionId = _ctx.SessionId,
             ClientConfig = new RealtimeAiClientConfig
             {
                 Client = RealtimeAiClient.Twilio
@@ -61,7 +64,6 @@ public partial class AiSpeechAssistantConnectService
             OnClientStopAsync = HandleClientStopAsync,
             OnSessionEndedAsync = HandleSessionEndedAsync,
             OnTranscriptionsCompletedAsync = HandleTranscriptionsCompletedAsync,
-            OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
             OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };

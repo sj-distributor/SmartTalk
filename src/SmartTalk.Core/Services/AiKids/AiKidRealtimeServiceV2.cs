@@ -1,6 +1,8 @@
 using System.Text;
 using Newtonsoft.Json;
 using Serilog;
+using Serilog.Context;
+using SmartTalk.Core.Logging;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
@@ -61,6 +63,14 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
     public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
     {
+        var sessionId = Guid.NewGuid().ToString();
+
+        // Same correlation key the engine uses, pushed before the first log line so the prompt and
+        // knowledge resolution below join to the engine's lines for this session in Seq.
+        using var callScope = LogContext.Push(new DeferredLogScope()
+            .Set(LogProperties.RealtimeSessionId, sessionId)
+            .Set(LogProperties.AssistantId, command.AssistantId));
+
         var assistant = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Could not find assistant by id: {command.AssistantId}");
@@ -79,6 +89,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var options = new RealtimeSessionOptions
         {
+            SessionId = sessionId,
             ClientConfig = new RealtimeAiClientConfig
             {
                 Client = RealtimeAiClient.Default
@@ -268,7 +279,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             finalPrompt = finalPrompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);
         }
 
-        Log.Information("The final prompt: {FinalPrompt}", finalPrompt);
+        // Length only — the engine's session-start line already carries the hash that identifies
+        // which revision was live.
+        Log.Information("[AiKidRealtimeV2] Prompt resolved, PromptChars: {PromptChars}", finalPrompt?.Length ?? 0);
 
         return finalPrompt;
     }

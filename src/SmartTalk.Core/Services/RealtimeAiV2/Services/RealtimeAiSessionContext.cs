@@ -12,8 +12,9 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public class RealtimeAiSessionContext
 {
-    // Identity
-    public string SessionId { get; } = Guid.NewGuid().ToString();
+    // Identity — the consumer may supply this via RealtimeSessionOptions.SessionId so its own
+    // pre-connect log lines share the value; otherwise the engine mints one.
+    public string SessionId { get; init; } = Guid.NewGuid().ToString();
 
     // Configuration
     public RealtimeSessionOptions Options { get; set; }
@@ -27,8 +28,38 @@ public class RealtimeAiSessionContext
     public IRealtimeAiTtsProvider TtsProvider { get; set; }
     public CancellationTokenSource SessionCts { get; set; }
 
+    /// <summary>
+    /// Claim flag for provider teardown, taken with Interlocked. A provider drop on a live session
+    /// reaches DisconnectFromProviderAsync from two directions at once — the critical-error path and
+    /// the orchestration loop unwinding — and a plain null check on SessionCts lets both through.
+    /// </summary>
+    public int ProviderDisconnectClaimed;
+
+    /// <summary>
+    /// Claim flag for session cleanup, taken with Interlocked. Cleanup is now reachable from two
+    /// places — the orchestration loop's finally and ConnectAsync's — and must run exactly once.
+    /// </summary>
+    public int CleanupClaimed;
+
+    /// <summary>
+    /// Set when the engine itself decides to end the session, so teardown can report why instead of
+    /// inferring it from the client socket's state. Null means the client ended it.
+    /// </summary>
+    public RealtimeAiSessionOutcome? TerminationCause { get; set; }
+
     // Negotiated once at connect (OutputModeNegotiator) and reused for the session — never re-sniffed.
     public RealtimeAiOutputMode OutputMode { get; set; }
+
+    // Latency anchors — Stopwatch ticks, not wall clock: monotonic, immune to clock adjustment,
+    // and allocation-free to read. Elapsed values are derived at the log site.
+    public long SessionStartedAt { get; set; }
+    public long ProviderConnectedAt { get; set; }
+    public long TurnStartedAt { get; set; }
+
+    /// <summary>Stopwatch stamp of the last frame from the provider; read with Interlocked because
+    /// the observer polls it from its own task while the receive loop writes it.</summary>
+    public long LastProviderMessageAt;
+    public bool TurnFirstAudioReported { get; set; }
 
     // Runtime state
     public int Round { get; set; }
