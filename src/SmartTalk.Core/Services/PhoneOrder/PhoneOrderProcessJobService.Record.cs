@@ -410,7 +410,9 @@ public partial class PhoneOrderProcessJobService
             sourceReportLanguage = SelectReportLanguageEnum(detection.Language);
         }
 
-        if (aiSpeechAssistant is { IsComplaintAnalysisEnabled: true })
+        var shouldRunComplaintAnalysis = await ShouldRunComplaintAnalysisAsync(agent, cancellationToken).ConfigureAwait(false);
+
+        if (shouldRunComplaintAnalysis)
         {
             try
             {

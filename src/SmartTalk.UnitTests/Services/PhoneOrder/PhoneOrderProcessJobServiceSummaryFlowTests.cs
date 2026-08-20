@@ -4,9 +4,11 @@ using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -184,6 +186,119 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
             .MarkRecordCompletedAsync(default);
     }
 
+    [Fact]
+    public async Task ShouldRunComplaintAnalysisAsync_CompanyEnabledFromCache_ShouldReturnTrue()
+    {
+        var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
+        fixture.CacheManager
+            .GetOrAddAsync<object?>(
+                Arg.Any<string>(),
+                Arg.Any<Func<string, Task<object?>>>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns("1");
+
+        var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
+            new Agent { Id = 7 }, CancellationToken.None);
+
+        result.ShouldBeTrue();
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default, default);
+    }
+
+    [Fact]
+    public async Task ShouldRunComplaintAnalysisAsync_CompanyDisabledFromCache_ShouldReturnFalse()
+    {
+        var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
+        fixture.CacheManager
+            .GetOrAddAsync<object?>(
+                Arg.Any<string>(),
+                Arg.Any<Func<string, Task<object?>>>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns("0");
+
+        var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
+            new Agent { Id = 7 }, CancellationToken.None);
+
+        result.ShouldBeFalse();
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default, default);
+    }
+
+    [Fact]
+    public async Task ShouldRunComplaintAnalysisAsync_CacheMiss_CompanyEnabled_ShouldReturnTrue()
+    {
+        var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
+        fixture.CacheManager
+            .GetOrAddAsync<object?>(
+                Arg.Any<string>(),
+                Arg.Any<Func<string, Task<object?>>>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo => callInfo.Arg<Func<string, Task<object?>>>()(callInfo.Arg<string>()));
+        fixture.PosDataProvider
+            .GetCompanySettingByAgentIdAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new CompanySetting { SettingValue = "1" });
+
+        var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
+            new Agent { Id = 7 }, CancellationToken.None);
+
+        result.ShouldBeTrue();
+        await fixture.PosDataProvider.Received(1)
+            .GetCompanySettingByAgentIdAsync(7, "is_complaint_analysis_enabled", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ShouldRunComplaintAnalysisAsync_CacheMiss_CompanyDisabled_ShouldReturnFalse()
+    {
+        var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
+        fixture.CacheManager
+            .GetOrAddAsync<object?>(
+                Arg.Any<string>(),
+                Arg.Any<Func<string, Task<object?>>>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo => callInfo.Arg<Func<string, Task<object?>>>()(callInfo.Arg<string>()));
+        fixture.PosDataProvider
+            .GetCompanySettingByAgentIdAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new CompanySetting { SettingValue = "0" });
+
+        var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
+            new Agent { Id = 7 }, CancellationToken.None);
+
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ShouldRunComplaintAnalysisAsync_CacheMiss_NoCompanySetting_ShouldReturnFalse()
+    {
+        var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
+        fixture.CacheManager
+            .GetOrAddAsync<object?>(
+                Arg.Any<string>(),
+                Arg.Any<Func<string, Task<object?>>>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo => callInfo.Arg<Func<string, Task<object?>>>()(callInfo.Arg<string>()));
+
+        var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(
+            new Agent { Id = 7 }, CancellationToken.None);
+
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ShouldRunComplaintAnalysisAsync_NullAgent_ShouldReturnFalseWithoutLookup()
+    {
+        var fixture = new FlowFixture("00:00:05", SingleSpeakerGreetingTranscription);
+
+        var result = await fixture.Service.ShouldRunComplaintAnalysisAsync(null, CancellationToken.None);
+
+        result.ShouldBeFalse();
+        await fixture.CacheManager.DidNotReceiveWithAnyArgs().GetOrAddAsync<object?>(
+            default!, default(Func<string, Task<object?>>), default!, default);
+        await fixture.PosDataProvider.DidNotReceiveWithAnyArgs().GetCompanySettingByAgentIdAsync(default, default, default);
+    }
+
     private const string TwoSpeakerTranscription = """
         {
           "segments": [
@@ -305,7 +420,9 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 AiSpeechAssistantDataProvider,
                 PosUtilService,
                 PhoneOrderUtilService,
-                SalesCustomerMatchService);
+                SalesCustomerMatchService,
+                PosDataProvider,
+                CacheManager);
         }
 
         public PhoneOrderRecord Record { get; }
@@ -349,6 +466,10 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         public IPhoneOrderUtilService PhoneOrderUtilService { get; } = Substitute.For<IPhoneOrderUtilService>();
 
         public ISalesCustomerMatchService SalesCustomerMatchService { get; } = Substitute.For<ISalesCustomerMatchService>();
+
+        public IPosDataProvider PosDataProvider { get; } = Substitute.For<IPosDataProvider>();
+
+        public ICacheManager CacheManager { get; } = Substitute.For<ICacheManager>();
     }
 
     private sealed class TestPhoneOrderProcessJobService : PhoneOrderProcessJobService
@@ -375,7 +496,9 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
             IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
             IPosUtilService posUtilService,
             IPhoneOrderUtilService phoneOrderUtilService,
-            ISalesCustomerMatchService salesCustomerMatchService)
+            ISalesCustomerMatchService salesCustomerMatchService,
+            IPosDataProvider posDataProvider,
+            ICacheManager cacheManager)
             : base(
                 salesClient,
                 ffmpegService,
@@ -396,7 +519,9 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 aiSpeechAssistantDataProvider,
                 posUtilService,
                 phoneOrderUtilService,
-                salesCustomerMatchService)
+                salesCustomerMatchService,
+                posDataProvider,
+                cacheManager)
         {
         }
 
