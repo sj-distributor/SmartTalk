@@ -414,11 +414,24 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
     public async Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AiSpeechAssistantKnowledge>()
+        var knowledges = await _repository.Query<AiSpeechAssistantKnowledge>()
             .Where(x => x.AssistantId == assistantId)
-            .OrderByDescending(x => x.Version)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return knowledges
+            .OrderByDescending(x => ParseKnowledgeVersion(x.Version))
             .ThenByDescending(x => x.CreatedDate)
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            .FirstOrDefault();
+    }
+
+    private static (int Major, int Minor) ParseKnowledgeVersion(string version)
+    {
+        var versionParts = version?.Split('.');
+        return versionParts?.Length == 2
+               && int.TryParse(versionParts[0], out var major)
+               && int.TryParse(versionParts[1], out var minor)
+            ? (major, minor)
+            : (-1, -1);
     }
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken)
