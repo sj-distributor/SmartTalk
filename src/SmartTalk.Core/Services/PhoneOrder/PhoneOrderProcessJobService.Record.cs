@@ -1061,7 +1061,7 @@ public partial class PhoneOrderProcessJobService
 
         return new GenerateAiOrdersRequestDto
         {
-            AiModel = "Smartalk",
+            AiModel = ResolveAiModel(record.SourceProvider),
             UseCanceledOrder = useCanceledOrder,
             AiOrderInfoDto = new AiOrderInfoDto
             {
@@ -1084,6 +1084,11 @@ public partial class PhoneOrderProcessJobService
             }
         };
     }
+
+    internal static string ResolveAiModel(string sourceProvider) =>
+        string.Equals(sourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase)
+            ? "OME PHONE 半自动"
+            : "OME PHONE 全自动";
 
     private async Task<SalesCustomerMatchResult> ResolveSalesCustomerMatchAsync(
         PhoneOrderRecord record,
