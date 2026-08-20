@@ -82,6 +82,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly IAiSpeechAssistantSessionCredentialService _sessionCredentialService;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPosUtilService _posUtilService;
     private readonly IPhoneOrderService _phoneOrderService;
@@ -126,6 +127,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         IPosUtilService posUtilService,
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
+        IAiSpeechAssistantSessionCredentialService sessionCredentialService,
         IPosDataProvider posDataProvider,
         IPhoneOrderService phoneOrderService,
         IAgentDataProvider agentDataProvider,
@@ -161,6 +163,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
+        _sessionCredentialService = sessionCredentialService;
         _posDataProvider = posDataProvider;
         _agentDataProvider = agentDataProvider;
         _agentTransferCallRoutingService = agentTransferCallRoutingService;
