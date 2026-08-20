@@ -712,6 +712,7 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 Substitute.For<IPosUtilService>(),
                 new ZhiPuAiSettings(configuration),
                 Substitute.For<IRedisSafeRunner>(),
+                Substitute.For<IAiSpeechAssistantSessionCredentialService>(),
                 posDataProvider,
                 Substitute.For<IPhoneOrderService>(),
                 harness.AgentDataProvider,

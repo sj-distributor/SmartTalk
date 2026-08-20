@@ -42,6 +42,7 @@ public class SalesPlaceholderFixture
             posUtilService: null!,
             zhiPuAiSettings: null!,
             redisSafeRunner: null!,
+            sessionCredentialService: null!,
             posDataProvider: null!,
             phoneOrderService: null!,
             agentDataProvider: null!,
