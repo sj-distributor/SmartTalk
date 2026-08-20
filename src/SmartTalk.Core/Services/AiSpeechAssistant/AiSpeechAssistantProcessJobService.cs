@@ -118,6 +118,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             PhoneNumber = context.UserInfo?.PhoneNumber,
             IsTransfer = context.IsTransfer,
             IncomingCallNumber = context.LastUserInfo.PhoneNumber,
+            TransferCallNumber = context.TransferCallNumber,
             OrderRecordType = orderRecordType,
             ParentRecordId = parentRecordId
         };

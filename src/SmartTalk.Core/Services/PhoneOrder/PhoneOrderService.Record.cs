@@ -65,6 +65,8 @@ public partial interface IPhoneOrderService
     Task<GetPhoneOrderRecordTasksResponse> GetPhoneOrderRecordTasksRequestsAsync(GetPhoneOrderRecordTasksRequest request, CancellationToken cancellationToken);
 
     Task<UpdatePhoneOrderRecordTasksResponse> UpdatePhoneOrderRecordTasksAsync(UpdatePhoneOrderRecordTasksCommand command, CancellationToken cancellationToken);
+    
+    Task<GetPhoneOrderRecordReportByOmePhoneResponse> GetPhoneOrderRecordReportByOmePhoneAsync(GetPhoneOrderRecordReportByOmePhoneRequest request, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -1482,6 +1484,18 @@ public partial class PhoneOrderService
         return new UpdatePhoneOrderRecordTasksResponse
         {
             Data = _mapper.Map<List<WaitingProcessingEventsDto>>(waitingProcessingEvents)
+        };
+    }
+
+    public async Task<GetPhoneOrderRecordReportByOmePhoneResponse> GetPhoneOrderRecordReportByOmePhoneAsync(GetPhoneOrderRecordReportByOmePhoneRequest request, CancellationToken cancellationToken)
+    {
+        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByOmePhoneAsync(request.CallerNumber, request.CalleeNumber, request.TransferCallNumber, request.CallTime, cancellationToken).ConfigureAwait(false);
+
+        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(record.SessionId, request.Language, cancellationToken).ConfigureAwait(false);
+
+        return new GetPhoneOrderRecordReportByOmePhoneResponse()
+        {
+            Data = _mapper.Map<PhoneOrderRecordReportDto>(report)
         };
     }
 }

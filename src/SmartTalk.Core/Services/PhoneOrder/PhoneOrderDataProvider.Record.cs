@@ -108,6 +108,8 @@ public partial interface IPhoneOrderDataProvider
     Task<(int, int)> GetAllOrUnreadWaitingProcessingEventsAsync(List<int> agentIds, List<TaskType> taskTypes = null, CancellationToken cancellationToken = default);
 
     Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
+    
+    Task<PhoneOrderRecord> GetPhoneOrderRecordByOmePhoneAsync(string phoneNumber, string inComingCallNumber, string transferCallNumber, DateTimeOffset callTime, CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderDataProvider
@@ -736,5 +738,22 @@ public partial class PhoneOrderDataProvider
     public async Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderRecordReport>().Where(x => x.RecordId == recordId && x.IsOrigin).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PhoneOrderRecord> GetPhoneOrderRecordByOmePhoneAsync(string phoneNumber, string inComingCallNumber, string transferCallNumber, DateTimeOffset callTime, CancellationToken cancellationToken)
+    {
+        var startTime = callTime.AddSeconds(-10);
+        var endTime = callTime.AddSeconds(10);
+
+        return await _repository.Query<PhoneOrderRecord>()
+            .Where(record =>
+                record.PhoneNumber == phoneNumber &&
+                record.IncomingCallNumber == inComingCallNumber &&
+                record.TransferCallNumber == transferCallNumber &&
+                record.CreatedDate >= startTime &&
+                record.CreatedDate < endTime)
+            .OrderByDescending(record => record.CreatedDate)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 }

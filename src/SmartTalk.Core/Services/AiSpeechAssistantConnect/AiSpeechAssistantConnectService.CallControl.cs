@@ -52,7 +52,7 @@ public partial class AiSpeechAssistantConnectService
     {
         GenerateRecordFromCall(new AiSpeechAssistantStreamContextDto
         {
-            CallSid = _ctx.CallSid, StreamSid = _ctx.StreamSid, Host = _ctx.Host, LastUserInfo = _ctx.LastUserInfo
+            CallSid = _ctx.CallSid, StreamSid = _ctx.StreamSid, Host = _ctx.Host, UserInfo = _ctx.UserInfo, LastUserInfo = _ctx.LastUserInfo, TransferCallNumber = _ctx.TransferCallNumber
         });
     }
 }
