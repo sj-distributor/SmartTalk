@@ -447,6 +447,8 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
 
         _inactivityTimerManager.StopTimer(_callId);
 
+        await TryHangupCallAsync().ConfigureAwait(false);
+
         using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         await _sidebandClient.CloseAsync("SmartTalk WebRTC session ended", closeCts.Token).ConfigureAwait(false);
 
@@ -463,6 +465,29 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
         Log.Information(
             "[RealtimeAiWebRtc] Session ended, CallId: {CallId}, Rounds: {Rounds}, Transcriptions: {TranscriptionCount}",
             _callId, _round, _transcriptions.Count);
+    }
+
+    private async Task TryHangupCallAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_callId) || string.IsNullOrWhiteSpace(_options?.ModelConfig?.ServiceUrl))
+            return;
+
+        using var hangupCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        try
+        {
+            await _callClient.HangupCallAsync(
+                _callId,
+                _options.ModelConfig.ServiceUrl,
+                hangupCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (hangupCts.IsCancellationRequested)
+        {
+            Log.Warning("[RealtimeAiWebRtc] Timed out hanging up call, CallId: {CallId}", _callId);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[RealtimeAiWebRtc] Failed to hang up call, CallId: {CallId}", _callId);
+        }
     }
 
     public void Dispose()

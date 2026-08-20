@@ -3,13 +3,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
+using SmartTalk.Api.Authentication.TemporarySession;
 using SmartTalk.Api.Extensions;
 using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Api.Controllers;
 
-[AllowAnonymous]
 [ApiController]
 [EnableCors(CorsPolicyExtension.RealtimeAiWebRtcPocPolicy)]
 [Route("api/[controller]")]
@@ -25,6 +25,7 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
     }
 
     [HttpPost("session/{assistantId:int}/{region}")]
+    [TemporarySessionAuthorize]
     [Consumes("application/sdp", "text/plain")]
     [Produces("application/json")]
     public async Task<IActionResult> CreateSessionAsync(
@@ -74,6 +75,7 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
     }
 
     [HttpPost("session/{callId}/ready")]
+    [AllowAnonymous]
     public async Task<IActionResult> MarkClientReadyAsync(string callId, CancellationToken cancellationToken)
     {
         var response = await _mediator.SendAsync<
@@ -89,6 +91,7 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
     }
 
     [HttpDelete("session/{callId}")]
+    [AllowAnonymous]
     public async Task<IActionResult> StopSessionAsync(string callId, CancellationToken cancellationToken)
     {
         var response = await _mediator.SendAsync<

@@ -174,6 +174,29 @@ public class AiKidRealtimeWebRtcSessionTests
         await fixture.Sideband.Received(1).CloseAsync(
             "SmartTalk WebRTC session ended",
             Arg.Any<CancellationToken>());
+        await fixture.CallClient.Received(1).HangupCallAsync(
+            "rtc_test_123",
+            "wss://api.openai.com/v1/realtime?model=gpt-realtime-test",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Cleanup_HangupFailure_StillClosesSideband()
+    {
+        var fixture = CreateFixture();
+        fixture.CallClient.HangupCallAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("hangup failed")));
+
+        await fixture.Session.InitializeAsync(
+            625, RealtimeAiServerRegion.HK, "offer", CancellationToken.None, CancellationToken.None);
+        await fixture.Session.RunAsync(CancellationToken.None);
+
+        await fixture.Sideband.Received(1).CloseAsync(
+            "SmartTalk WebRTC session ended",
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

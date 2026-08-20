@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using SmartTalk.Core.Ioc;
@@ -22,6 +23,11 @@ public interface IOpenAiRealtimeWebRtcCallClient : IScopedDependency
     Task<RealtimeAiWebRtcCallResult> CreateCallAsync(
         string offerSdp,
         string sessionJson,
+        string providerServiceUrl,
+        CancellationToken cancellationToken);
+
+    Task HangupCallAsync(
+        string callId,
         string providerServiceUrl,
         CancellationToken cancellationToken);
 }
@@ -87,6 +93,36 @@ public sealed class OpenAiRealtimeWebRtcCallClient : IOpenAiRealtimeWebRtcCallCl
                 ["Authorization"] = $"Bearer {apiKey}"
             }
         };
+    }
+
+    public async Task HangupCallAsync(
+        string callId,
+        string providerServiceUrl,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(callId))
+            throw new ArgumentException("Call ID cannot be empty.", nameof(callId));
+
+        var (baseUrl, apiKey) = ResolveEndpoint(providerServiceUrl);
+        var requestUri = new Uri(
+            $"{baseUrl.TrimEnd('/')}/v1/realtime/calls/{Uri.EscapeDataString(callId)}/hangup",
+            UriKind.Absolute);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        using var response = await _httpClientFactory.CreateClient(timeout: TimeSpan.FromSeconds(10))
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (response.IsSuccessStatusCode ||
+            response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone)
+            return;
+
+        var error = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var boundedError = error.Length <= 2048 ? error : error[..2048];
+        throw new InvalidOperationException(
+            $"OpenAI WebRTC call hangup failed ({(int)response.StatusCode}): {boundedError}");
     }
 
     internal static string ParseCallId(string location)
