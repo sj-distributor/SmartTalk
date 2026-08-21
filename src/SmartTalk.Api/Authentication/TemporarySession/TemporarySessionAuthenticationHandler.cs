@@ -5,12 +5,12 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Messages.Constants;
 
 namespace SmartTalk.Api.Authentication.TemporarySession;
 
 public sealed class TemporarySessionAuthenticationHandler : AuthenticationHandler<TemporarySessionAuthenticationOptions>
 {
+    private const int TemporarySessionAccountId = 1;
     private const string InvalidSessionMessage = "The interview session is invalid or has expired.";
     private const string ChallengeWrittenItem = "TemporarySessionChallengeWritten";
 
@@ -48,7 +48,7 @@ public sealed class TemporarySessionAuthenticationHandler : AuthenticationHandle
         var identity = new ClaimsIdentity(new[]
         {
             new Claim(ClaimTypes.Name, "internal_user"),
-            new Claim(ClaimTypes.NameIdentifier, CurrentUsers.InternalUser.Id.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, TemporarySessionAccountId.ToString()),
             new Claim(ClaimTypes.Authentication, AuthenticationSchemeConstants.SelfAuthenticationScheme),
             new Claim(TemporarySessionAuthenticationDefaults.CredentialTypeClaim, TemporarySessionAuthenticationDefaults.CredentialType),
             new Claim(TemporarySessionAuthenticationDefaults.SessionIdClaim, credential.SessionId.ToString("D")),
