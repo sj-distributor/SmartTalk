@@ -63,4 +63,31 @@ public class RealtimeAiWebRtcCommandHandlerTests
 
         Assert.False(response.IsFound);
     }
+
+    [Fact]
+    public async Task AppendRecording_ReturnsRegistryResult()
+    {
+        var registry = Substitute.For<IRealtimeAiWebRtcSessionRegistry>();
+        var pcmBytes = new byte[] { 1, 0, 2, 0 };
+        var context = Substitute.For<IReceiveContext<AppendRealtimeAiWebRtcRecordingCommand>>();
+        context.Message.Returns(new AppendRealtimeAiWebRtcRecordingCommand
+        {
+            CallId = "rtc_test_123",
+            Sequence = 3,
+            IsFinal = true,
+            PcmBytes = pcmBytes
+        });
+        registry.AppendRecordingAsync("rtc_test_123", 3, pcmBytes, true).Returns(
+            new AppendRealtimeAiWebRtcRecordingResponse
+            {
+                Status = RealtimeAiWebRtcRecordingAppendStatus.Accepted,
+                NextSequence = 4
+            });
+
+        var response = await new AppendRealtimeAiWebRtcRecordingCommandHandler(registry)
+            .Handle(context, CancellationToken.None);
+
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, response.Status);
+        Assert.Equal(4, response.NextSequence);
+    }
 }

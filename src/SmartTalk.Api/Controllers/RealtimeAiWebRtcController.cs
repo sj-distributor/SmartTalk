@@ -15,7 +15,10 @@ namespace SmartTalk.Api.Controllers;
 [Route("api/[controller]")]
 public sealed class RealtimeAiWebRtcController : ControllerBase
 {
+    private const string RecordingSequenceHeader = "X-Recording-Sequence";
+    private const string RecordingFinalHeader = "X-Recording-Final";
     private const int MaxSdpLength = 64 * 1024;
+    private const int MaxRecordingChunkLength = 256 * 1024;
 
     private readonly IMediator _mediator;
 
@@ -88,6 +91,66 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         return response.IsFound
             ? NoContent()
             : NotFound();
+    }
+
+    [HttpPost("session/{callId}/recording")]
+    [TemporarySessionAuthorize]
+    [Consumes("application/octet-stream")]
+    public async Task<IActionResult> AppendRecordingAsync(
+        string callId,
+        [FromHeader(Name = RecordingSequenceHeader)] long? sequence,
+        [FromHeader(Name = RecordingFinalHeader)] bool isFinal,
+        CancellationToken cancellationToken)
+    {
+        if (sequence is null or < 0)
+            return BadRequest(new { error = $"{RecordingSequenceHeader} must be a non-negative integer." });
+
+        if (Request.ContentLength is > MaxRecordingChunkLength)
+            return BadRequest(new { error = $"Recording chunk exceeds {MaxRecordingChunkLength} bytes." });
+
+        var pcmBytes = new byte[MaxRecordingChunkLength + 1];
+        var length = 0;
+        while (length < pcmBytes.Length)
+        {
+            var read = await Request.Body
+                .ReadAsync(pcmBytes.AsMemory(length, pcmBytes.Length - length), cancellationToken)
+                .ConfigureAwait(false);
+            if (read == 0) break;
+            length += read;
+        }
+
+        if ((!isFinal && length == 0) || length > MaxRecordingChunkLength || length % sizeof(short) != 0)
+            return BadRequest(new { error = "Recording chunk must contain 24 kHz mono PCM16LE audio." });
+
+        Array.Resize(ref pcmBytes, length);
+        var response = await _mediator.SendAsync<
+            AppendRealtimeAiWebRtcRecordingCommand,
+            AppendRealtimeAiWebRtcRecordingResponse>(new AppendRealtimeAiWebRtcRecordingCommand
+            {
+                CallId = callId,
+                Sequence = sequence.Value,
+                IsFinal = isFinal,
+                PcmBytes = pcmBytes
+            }, cancellationToken).ConfigureAwait(false);
+
+        return response.Status switch
+        {
+            RealtimeAiWebRtcRecordingAppendStatus.Accepted or
+                RealtimeAiWebRtcRecordingAppendStatus.Duplicate => NoContent(),
+            RealtimeAiWebRtcRecordingAppendStatus.NotFound => NotFound(),
+            RealtimeAiWebRtcRecordingAppendStatus.InvalidSequence => Conflict(new
+            {
+                error = "Recording chunk sequence is not the next expected sequence.",
+                nextSequence = response.NextSequence
+            }),
+            RealtimeAiWebRtcRecordingAppendStatus.RecordingLimitExceeded => StatusCode(
+                StatusCodes.Status413PayloadTooLarge,
+                new { error = "Recording exceeds the maximum session size." }),
+            RealtimeAiWebRtcRecordingAppendStatus.RateLimitExceeded => StatusCode(
+                StatusCodes.Status429TooManyRequests,
+                new { error = "Recording chunks are arriving faster than real-time audio." }),
+            _ => Conflict(new { error = "Recording has already been finalized." })
+        };
     }
 
     [HttpDelete("session/{callId}")]

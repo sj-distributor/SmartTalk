@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
+using NAudio.Wave;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiKids;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
+using SmartTalk.Core.Services.RealtimeAiV2.Recording;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Commands.AiKids;
+using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
@@ -25,10 +28,20 @@ public interface IAiKidRealtimeWebRtcSession : IScopedDependency
     Task RunAsync(CancellationToken cancellationToken);
 
     Task MarkClientReadyAsync();
+
+    Task<AppendRealtimeAiWebRtcRecordingResponse> AppendRecordingAsync(
+        long sequence,
+        ReadOnlyMemory<byte> pcmBytes,
+        bool isFinal);
 }
 
 public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, IDisposable
 {
+    private const long MaxRecordingBytes = 90L * 1024 * 1024;
+    private const long MaxRecordingBytesPerSecond = 24_000L * sizeof(short) * 4;
+    private const long RecordingRateBurstBytes = 512L * 1024;
+    private static readonly TimeSpan RecordingFinalizationGrace = TimeSpan.FromSeconds(3);
+
     private readonly IAiKidRealtimeServiceV2 _aiKidRealtimeService;
     private readonly IRealtimeAiSwitcher _realtimeAiSwitcher;
     private readonly IOpenAiRealtimeWebRtcCallClient _callClient;
@@ -36,8 +49,11 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
     private readonly IInactivityTimerManager _inactivityTimerManager;
 
     private readonly ConcurrentQueue<(AiSpeechAssistantSpeaker Speaker, string Text)> _transcriptions = new();
+    private readonly SemaphoreSlim _recordingLock = new(1, 1);
     private readonly SemaphoreSlim _responseStateLock = new(1, 1);
     private readonly CancellationTokenSource _stopCts = new();
+    private readonly TaskCompletionSource _recordingFinalizedSignal =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private RealtimeSessionOptions _options;
     private IRealtimeAiProviderAdapter _providerAdapter;
@@ -48,6 +64,13 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
     private int _cleanupStarted;
     private bool _isResponseInProgress;
     private bool _hasPendingResponseTrigger;
+    private IRecordingBuffer _recordingBuffer;
+    private DateTimeOffset _recordingRateCheckedAt;
+    private double _recordingRateTokens;
+    private long _recordingBytes;
+    private long _nextRecordingSequence;
+    private bool _recordingFinalized;
+    private bool _recordingAccepting;
 
     public AiKidRealtimeWebRtcSession(
         IAiKidRealtimeServiceV2 aiKidRealtimeService,
@@ -81,9 +104,7 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
             initializationCancellationToken,
             CancellationToken.None).ConfigureAwait(false);
 
-        // The WebRTC media flows directly between browser and OpenAI, so the server does not
-        // receive PCM frames and must not invoke the legacy recording buffer/callback.
-        _options.EnableRecording = false;
+        _options.EnableRecording = true;
 
         // Interview WebRTC always uses OpenAI's native audio. Keep external TTS settings scoped
         // to the existing WSS/telephony paths, even if MiniMax is enabled for this assistant.
@@ -102,6 +123,14 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
             call.SidebandUri,
             call.SidebandHeaders,
             initializationCancellationToken).ConfigureAwait(false);
+
+        if (_options.EnableRecording)
+        {
+            _recordingBuffer = RealtimeAiRecordingSettings.Create();
+            _recordingRateCheckedAt = DateTimeOffset.UtcNow;
+            _recordingRateTokens = RecordingRateBurstBytes;
+            _recordingAccepting = true;
+        }
 
         Log.Information(
             "[RealtimeAiWebRtc] Session initialized, CallId: {CallId}, AssistantId: {AssistantId}, Region: {Region}, Provider: {Provider}, Model: {Model}",
@@ -140,6 +169,72 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
 
         if (_options.OnSessionReadyAsync != null)
             await _options.OnSessionReadyAsync(BuildSessionActions()).ConfigureAwait(false);
+    }
+
+    public async Task<AppendRealtimeAiWebRtcRecordingResponse> AppendRecordingAsync(
+        long sequence,
+        ReadOnlyMemory<byte> pcmBytes,
+        bool isFinal)
+    {
+        await _recordingLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (sequence < 0 || (!isFinal && pcmBytes.IsEmpty) || pcmBytes.Length % sizeof(short) != 0)
+                return RecordingResult(RealtimeAiWebRtcRecordingAppendStatus.InvalidSequence);
+
+            if (sequence < _nextRecordingSequence ||
+                (_recordingFinalized && isFinal && sequence == _nextRecordingSequence))
+                return RecordingResult(RealtimeAiWebRtcRecordingAppendStatus.Duplicate);
+
+            if (_options?.EnableRecording != true || !_recordingAccepting || _recordingBuffer == null)
+                return RecordingResult(RealtimeAiWebRtcRecordingAppendStatus.Finalized);
+
+            if (sequence != _nextRecordingSequence)
+                return RecordingResult(RealtimeAiWebRtcRecordingAppendStatus.InvalidSequence);
+
+            if (!pcmBytes.IsEmpty)
+            {
+                if (_recordingBytes + pcmBytes.Length > MaxRecordingBytes)
+                    return RecordingResult(RealtimeAiWebRtcRecordingAppendStatus.RecordingLimitExceeded);
+
+                var now = DateTimeOffset.UtcNow;
+                var elapsedSeconds = Math.Max(0, (now - _recordingRateCheckedAt).TotalSeconds);
+                _recordingRateTokens = Math.Min(
+                    RecordingRateBurstBytes,
+                    _recordingRateTokens + elapsedSeconds * MaxRecordingBytesPerSecond);
+                _recordingRateCheckedAt = now;
+                if (pcmBytes.Length > _recordingRateTokens)
+                    return RecordingResult(RealtimeAiWebRtcRecordingAppendStatus.RateLimitExceeded);
+
+                await _recordingBuffer.WriteAsync(pcmBytes).ConfigureAwait(false);
+                _recordingRateTokens -= pcmBytes.Length;
+                _recordingBytes += pcmBytes.Length;
+                _nextRecordingSequence++;
+            }
+
+            if (isFinal)
+            {
+                _recordingFinalized = true;
+                _recordingAccepting = false;
+                _recordingFinalizedSignal.TrySetResult();
+            }
+
+            return RecordingResult(RealtimeAiWebRtcRecordingAppendStatus.Accepted);
+        }
+        finally
+        {
+            _recordingLock.Release();
+        }
+    }
+
+    private AppendRealtimeAiWebRtcRecordingResponse RecordingResult(
+        RealtimeAiWebRtcRecordingAppendStatus status)
+    {
+        return new AppendRealtimeAiWebRtcRecordingResponse
+        {
+            Status = status,
+            NextSequence = _nextRecordingSequence
+        };
     }
 
     internal async Task ProcessProviderMessageAsync(string rawMessage)
@@ -447,24 +542,129 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
 
         _inactivityTimerManager.StopTimer(_callId);
 
+        await WaitForRecordingFinalizationAsync().ConfigureAwait(false);
+
         await TryHangupCallAsync().ConfigureAwait(false);
 
-        using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        await _sidebandClient.CloseAsync("SmartTalk WebRTC session ended", closeCts.Token).ConfigureAwait(false);
-
-        if (_options?.OnTranscriptionsCompletedAsync != null)
+        await SafeExecuteAsync(async () =>
         {
-            await _options.OnTranscriptionsCompletedAsync(
-                _callId,
-                _transcriptions.ToList()).ConfigureAwait(false);
-        }
+            using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await _sidebandClient.CloseAsync("SmartTalk WebRTC session ended", closeCts.Token).ConfigureAwait(false);
+        }, "close sideband").ConfigureAwait(false);
 
-        if (_options?.OnSessionEndedAsync != null)
-            await _options.OnSessionEndedAsync(_callId).ConfigureAwait(false);
+        await SafeExecuteAsync(
+            () => _options?.OnSessionEndedAsync?.Invoke(_callId) ?? Task.CompletedTask,
+            "invoke OnSessionEndedAsync").ConfigureAwait(false);
+        await SafeExecuteAsync(HandleRecordingAsync, "handle recording").ConfigureAwait(false);
+        await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions").ConfigureAwait(false);
 
         Log.Information(
             "[RealtimeAiWebRtc] Session ended, CallId: {CallId}, Rounds: {Rounds}, Transcriptions: {TranscriptionCount}",
             _callId, _round, _transcriptions.Count);
+    }
+
+    private async Task HandleRecordingAsync()
+    {
+        var buffer = Interlocked.Exchange(ref _recordingBuffer, null);
+        if (buffer == null) return;
+
+        try
+        {
+            if (_options?.EnableRecording != true || _options.OnRecordingCompleteAsync == null) return;
+            if (!_recordingFinalized)
+            {
+                Log.Warning(
+                    "[RealtimeAiWebRtc] Discarding incomplete recording, CallId: {CallId}, Bytes: {Bytes}, NextSequence: {NextSequence}",
+                    _callId,
+                    _recordingBytes,
+                    _nextRecordingSequence);
+                return;
+            }
+
+            var pcmBytes = await buffer.ExtractAsync().ConfigureAwait(false);
+            if (pcmBytes.Length == 0) return;
+
+            var waveFormat = new WaveFormat(24_000, 16, 1);
+            using var wavStream = new MemoryStream();
+            await using (var writer = new WaveFileWriter(wavStream, waveFormat))
+            {
+                writer.Write(pcmBytes, 0, pcmBytes.Length);
+                await writer.FlushAsync().ConfigureAwait(false);
+            }
+
+            await _options.OnRecordingCompleteAsync(_callId, wavStream.ToArray()).ConfigureAwait(false);
+        }
+        finally
+        {
+            await buffer.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task WaitForRecordingFinalizationAsync()
+    {
+        var shouldWait = false;
+        await _recordingLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            shouldWait = _recordingAccepting && _recordingBytes > 0;
+            if (!shouldWait)
+                _recordingAccepting = false;
+        }
+        finally
+        {
+            _recordingLock.Release();
+        }
+
+        if (!shouldWait) return;
+
+        await Task.WhenAny(
+            _recordingFinalizedSignal.Task,
+            Task.Delay(RecordingFinalizationGrace)).ConfigureAwait(false);
+
+        var autoFinalized = false;
+        await _recordingLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _recordingAccepting = false;
+            if (!_recordingFinalized && _recordingBytes > 0)
+            {
+                _recordingFinalized = true;
+                autoFinalized = true;
+                _recordingFinalizedSignal.TrySetResult();
+            }
+        }
+        finally
+        {
+            _recordingLock.Release();
+        }
+
+        if (autoFinalized)
+        {
+            Log.Warning(
+                "[RealtimeAiWebRtc] Auto-finalized incomplete recording during cleanup, CallId: {CallId}, Bytes: {Bytes}, NextSequence: {NextSequence}",
+                _callId,
+                _recordingBytes,
+                _nextRecordingSequence);
+        }
+    }
+
+    private Task HandleTranscriptionsAsync()
+    {
+        return _options?.OnTranscriptionsCompletedAsync == null || _transcriptions.IsEmpty
+            ? Task.CompletedTask
+            : _options.OnTranscriptionsCompletedAsync(_callId, _transcriptions.ToList());
+    }
+
+    private async Task SafeExecuteAsync(Func<Task> action, string operationName)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[RealtimeAiWebRtc] Cleanup failed: {Operation}, CallId: {CallId}", operationName, _callId);
+        }
     }
 
     private async Task TryHangupCallAsync()
@@ -492,6 +692,7 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
 
     public void Dispose()
     {
+        _recordingLock.Dispose();
         _stopCts.Dispose();
     }
 }

@@ -1,10 +1,12 @@
 using NSubstitute;
+using NAudio.Wave;
 using SmartTalk.Core.Services.AiKids;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiWebRtc;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Commands.AiKids;
+using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
@@ -13,6 +15,116 @@ namespace SmartTalk.UnitTests.Services.RealtimeAiV2;
 
 public class AiKidRealtimeWebRtcSessionTests
 {
+    [Fact]
+    public async Task RecordingPcm_IsWrappedAsWavAndSentThroughExistingCallbackOnCleanup()
+    {
+        var fixture = CreateFixture();
+        string? recordedSessionId = null;
+        byte[]? recordedWav = null;
+        fixture.Options.OnRecordingCompleteAsync = (sessionId, wavBytes) =>
+        {
+            recordedSessionId = sessionId;
+            recordedWav = wavBytes;
+            return Task.CompletedTask;
+        };
+
+        await fixture.Session.InitializeAsync(
+            625, RealtimeAiServerRegion.HK, "offer", CancellationToken.None, CancellationToken.None);
+
+        var append = await fixture.Session.AppendRecordingAsync(
+            0,
+            new byte[] { 1, 0, 2, 0 },
+            true);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, append.Status);
+
+        await fixture.Session.RunAsync(CancellationToken.None);
+
+        Assert.Equal("rtc_test_123", recordedSessionId);
+        Assert.NotNull(recordedWav);
+        using var reader = new WaveFileReader(new MemoryStream(recordedWav!));
+        Assert.Equal(24_000, reader.WaveFormat.SampleRate);
+        Assert.Equal(16, reader.WaveFormat.BitsPerSample);
+        Assert.Equal(1, reader.WaveFormat.Channels);
+        Assert.Equal(4, reader.Length);
+    }
+
+    [Fact]
+    public async Task RecordingPcm_RejectsGapsAndIgnoresRetriesWithoutDuplicatingAudio()
+    {
+        var fixture = CreateFixture();
+        byte[]? recordedWav = null;
+        fixture.Options.OnRecordingCompleteAsync = (_, wavBytes) =>
+        {
+            recordedWav = wavBytes;
+            return Task.CompletedTask;
+        };
+
+        await fixture.Session.InitializeAsync(
+            625, RealtimeAiServerRegion.HK, "offer", CancellationToken.None, CancellationToken.None);
+
+        var first = await fixture.Session.AppendRecordingAsync(0, new byte[] { 1, 0 }, false);
+        var duplicate = await fixture.Session.AppendRecordingAsync(0, new byte[] { 1, 0 }, false);
+        var gap = await fixture.Session.AppendRecordingAsync(2, new byte[] { 3, 0 }, false);
+        var final = await fixture.Session.AppendRecordingAsync(1, new byte[] { 2, 0 }, true);
+
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, first.Status);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Duplicate, duplicate.Status);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.InvalidSequence, gap.Status);
+        Assert.Equal(1, gap.NextSequence);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, final.Status);
+
+        await fixture.Session.RunAsync(CancellationToken.None);
+
+        using var reader = new WaveFileReader(new MemoryStream(recordedWav!));
+        Assert.Equal(4, reader.Length);
+    }
+
+    [Fact]
+    public async Task RecordingPcm_RejectsUploadsThatRunFarAheadOfRealtime()
+    {
+        var fixture = CreateFixture();
+        await fixture.Session.InitializeAsync(
+            625, RealtimeAiServerRegion.HK, "offer", CancellationToken.None, CancellationToken.None);
+        var chunk = new byte[256 * 1024];
+
+        var first = await fixture.Session.AppendRecordingAsync(0, chunk, false);
+        var second = await fixture.Session.AppendRecordingAsync(1, chunk, false);
+        var third = await fixture.Session.AppendRecordingAsync(2, chunk, false);
+
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, first.Status);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, second.Status);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.RateLimitExceeded, third.Status);
+    }
+
+    [Fact]
+    public async Task RecordingPcm_WithoutClientFinal_IsAutoFinalizedOnCleanup()
+    {
+        var fixture = CreateFixture();
+        byte[]? recordedWav = null;
+        fixture.Options.OnRecordingCompleteAsync = (_, wavBytes) =>
+        {
+            recordedWav = wavBytes;
+            return Task.CompletedTask;
+        };
+
+        await fixture.Session.InitializeAsync(
+            625, RealtimeAiServerRegion.HK, "offer", CancellationToken.None, CancellationToken.None);
+        var oneSecondOfPcm = new byte[24_000 * sizeof(short)];
+        var append = await fixture.Session.AppendRecordingAsync(
+            0,
+            oneSecondOfPcm,
+            false);
+
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, append.Status);
+
+        await fixture.Session.RunAsync(CancellationToken.None);
+
+        Assert.NotNull(recordedWav);
+        using var reader = new WaveFileReader(new MemoryStream(recordedWav!));
+        Assert.Equal(oneSecondOfPcm.Length, reader.Length);
+        Assert.Equal(TimeSpan.FromSeconds(1), reader.TotalTime);
+    }
+
     [Fact]
     public async Task Initialize_AlwaysUsesBuiltInAudioForInterviewWebRtc()
     {

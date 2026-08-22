@@ -24,6 +24,7 @@ public class AiSpeechAssistantSessionCredentialServiceTests
             Arg.Is<AiSpeechAssistantSessionCredential>(x =>
                 x.SessionId == session.SessionId &&
                 x.AssistantId == session.AssistantId &&
+                x.Count == 0 &&
                 x.ExpiresAt == Now.AddHours(1)),
             Arg.Is<ICachingSetting>(x => x.Expiry == TimeSpan.FromHours(1)),
             Arg.Any<CancellationToken>());
@@ -85,6 +86,38 @@ public class AiSpeechAssistantSessionCredentialServiceTests
             .SetAsync(default, default, default, default);
     }
 
+    [Fact]
+    public async Task GetValidAsync_WhenSessionWasAlreadyUsed_ReturnsInvalid()
+    {
+        var fixture = CreateFixture();
+        var session = CreateSession(Now);
+        session.Count = 1;
+        fixture.DataProvider.GetAiSpeechAssistantSessionBySessionIdAsync(
+                session.SessionId,
+                Arg.Any<CancellationToken>())
+            .Returns(session);
+
+        var result = await fixture.Service.GetValidAsync(session.SessionId);
+
+        Assert.Null(result);
+        await fixture.CacheManager.DidNotReceiveWithAnyArgs()
+            .SetAsync(default, default, default, default);
+    }
+
+    [Fact]
+    public async Task InvalidateAsync_RemovesCachedCredential()
+    {
+        var fixture = CreateFixture();
+        var sessionId = Guid.Parse("753a2495-e52f-498c-8cd2-900de42f90ce");
+
+        await fixture.Service.InvalidateAsync(sessionId);
+
+        await fixture.CacheManager.Received(1).RemoveAsync(
+            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId),
+            Arg.Any<ICachingSetting>(),
+            Arg.Any<CancellationToken>());
+    }
+
     private static Fixture CreateFixture()
     {
         var clock = Substitute.For<IClock>();
@@ -115,6 +148,7 @@ public class AiSpeechAssistantSessionCredentialServiceTests
         {
             AssistantId = 123,
             SessionId = Guid.Parse("753a2495-e52f-498c-8cd2-900de42f90ce"),
+            Count = 0,
             ExpiresAt = expiresAt
         };
     }
