@@ -9,7 +9,7 @@ public static class AiSpeechAssistantSessionCredentialDefaults
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
 
-    public static string GetCacheKey(Guid sessionId) => $"ai-speech-assistant-session:v2:{sessionId:D}";
+    public static string GetCacheKey(Guid sessionId) => $"ai-speech-assistant-session:{sessionId:D}";
 }
 
 public sealed class AiSpeechAssistantSessionCredential
@@ -17,8 +17,6 @@ public sealed class AiSpeechAssistantSessionCredential
     public Guid SessionId { get; set; }
 
     public int AssistantId { get; set; }
-
-    public int Count { get; set; }
 
     public DateTimeOffset ExpiresAt { get; set; }
 }
@@ -28,8 +26,6 @@ public interface IAiSpeechAssistantSessionCredentialService : IScopedDependency
     Task StoreAsync(AiSpeechAssistantSession session, CancellationToken cancellationToken = default);
 
     Task<AiSpeechAssistantSessionCredential> GetValidAsync(Guid sessionId, CancellationToken cancellationToken = default);
-
-    Task InvalidateAsync(Guid sessionId, CancellationToken cancellationToken = default);
 }
 
 public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssistantSessionCredentialService
@@ -92,19 +88,10 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
         return credential;
     }
 
-    public Task InvalidateAsync(Guid sessionId, CancellationToken cancellationToken = default)
-    {
-        return _cacheManager.RemoveAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId),
-            new RedisCachingSetting(),
-            cancellationToken);
-    }
-
     private bool IsValid(AiSpeechAssistantSessionCredential credential, Guid sessionId)
     {
         return credential != null &&
                credential.SessionId == sessionId &&
-               credential.Count == 0 &&
                _clock.Now < credential.ExpiresAt;
     }
 
@@ -114,7 +101,6 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
         {
             SessionId = session.SessionId,
             AssistantId = session.AssistantId,
-            Count = session.Count,
             ExpiresAt = session.CreatedDate.Add(AiSpeechAssistantSessionCredentialDefaults.Lifetime)
         };
     }
