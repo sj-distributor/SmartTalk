@@ -40,6 +40,10 @@
         <label for="endpoint">SDP Endpoint</label>
         <input id="endpoint" value="https://smarttalk-asia-test.yamimeal.ca/api/RealtimeAiWebRtc/session/93/1" />
       </div>
+      <div class="endpoint">
+        <label for="sessionId">Session ID</label>
+        <input id="sessionId" placeholder="Paste the Session ID returned by /api/AiSpeechAssistant/session/add" />
+      </div>
       <div class="button"><button id="connect">Connect</button></div>
       <div class="button"><button id="disconnect" class="danger" disabled>Disconnect</button></div>
       <div class="button"><button id="startMic" class="success" disabled>Start Mic</button></div>
@@ -56,6 +60,7 @@
 </main>
 <script>
   const endpointEl = document.getElementById("endpoint");
+  const sessionIdEl = document.getElementById("sessionId");
   const statusEl = document.getElementById("status");
   const logEl = document.getElementById("log");
   const audioEl = document.getElementById("remoteAudio");
@@ -70,11 +75,18 @@
   const DISCONNECTED_GRACE_MS = 8000;
   const CONNECTION_TIMEOUT_MS = 15000;
   const MAX_RECONNECT_ATTEMPTS = 3;
+  const TEMPORARY_SESSION_HEADER = "X-INTERVIEW-SESSION";
+  const RECORDING_SAMPLE_RATE = 24000;
+  const RECORDING_BATCH_BYTES = RECORDING_SAMPLE_RATE * 2;
+  const RECORDING_UPLOAD_TIMEOUT_MS = 10000;
+  const RECORDING_UPLOAD_ATTEMPTS = 4;
 
   let pc = null;
   let dc = null;
   let audioSender = null;
   let micStream = null;
+  let remoteStream = null;
+  let recordingState = null;
   let callId = null;
   let statsTimer = null;
   let disconnecting = false;
@@ -121,6 +133,13 @@
     pingBtn.disabled = !connected || reconnecting || dc?.readyState !== "open";
   }
 
+  function temporarySessionHeaders(additionalHeaders = {}) {
+    const sessionId = sessionIdEl.value.trim();
+    return sessionId
+      ? { ...additionalHeaders, [TEMPORARY_SESSION_HEADER]: sessionId }
+      : additionalHeaders;
+  }
+
   function controlUrl(suffix = "", id = callId) {
     const endpoint = endpointEl.value.trim();
     const marker = "/session/";
@@ -146,7 +165,7 @@
     try {
       return await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/sdp" },
+        headers: temporarySessionHeaders({ "Content-Type": "application/sdp" }),
         body: sdp,
         signal: controller.signal
       });
@@ -154,6 +173,209 @@
       clearTimeout(timeout);
       if (connectAbortController === controller) connectAbortController = null;
     }
+  }
+
+  function convertToPcm16(input, sourceSampleRate) {
+    const outputLength = sourceSampleRate === RECORDING_SAMPLE_RATE
+      ? input.length
+      : Math.max(1, Math.round(input.length * RECORDING_SAMPLE_RATE / sourceSampleRate));
+    const bytes = new Uint8Array(outputLength * 2);
+    const view = new DataView(bytes.buffer);
+    const ratio = sourceSampleRate / RECORDING_SAMPLE_RATE;
+
+    for (let index = 0; index < outputLength; index++) {
+      const position = Math.min(input.length - 1, index * ratio);
+      const left = Math.floor(position);
+      const right = Math.min(input.length - 1, left + 1);
+      const sample = input[left] + (input[right] - input[left]) * (position - left);
+      const clamped = Math.max(-1, Math.min(1, sample));
+      view.setInt16(index * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    }
+
+    return bytes;
+  }
+
+  function takePendingRecordingBytes(state) {
+    if (!state.pendingBytes) return null;
+
+    const payload = new Uint8Array(state.pendingBytes);
+    let offset = 0;
+    for (const chunk of state.pendingChunks) {
+      payload.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    state.pendingChunks = [];
+    state.pendingBytes = 0;
+    return payload;
+  }
+
+  function wait(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+  }
+
+  async function uploadRecordingChunk(state, sequence, payload, isFinal, keepalive) {
+    let lastError;
+    for (let attempt = 1; attempt <= RECORDING_UPLOAD_ATTEMPTS; attempt++) {
+      try {
+        const response = await fetchWithTimeout(controlUrl("/recording", state.callId), {
+          method: "POST",
+          headers: temporarySessionHeaders({
+            "Content-Type": "application/octet-stream",
+            "X-Recording-Sequence": String(sequence),
+            "X-Recording-Final": String(isFinal)
+          }),
+          body: payload,
+          keepalive
+        }, RECORDING_UPLOAD_TIMEOUT_MS);
+        if (!response.ok) {
+          const body = await response.text();
+          const error = new Error(`recording HTTP ${response.status}: ${body.slice(0, 300)}`);
+          error.retryable = response.status === 408 || response.status === 425 ||
+            response.status === 429 || response.status >= 500;
+          throw error;
+        }
+
+        state.uploadedBytes += payload.byteLength;
+        if (isFinal) state.finalized = true;
+        return;
+      } catch (error) {
+        lastError = error;
+        if (error.retryable === false) break;
+        if (attempt < RECORDING_UPLOAD_ATTEMPTS)
+          await wait(250 * 2 ** (attempt - 1));
+      }
+    }
+
+    throw lastError;
+  }
+
+  function queueRecordingUpload(state, keepalive = false, isFinal = false) {
+    const payload = takePendingRecordingBytes(state);
+    if (!payload && !isFinal) return;
+
+    const body = payload || new Uint8Array();
+    const sequence = state.nextSequence;
+    if (payload) state.nextSequence++;
+
+    state.uploadChain = state.uploadChain.then(async () => {
+      if (state.uploadFailed) return;
+      await uploadRecordingChunk(state, sequence, body, isFinal, keepalive);
+    }).catch(error => {
+      state.uploadFailed = true;
+      log(`RECORDING upload failed sequence=${sequence}: ${error.message}`, "error");
+    });
+  }
+
+  function appendRecordingBytes(state, bytes) {
+    if (recordingState !== state || !bytes.byteLength) return;
+    state.pendingChunks.push(bytes);
+    state.pendingBytes += bytes.byteLength;
+    if (state.pendingBytes >= RECORDING_BATCH_BYTES) queueRecordingUpload(state);
+  }
+
+  function attachRecordingStream(stream) {
+    const state = recordingState;
+    if (!state || !stream || state.sources.has(stream)) return;
+    if (!stream.getAudioTracks().some(track => track.readyState === "live")) return;
+
+    const source = state.context.createMediaStreamSource(stream);
+    source.connect(state.mixer);
+    state.sources.set(stream, source);
+  }
+
+  function detachRecordingStream(stream) {
+    const state = recordingState;
+    const source = state?.sources.get(stream);
+    if (!source) return;
+
+    source.disconnect();
+    state.sources.delete(stream);
+  }
+
+  async function startRecording(id) {
+    await stopRecording();
+
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error("Web Audio API is unavailable");
+
+      const context = new AudioContextClass({ sampleRate: RECORDING_SAMPLE_RATE });
+      const mixer = context.createGain();
+      const processor = context.createScriptProcessor(4096, 1, 1);
+      const silentOutput = context.createGain();
+      silentOutput.gain.value = 0;
+      mixer.connect(processor);
+      processor.connect(silentOutput);
+      silentOutput.connect(context.destination);
+
+      const state = {
+        callId: id,
+        context,
+        mixer,
+        processor,
+        silentOutput,
+        sources: new Map(),
+        pendingChunks: [],
+        pendingBytes: 0,
+        uploadedBytes: 0,
+        nextSequence: 0,
+        finalized: false,
+        uploadFailed: false,
+        uploadChain: Promise.resolve()
+      };
+      recordingState = state;
+      processor.onaudioprocess = event => {
+        if (recordingState !== state) return;
+        appendRecordingBytes(state, convertToPcm16(
+          event.inputBuffer.getChannelData(0),
+          context.sampleRate));
+      };
+
+      attachRecordingStream(remoteStream);
+      attachRecordingStream(micStream);
+      if (context.state === "suspended") await context.resume();
+      log(`RECORDING started sampleRate=${context.sampleRate}`, "out");
+    } catch (error) {
+      recordingState = null;
+      log(`RECORDING unavailable: ${error.message}`, "error");
+    }
+  }
+
+  async function stopRecording() {
+    const state = recordingState;
+    if (!state) return;
+    recordingState = null;
+
+    state.processor.onaudioprocess = null;
+    state.sources.forEach(source => source.disconnect());
+    state.sources.clear();
+    state.mixer.disconnect();
+    state.processor.disconnect();
+    state.silentOutput.disconnect();
+    queueRecordingUpload(state, false, true);
+    await state.uploadChain;
+    await state.context.close().catch(() => {});
+    log(`RECORDING stopped uploadedBytes=${state.uploadedBytes}${state.finalized ? " finalized" : " partial"}`,
+      state.uploadFailed ? "error" : "out");
+  }
+
+  function finalizeRecordingForUnload() {
+    const state = recordingState;
+    if (!state || state.finalized) return;
+
+    state.processor.onaudioprocess = null;
+    const payload = takePendingRecordingBytes(state) || new Uint8Array();
+    const sequence = state.nextSequence;
+    fetch(controlUrl("/recording", state.callId), {
+      method: "POST",
+      headers: temporarySessionHeaders({
+        "Content-Type": "application/octet-stream",
+        "X-Recording-Sequence": String(sequence),
+        "X-Recording-Final": "true"
+      }),
+      body: payload,
+      keepalive: true
+    }).catch(() => {});
   }
 
   function summarizeEvent(raw) {
@@ -185,7 +407,10 @@
       log("DATA_CHANNEL open", "in");
       pingBtn.disabled = false;
       try {
-        const response = await fetchWithTimeout(controlUrl("/ready"), { method: "POST" }, 8000);
+        const response = await fetchWithTimeout(controlUrl("/ready"), {
+          method: "POST",
+          headers: temporarySessionHeaders()
+        }, 8000);
         if (!response.ok) throw new Error(`ready HTTP ${response.status}`);
         log("CLIENT_READY acknowledged; server greeting may now start", "out");
       } catch (error) {
@@ -371,7 +596,9 @@
 
       pc.addEventListener("track", event => {
         if (pc !== peer) return;
-        audioEl.srcObject = event.streams[0] || new MediaStream([event.track]);
+        remoteStream = event.streams[0] || new MediaStream([event.track]);
+        audioEl.srcObject = remoteStream;
+        attachRecordingStream(remoteStream);
         audioEl.play().catch(error => log(`AUDIO autoplay blocked: ${error.message}`, "error"));
         log(`REMOTE_TRACK kind=${event.track.kind} id=${event.track.id}`, "in");
       });
@@ -437,6 +664,7 @@
 
       if (pc !== peer || (isReconnect && manualDisconnect)) throw new Error("Connection attempt was cancelled");
       await peer.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      await startRecording(callId);
       await applyAudioBitrate(targetAudioBitrate, isReconnect ? "reconnect" : "initial connection");
       setStatus("connected");
       setButtons(true);
@@ -466,6 +694,7 @@
       });
       const track = micStream.getAudioTracks()[0];
       await audioSender.replaceTrack(track);
+      attachRecordingStream(micStream);
       await applyAudioBitrate(targetAudioBitrate, isRecovery ? "microphone recovery" : "microphone started");
       setButtons(true);
       log(`MIC started id=${track.id} readyState=${track.readyState}`, "out");
@@ -488,6 +717,7 @@
     if (!micStream) return;
     const stream = micStream;
     micStream = null;
+    detachRecordingStream(stream);
     try {
       await audioSender?.replaceTrack(null);
     } catch (error) {
@@ -620,9 +850,14 @@
       } else {
         await stopMic();
       }
+      await stopRecording();
       if (notifyServer && previousCallId) {
         try {
-          await fetchWithTimeout(controlUrl("", previousCallId), { method: "DELETE", keepalive: true }, 3000);
+          await fetchWithTimeout(controlUrl("", previousCallId), {
+            method: "DELETE",
+            headers: temporarySessionHeaders(),
+            keepalive: true
+          }, 3000);
         } catch (error) {
           log(`SERVER disconnect failed: ${error.message}`, "error");
         }
@@ -634,6 +869,7 @@
       dc?.close();
       pc?.close();
       audioEl.srcObject = null;
+      remoteStream = null;
     } finally {
       dc = null;
       pc = null;
@@ -660,7 +896,7 @@
   document.getElementById("clear").addEventListener("click", () => { logEl.textContent = ""; });
   document.addEventListener("visibilitychange", () => log(`PAGE visibility=${document.visibilityState}`));
   window.addEventListener("beforeunload", () => {
-    if (callId) fetch(controlUrl(), { method: "DELETE", keepalive: true }).catch(() => {});
+    finalizeRecordingForUnload();
   });
 
   setButtons(false);

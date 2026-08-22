@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
 namespace SmartTalk.Core.Services.RealtimeAiWebRtc;
@@ -14,6 +15,12 @@ public interface IRealtimeAiWebRtcSessionRegistry : ISingletonDependency
         CancellationToken cancellationToken);
 
     Task<bool> MarkClientReadyAsync(string callId);
+
+    Task<AppendRealtimeAiWebRtcRecordingResponse> AppendRecordingAsync(
+        string callId,
+        long sequence,
+        ReadOnlyMemory<byte> pcmBytes,
+        bool isFinal);
 
     Task<bool> StopAsync(string callId);
 }
@@ -77,6 +84,27 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
         return await active.MarkClientReadyAsync().ConfigureAwait(false);
     }
 
+    public async Task<AppendRealtimeAiWebRtcRecordingResponse> AppendRecordingAsync(
+        string callId,
+        long sequence,
+        ReadOnlyMemory<byte> pcmBytes,
+        bool isFinal)
+    {
+        if (!_sessions.TryGetValue(callId, out var active))
+            return new AppendRealtimeAiWebRtcRecordingResponse
+            {
+                Status = RealtimeAiWebRtcRecordingAppendStatus.NotFound
+            };
+
+        var result = await active.AppendRecordingAsync(sequence, pcmBytes, isFinal).ConfigureAwait(false);
+        if (isFinal && result.Status is (
+                RealtimeAiWebRtcRecordingAppendStatus.Accepted or
+                RealtimeAiWebRtcRecordingAppendStatus.Duplicate))
+            await active.RequestStopAsync().ConfigureAwait(false);
+
+        return result;
+    }
+
     public async Task<bool> StopAsync(string callId)
     {
         if (!_sessions.TryGetValue(callId, out var active)) return false;
@@ -107,6 +135,7 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
     {
         private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
         private bool _disposed;
+        private bool _stopping;
 
         public ActiveSession(
             IServiceScope scope,
@@ -142,6 +171,28 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
             }
         }
 
+        public async Task<AppendRealtimeAiWebRtcRecordingResponse> AppendRecordingAsync(
+            long sequence,
+            ReadOnlyMemory<byte> pcmBytes,
+            bool isFinal)
+        {
+            await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_disposed || _stopping)
+                    return new AppendRealtimeAiWebRtcRecordingResponse
+                    {
+                        Status = RealtimeAiWebRtcRecordingAppendStatus.NotFound
+                    };
+
+                return await Session.AppendRecordingAsync(sequence, pcmBytes, isFinal).ConfigureAwait(false);
+            }
+            finally
+            {
+                _lifecycleGate.Release();
+            }
+        }
+
         public async Task<bool> StopAsync()
         {
             Task completion;
@@ -149,8 +200,9 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
             await _lifecycleGate.WaitAsync().ConfigureAwait(false);
             try
             {
-                if (_disposed) return false;
+                if (_disposed || _stopping) return false;
 
+                _stopping = true;
                 Cancellation.Cancel();
                 completion = Completion;
             }
@@ -163,6 +215,22 @@ public sealed class RealtimeAiWebRtcSessionRegistry : IRealtimeAiWebRtcSessionRe
                 await completion.ConfigureAwait(false);
 
             return true;
+        }
+
+        public async Task RequestStopAsync()
+        {
+            await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_disposed || _stopping) return;
+
+                _stopping = true;
+                Cancellation.Cancel();
+            }
+            finally
+            {
+                _lifecycleGate.Release();
+            }
         }
 
         public void Cancel()

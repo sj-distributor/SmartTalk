@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SmartTalk.Core.Services.RealtimeAiWebRtc;
+using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
 
@@ -62,6 +63,60 @@ public class RealtimeAiWebRtcSessionRegistryTests
         await session.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(1));
     }
 
+    [Fact]
+    public async Task AppendRecording_ForwardsPcmBeforeStopAndRejectsItWhileStopping()
+    {
+        var session = new ControllableSession { BlockRunCleanup = true };
+        using var provider = BuildServiceProvider(session);
+        using var registry = new RealtimeAiWebRtcSessionRegistry(
+            provider.GetRequiredService<IServiceScopeFactory>());
+        var call = await registry.CreateAsync(
+            625,
+            RealtimeAiServerRegion.HK,
+            "offer",
+            CancellationToken.None);
+        var pcmBytes = new byte[] { 1, 0, 2, 0 };
+
+        var accepted = await registry.AppendRecordingAsync(call.CallId, 0, pcmBytes, false);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, accepted.Status);
+        Assert.Equal(pcmBytes, session.RecordedPcm);
+
+        var stopTask = registry.StopAsync(call.CallId);
+        await session.RunCancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var rejected = await registry.AppendRecordingAsync(call.CallId, 1, pcmBytes, false);
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.NotFound, rejected.Status);
+
+        session.ReleaseRunCleanup.TrySetResult();
+        Assert.True(await stopTask.WaitAsync(TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task AppendRecording_FinalChunkStopsSessionAfterItIsAccepted()
+    {
+        var session = new ControllableSession { BlockRunCleanup = true };
+        using var provider = BuildServiceProvider(session);
+        using var registry = new RealtimeAiWebRtcSessionRegistry(
+            provider.GetRequiredService<IServiceScopeFactory>());
+        var call = await registry.CreateAsync(
+            625,
+            RealtimeAiServerRegion.HK,
+            "offer",
+            CancellationToken.None);
+
+        var result = await registry.AppendRecordingAsync(
+            call.CallId,
+            0,
+            new byte[] { 1, 0 },
+            true);
+
+        Assert.Equal(RealtimeAiWebRtcRecordingAppendStatus.Accepted, result.Status);
+        await session.RunCancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        session.ReleaseRunCleanup.TrySetResult();
+        await session.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
     private static ServiceProvider BuildServiceProvider(IAiKidRealtimeWebRtcSession session)
     {
         var services = new ServiceCollection();
@@ -74,6 +129,8 @@ public class RealtimeAiWebRtcSessionRegistryTests
         public bool WaitForInitializationCancellation { get; init; }
 
         public bool BlockReadyCallback { get; init; }
+
+        public bool BlockRunCleanup { get; init; }
 
         public CancellationToken InitializationToken { get; private set; }
 
@@ -90,6 +147,14 @@ public class RealtimeAiWebRtcSessionRegistryTests
 
         public TaskCompletionSource Disposed { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource RunCancellationObserved { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ReleaseRunCleanup { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public byte[] RecordedPcm { get; private set; } = [];
 
         public async Task<RealtimeAiWebRtcCallResult> InitializeAsync(
             int assistantId,
@@ -120,6 +185,9 @@ public class RealtimeAiWebRtcSessionRegistryTests
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                RunCancellationObserved.TrySetResult();
+                if (BlockRunCleanup)
+                    await ReleaseRunCleanup.Task;
             }
         }
 
@@ -128,6 +196,19 @@ public class RealtimeAiWebRtcSessionRegistryTests
             ReadyCallbackStarted.TrySetResult();
             if (BlockReadyCallback)
                 await ReleaseReadyCallback.Task;
+        }
+
+        public Task<AppendRealtimeAiWebRtcRecordingResponse> AppendRecordingAsync(
+            long sequence,
+            ReadOnlyMemory<byte> pcmBytes,
+            bool isFinal)
+        {
+            RecordedPcm = pcmBytes.ToArray();
+            return Task.FromResult(new AppendRealtimeAiWebRtcRecordingResponse
+            {
+                Status = RealtimeAiWebRtcRecordingAppendStatus.Accepted,
+                NextSequence = sequence + 1
+            });
         }
 
         public void Dispose()
