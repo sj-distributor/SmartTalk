@@ -7,6 +7,7 @@ using SmartTalk.Api.Authentication.TemporarySession;
 using SmartTalk.Api.Extensions;
 using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -15,6 +16,7 @@ namespace SmartTalk.Api.Controllers;
 [Route("api/[controller]")]
 public sealed class RealtimeAiWebRtcController : ControllerBase
 {
+    private const string InvalidSessionMessage = "The interview session is invalid or has expired.";
     private const string RecordingSequenceHeader = "X-Recording-Sequence";
     private const string RecordingFinalHeader = "X-Recording-Final";
     private const int MaxSdpLength = 64 * 1024;
@@ -43,6 +45,19 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         var offerSdp = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(offerSdp) || offerSdp.Length > MaxSdpLength)
             return BadRequest(new { error = "Invalid SDP offer." });
+
+        var rawSessionId = User.FindFirst(TemporarySessionAuthenticationDefaults.SessionIdClaim)?.Value;
+        if (!Guid.TryParse(rawSessionId, out var sessionId))
+            return Unauthorized(new { code = StatusCodes.Status401Unauthorized, msg = InvalidSessionMessage });
+
+        var sessionResponse = await _mediator.RequestAsync<
+            GetAiSpeechAssistantSessionRequest,
+            GetAiSpeechAssistantSessionResponse>(new GetAiSpeechAssistantSessionRequest
+            {
+                SessionId = sessionId
+            }, cancellationToken).ConfigureAwait(false);
+        if (sessionResponse.Data?.Count != 0)
+            return Unauthorized(new { code = StatusCodes.Status401Unauthorized, msg = InvalidSessionMessage });
 
         CreateRealtimeAiWebRtcSessionResponse response;
         try
