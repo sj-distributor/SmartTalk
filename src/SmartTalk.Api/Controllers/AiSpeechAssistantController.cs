@@ -338,6 +338,14 @@ public class AiSpeechAssistantController : ControllerBase
         if (!IsTemporarySessionBoundTo(request.SessionId)) return Forbid();
 
         var response = await _mediator.RequestAsync<GetAiSpeechAssistantSessionRequest, GetAiSpeechAssistantSessionResponse>(request).ConfigureAwait(false);
+        if (IsTemporarySessionCredential() && response.Data?.Count > 0)
+        {
+            return Unauthorized(new
+            {
+                code = StatusCodes.Status401Unauthorized,
+                msg = "The interview session is invalid or has expired."
+            });
+        }
 
         return Ok(response);
     }
@@ -365,12 +373,17 @@ public class AiSpeechAssistantController : ControllerBase
 
     private bool IsTemporarySessionBoundTo(Guid sessionId)
     {
-        return !User.HasClaim(
-                   TemporarySessionAuthenticationDefaults.CredentialTypeClaim,
-                   TemporarySessionAuthenticationDefaults.CredentialType) ||
+        return !IsTemporarySessionCredential() ||
                User.HasClaim(
                    TemporarySessionAuthenticationDefaults.SessionIdClaim,
                    sessionId.ToString("D"));
+    }
+
+    private bool IsTemporarySessionCredential()
+    {
+        return User.HasClaim(
+            TemporarySessionAuthenticationDefaults.CredentialTypeClaim,
+            TemporarySessionAuthenticationDefaults.CredentialType);
     }
     
     [Route("assistant/switch"), HttpPost]

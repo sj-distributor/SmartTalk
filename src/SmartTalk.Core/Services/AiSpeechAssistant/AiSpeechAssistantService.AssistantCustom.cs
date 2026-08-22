@@ -749,7 +749,6 @@ public partial class AiSpeechAssistantService
             session.Count++;
             
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantSessionAsync(session, true, cancellationToken).ConfigureAwait(false);
-            await _sessionCredentialService.InvalidateAsync(command.SessionId, cancellationToken).ConfigureAwait(false);
         }, wait: TimeSpan.FromSeconds(10), retry: TimeSpan.FromSeconds(1), server: RedisServer.System).ConfigureAwait(false);
         
         return new UpdateAiSpeechAssistantSessionResponse
