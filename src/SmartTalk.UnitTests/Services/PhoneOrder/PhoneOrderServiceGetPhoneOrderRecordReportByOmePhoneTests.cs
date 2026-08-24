@@ -109,9 +109,8 @@ public class PhoneOrderServiceGetPhoneOrderRecordReportByOmePhoneTests
             Substitute.For<ISmartTalkBackgroundJobClient>(),
             Substitute.For<ISpeechMaticsDataProvider>(),
             null!,
-            Substitute.For<TranscriptionCallbackSetting>(),
             null!,
-            Substitute.For<IAiSpeechAssistantDataProvider>(),
+            null!,
             Substitute.For<ILinphoneDataProvider>());
     }
 }
