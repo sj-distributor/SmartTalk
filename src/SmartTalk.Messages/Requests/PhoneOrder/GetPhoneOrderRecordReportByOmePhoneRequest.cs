@@ -7,6 +7,8 @@ namespace SmartTalk.Messages.Requests.PhoneOrder;
 
 public class GetPhoneOrderRecordReportByOmePhoneRequest : IRequest
 {
+    public int? RecordId { get; set; }
+    
     public DateTimeOffset CallTime { get; set; }
 
     public string CallerNumber { get; set; }
