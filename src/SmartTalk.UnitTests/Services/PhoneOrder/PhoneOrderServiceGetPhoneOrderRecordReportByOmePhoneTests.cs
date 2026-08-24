@@ -99,7 +99,6 @@ public class PhoneOrderServiceGetPhoneOrderRecordReportByOmePhoneTests
             null!,
             Substitute.For<IAgentDataProvider>(),
             Substitute.For<IAttachmentService>(),
-            Substitute.For<IAccountDataProvider>(),
             Substitute.For<ISpeechMaticsService>(),
             Substitute.For<ISpeechToTextService>(),
             Substitute.For<IPhoneOrderUtilService>(),
@@ -109,7 +108,7 @@ public class PhoneOrderServiceGetPhoneOrderRecordReportByOmePhoneTests
             Substitute.For<ISmartTalkBackgroundJobClient>(),
             Substitute.For<ISpeechMaticsDataProvider>(),
             null!,
-            Substitute.For<TranscriptionCallbackSetting>(),
+            Substitute.For<IAccountDataProvider>(),
             null!,
             Substitute.For<IAiSpeechAssistantDataProvider>(),
             Substitute.For<ILinphoneDataProvider>());
