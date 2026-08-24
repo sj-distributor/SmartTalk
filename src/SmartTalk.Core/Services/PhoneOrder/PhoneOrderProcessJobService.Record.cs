@@ -26,6 +26,7 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 using System.ClientModel;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Diagnostics;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Enums.Sales;
@@ -725,6 +726,7 @@ public partial class PhoneOrderProcessJobService
         if (string.IsNullOrEmpty(record.TranscriptionText)) return;
 
         var isAixvolinkRecord = string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase);
+        var flow = isAixvolinkRecord ? "Aixvolink" : "SmartTalkCallIn";
         var soldToIds = new List<string>(); 
         if (!string.IsNullOrEmpty(aiSpeechAssistant.Name))
              soldToIds = aiSpeechAssistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -748,7 +750,10 @@ public partial class PhoneOrderProcessJobService
             }
         }
 
-        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, cancellationToken).ConfigureAwait(false); 
+        var analysisStopwatch = Stopwatch.StartNew();
+        var extractedOrders = await ExtractAndMatchOrderItemsFromReportAsync(record.TranscriptionText, historyItems, flow, record.Id, cancellationToken).ConfigureAwait(false);
+        analysisStopwatch.Stop();
+        Log.Information("AiOrderAnalysisFinished Flow={Flow} RequestType={RequestType} RecordId={RecordId} DurationMs={DurationMs} StoreCount={StoreCount} ItemCount={ItemCount}", flow, "ExtractAndMatchOrderItems", record.Id, analysisStopwatch.ElapsedMilliseconds, extractedOrders.Count, extractedOrders.Sum(x => x.Orders?.Count ?? 0));
         if (!extractedOrders.Any()) return;
 
         var pacificZone = PstTimeZone.Get();
@@ -813,7 +818,7 @@ public partial class PhoneOrderProcessJobService
         return $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}";
     }
 
-    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken) 
+    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, string flow, int recordId, CancellationToken cancellationToken) 
     { 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
@@ -932,7 +937,12 @@ public partial class PhoneOrderProcessJobService
                         var isTargetQuantity = orderItem.TryGetProperty("IsTargetQuantity", out var itq) && itq.GetBoolean();
 
                         if (string.IsNullOrWhiteSpace(materialNumber))
+                        {
+                            var matchStopwatch = Stopwatch.StartNew();
                             materialNumber = MatchMaterialNumber(name, materialNumber, unit, historyItems);
+                            matchStopwatch.Stop();
+                            Log.Information("AiOrderItemMatched Flow={Flow} RequestType={RequestType} RecordId={RecordId} ItemName={ItemName} DurationMs={DurationMs} Matched={Matched}", flow, "MatchMaterialNumber", recordId, name, matchStopwatch.ElapsedMilliseconds, !string.IsNullOrWhiteSpace(materialNumber));
+                        }
                         
                         storeDto.Orders.Add(new ExtractedOrderItemDto
                         {
