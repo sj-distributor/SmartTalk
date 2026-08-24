@@ -53,9 +53,9 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly OpenAiSettings _openAiSettings;
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
     private readonly SalesSetting _salesSetting;
+    private readonly ILinphoneDataProvider  _linphoneData;
 
-    public PhoneOrderService(
-        IMapper mapper,
+    public PhoneOrderService(IMapper mapper,
         ICurrentUser currentUser,
         SalesSetting salesSetting,
         IWeChatClient weChatClient,
@@ -76,6 +76,7 @@ public partial class PhoneOrderService : IPhoneOrderService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ISpeechMaticsDataProvider speechMaticsDataProvider,
         OpenAiSettings openAiSettings,
+        TranscriptionCallbackSetting @for,
         TranscriptionCallbackSetting transcriptionCallbackSetting,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         ILinphoneDataProvider linphoneDataProvider)

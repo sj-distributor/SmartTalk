@@ -100,6 +100,7 @@ public class PhoneOrderServiceGetPhoneOrderRecordsTests
             Substitute.For<ISpeechMaticsDataProvider>(),
             null!,
             null!,
+            Substitute.For<TranscriptionCallbackSetting>(),
             Substitute.For<IAiSpeechAssistantDataProvider>(),
             Substitute.For<ILinphoneDataProvider>());
     }
