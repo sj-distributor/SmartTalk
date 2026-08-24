@@ -12,10 +12,6 @@ public class GetPhoneOrderRecordReportByOmePhoneRequest : IRequest
     public DateTimeOffset CallTime { get; set; }
 
     public string CallerNumber { get; set; }
-
-    public string CalleeNumber { get; set; }
-    
-    public string TransferCallNumber { get; set; }
     
     public SystemLanguage Language { get; set; }
 }
