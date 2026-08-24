@@ -100,8 +100,9 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
         });
         
         var manager = new ThrottlingManager();
-        
-        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: 5));
+        var customerItemsConcurrency = Math.Max(1, configuration.GetValue<int>("CustomerItemsRefreshConcurrency", 5));
+
+        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: customerItemsConcurrency));
     }
 
     private static void ScanHangfireRecurringJobs(IApplicationBuilder app)
