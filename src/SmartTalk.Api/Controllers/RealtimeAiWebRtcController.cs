@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using Serilog;
 using SmartTalk.Api.Authentication.TemporarySession;
 using SmartTalk.Api.Extensions;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.RealtimeAiWebRtc;
 using SmartTalk.Messages.Enums.RealtimeAi;
-using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
 namespace SmartTalk.Api.Controllers;
 
@@ -23,10 +23,14 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
     private const int MaxRecordingChunkLength = 256 * 1024;
 
     private readonly IMediator _mediator;
+    private readonly IAiSpeechAssistantSessionCredentialService _sessionCredentialService;
 
-    public RealtimeAiWebRtcController(IMediator mediator)
+    public RealtimeAiWebRtcController(
+        IMediator mediator,
+        IAiSpeechAssistantSessionCredentialService sessionCredentialService)
     {
         _mediator = mediator;
+        _sessionCredentialService = sessionCredentialService;
     }
 
     [HttpPost("session/{assistantId:int}/{region}")]
@@ -45,19 +49,6 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         var offerSdp = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(offerSdp) || offerSdp.Length > MaxSdpLength)
             return BadRequest(new { error = "Invalid SDP offer." });
-
-        var rawSessionId = User.FindFirst(TemporarySessionAuthenticationDefaults.SessionIdClaim)?.Value;
-        if (!Guid.TryParse(rawSessionId, out var sessionId))
-            return Unauthorized(new { code = StatusCodes.Status401Unauthorized, msg = InvalidSessionMessage });
-
-        var sessionResponse = await _mediator.RequestAsync<
-            GetAiSpeechAssistantSessionRequest,
-            GetAiSpeechAssistantSessionResponse>(new GetAiSpeechAssistantSessionRequest
-            {
-                SessionId = sessionId
-            }, cancellationToken).ConfigureAwait(false);
-        if (sessionResponse.Data?.Count != 0)
-            return Unauthorized(new { code = StatusCodes.Status401Unauthorized, msg = InvalidSessionMessage });
 
         CreateRealtimeAiWebRtcSessionResponse response;
         try
@@ -169,18 +160,31 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
     }
 
     [HttpDelete("session/{callId}")]
-    [AllowAnonymous]
+    [TemporarySessionAuthorize]
     public async Task<IActionResult> StopSessionAsync(string callId, CancellationToken cancellationToken)
     {
-        var response = await _mediator.SendAsync<
-            StopRealtimeAiWebRtcSessionCommand,
-            StopRealtimeAiWebRtcSessionResponse>(new StopRealtimeAiWebRtcSessionCommand
-            {
-                CallId = callId
-            }, cancellationToken).ConfigureAwait(false);
+        var rawSessionId = User.FindFirst(TemporarySessionAuthenticationDefaults.SessionIdClaim)?.Value;
+        if (!Guid.TryParse(rawSessionId, out var sessionId))
+            return Unauthorized(new { code = StatusCodes.Status401Unauthorized, msg = InvalidSessionMessage });
 
-        return response.IsFound
-            ? NoContent()
-            : NotFound();
+        try
+        {
+            var response = await _mediator.SendAsync<
+                StopRealtimeAiWebRtcSessionCommand,
+                StopRealtimeAiWebRtcSessionResponse>(new StopRealtimeAiWebRtcSessionCommand
+                {
+                    CallId = callId
+                }, cancellationToken).ConfigureAwait(false);
+
+            return response.IsFound
+                ? NoContent()
+                : NotFound();
+        }
+        finally
+        {
+            await _sessionCredentialService
+                .InvalidateAsync(sessionId, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
     }
 }

@@ -85,6 +85,38 @@ public class AiSpeechAssistantSessionCredentialServiceTests
             .SetAsync(default, default, default, default);
     }
 
+    [Fact]
+    public async Task GetValidAsync_WhenCacheIsMissingAndSessionWasUsed_DoesNotRehydrate()
+    {
+        var fixture = CreateFixture();
+        var session = CreateSession(Now.AddMinutes(-30));
+        session.Count = 1;
+        fixture.DataProvider.GetAiSpeechAssistantSessionBySessionIdAsync(
+                session.SessionId,
+                Arg.Any<CancellationToken>())
+            .Returns(session);
+
+        var result = await fixture.Service.GetValidAsync(session.SessionId);
+
+        Assert.Null(result);
+        await fixture.CacheManager.DidNotReceiveWithAnyArgs()
+            .SetAsync(default, default, default, default);
+    }
+
+    [Fact]
+    public async Task InvalidateAsync_RemovesCredentialFromRedis()
+    {
+        var fixture = CreateFixture();
+        var sessionId = Guid.Parse("753a2495-e52f-498c-8cd2-900de42f90ce");
+
+        await fixture.Service.InvalidateAsync(sessionId);
+
+        await fixture.CacheManager.Received(1).RemoveAsync(
+            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId),
+            Arg.Any<ICachingSetting>(),
+            Arg.Any<CancellationToken>());
+    }
+
     private static Fixture CreateFixture()
     {
         var clock = Substitute.For<IClock>();
