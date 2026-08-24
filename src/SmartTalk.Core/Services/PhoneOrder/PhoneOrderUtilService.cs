@@ -1,4 +1,5 @@
 using AutoMapper;
+using System.Diagnostics;
 using Google.Cloud.Translation.V2;
 using Mediator.Net;
 using Newtonsoft.Json;
@@ -8,6 +9,7 @@ using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
 using SmartTalk.Core.Domain.PhoneOrder;
+using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Printer;
 using SmartTalk.Core.Domain.System;
@@ -80,6 +82,9 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
 
     public async Task ExtractPhoneOrderShoppingCartAsync(string goalTexts, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
+        var flow = string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase) ? "Aixvolink" : "SmartTalkCallIn";
+        var stopwatch = Stopwatch.StartNew();
+        Log.Information("AiOrderRequestStarted Flow={Flow} RequestType={RequestType} RecordId={RecordId}", flow, "ExtractShoppingCart", record.Id);
         try
         {
             if (record.Scenario != DialogueScenarios.Order) return;
@@ -116,6 +121,11 @@ public class PhoneOrderUtilService : IPhoneOrderUtilService
         catch (Exception e)
         {
             Log.Error("Match similar items failed: {@Exception}", e);
+        }
+        finally
+        {
+            stopwatch.Stop();
+            Log.Information("AiOrderRequestFinished Flow={Flow} RequestType={RequestType} RecordId={RecordId} DurationMs={DurationMs}", flow, "ExtractShoppingCart", record.Id, stopwatch.ElapsedMilliseconds);
         }
     }
     
