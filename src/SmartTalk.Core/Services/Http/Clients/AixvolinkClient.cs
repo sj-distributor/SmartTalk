@@ -24,7 +24,7 @@ public class AixvolinkClient : IAixvolinkClient
     {
         var headers = new Dictionary<string, string>
         {
-            { "X-API-KEY", _setting.ApiKey }
+            { "API-KEY", _setting.ApiKey }
         };
 
         await _httpClientFactory.PostAsJsonAsync($"{_setting.BaseUrl}/api/external/smarttalk/call-results/callback", request, cancellationToken, headers: headers).ConfigureAwait(false);

@@ -110,7 +110,7 @@ public class PhoneOrderServiceGetPhoneOrderRecordReportByOmePhoneTests
             null!,
             Substitute.For<IAccountDataProvider>(),
             null!,
-            Substitute.For<IAiSpeechAssistantDataProvider>(),
+            null!,
             Substitute.For<ILinphoneDataProvider>());
     }
 }
