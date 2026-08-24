@@ -786,8 +786,8 @@ public partial class PhoneOrderService
 
     public async Task<GetPhoneOrderRecordReportResponse> GetPhoneOrderRecordReportByCallSidAsync(GetPhoneOrderRecordReportRequest request, CancellationToken cancellationToken)
     {
-        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, cancellationToken).ConfigureAwait(false);
-        
+        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(request.CallSid, request.Language, null, cancellationToken).ConfigureAwait(false);
+
         if (report == null)
         {
             var record = await _phoneOrderDataProvider.GetPhoneOrderRecordBySessionIdAsync(request.CallSid, cancellationToken).ConfigureAwait(false);
@@ -1513,11 +1513,20 @@ public partial class PhoneOrderService
 
     public async Task<GetPhoneOrderRecordReportByOmePhoneResponse> GetPhoneOrderRecordReportByOmePhoneAsync(GetPhoneOrderRecordReportByOmePhoneRequest request, CancellationToken cancellationToken)
     {
-        var record = await _phoneOrderDataProvider.GetPhoneOrderRecordByOmePhoneAsync(request.CallerNumber, request.CalleeNumber, request.TransferCallNumber, request.CallTime, cancellationToken).ConfigureAwait(false);
+        var record = request.RecordId.HasValue
+            ? await _phoneOrderDataProvider.GetPhoneOrderRecordByIdAsync(request.RecordId.Value, cancellationToken).ConfigureAwait(false)
+            : await _phoneOrderDataProvider
+                .GetPhoneOrderRecordByOmePhoneAsync(
+                    request.CallerNumber,
+                    request.CalleeNumber,
+                    request.TransferCallNumber,
+                    request.CallTime,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(record.SessionId, request.Language, cancellationToken).ConfigureAwait(false);
+        var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(null, request.Language, record.Id, cancellationToken).ConfigureAwait(false);
 
-        return new GetPhoneOrderRecordReportByOmePhoneResponse()
+        return new GetPhoneOrderRecordReportByOmePhoneResponse
         {
             Data = _mapper.Map<PhoneOrderRecordReportDto>(report)
         };

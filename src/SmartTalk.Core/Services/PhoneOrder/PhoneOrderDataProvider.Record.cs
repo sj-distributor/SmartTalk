@@ -69,7 +69,7 @@ public partial interface IPhoneOrderDataProvider
 
     Task AddPhoneOrderRecordReportsAsync(List<PhoneOrderRecordReport> recordReports, bool forceSave = true, CancellationToken cancellationToken = default);
 
-    Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken);
+    Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, int? recordId = null, CancellationToken cancellationToken = default);
     
     Task<List<PhoneOrderRecordReport>> GetPhoneOrderRecordReportByRecordIdAsync(List<int> recordId, CancellationToken cancellationToken);
 
@@ -457,8 +457,19 @@ public partial class PhoneOrderDataProvider
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, CancellationToken cancellationToken)
+    public async Task<PhoneOrderRecordReport> GetPhoneOrderRecordReportAsync(string callSid, SystemLanguage language, int? recordId = null, CancellationToken cancellationToken = default)
     {
+        if (recordId.HasValue)
+        {
+            var reports = await _repository.Query<PhoneOrderRecordReport>()
+                .Where(x => x.RecordId == recordId.Value)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            return reports.FirstOrDefault(x =>
+                x.Language == (TranscriptionLanguage)language);
+        }
+        
         var query = from record in _repository.Query<PhoneOrderRecord>().Where(x => x.SessionId == callSid)
             join report in _repository.Query<PhoneOrderRecordReport>() on record.Id equals report.RecordId
             where report.Language == (TranscriptionLanguage)language
