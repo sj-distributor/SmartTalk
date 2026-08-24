@@ -54,8 +54,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private readonly TranscriptionCallbackSetting _transcriptionCallbackSetting;
     private readonly SalesSetting _salesSetting;
 
-    public PhoneOrderService(
-        IMapper mapper,
+    public PhoneOrderService(IMapper mapper,
         ICurrentUser currentUser,
         SalesSetting salesSetting,
         IWeChatClient weChatClient,

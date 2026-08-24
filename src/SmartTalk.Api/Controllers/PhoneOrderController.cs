@@ -143,6 +143,15 @@ public class PhoneOrderController : ControllerBase
         
         return Ok(response);
     }
+    
+    [Route("record/report/omePhone"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderRecordReportByOmePhoneResponse))]
+    public async Task<IActionResult> GetPhoneOrderRecordReportByOmePhoneAsync([FromQuery] GetPhoneOrderRecordReportByOmePhoneRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetPhoneOrderRecordReportByOmePhoneRequest, GetPhoneOrderRecordReportByOmePhoneResponse>(request).ConfigureAwait(false);
+        
+        return Ok(response);
+    }
 
     [Route("data/dashboard"), HttpPost]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetPhoneOrderDataDashboardResponse))]

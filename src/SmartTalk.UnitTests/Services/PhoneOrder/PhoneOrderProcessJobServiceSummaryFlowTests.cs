@@ -305,7 +305,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 AiSpeechAssistantDataProvider,
                 PosUtilService,
                 PhoneOrderUtilService,
-                SalesCustomerMatchService);
+                SalesCustomerMatchService,
+                AixvolinkClient);
         }
 
         public PhoneOrderRecord Record { get; }
@@ -349,6 +350,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         public IPhoneOrderUtilService PhoneOrderUtilService { get; } = Substitute.For<IPhoneOrderUtilService>();
 
         public ISalesCustomerMatchService SalesCustomerMatchService { get; } = Substitute.For<ISalesCustomerMatchService>();
+        
+        public IAixvolinkClient AixvolinkClient { get; } = Substitute.For<IAixvolinkClient>();
     }
 
     private sealed class TestPhoneOrderProcessJobService : PhoneOrderProcessJobService
@@ -375,7 +378,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
             IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
             IPosUtilService posUtilService,
             IPhoneOrderUtilService phoneOrderUtilService,
-            ISalesCustomerMatchService salesCustomerMatchService)
+            ISalesCustomerMatchService salesCustomerMatchService,
+            IAixvolinkClient aixvolinkClient)
             : base(
                 salesClient,
                 ffmpegService,
@@ -396,7 +400,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 aiSpeechAssistantDataProvider,
                 posUtilService,
                 phoneOrderUtilService,
-                salesCustomerMatchService)
+                salesCustomerMatchService,
+                aixvolinkClient)
         {
         }
 
