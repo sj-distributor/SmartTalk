@@ -51,6 +51,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
     private readonly IPhoneOrderUtilService _phoneOrderUtilService;
     private readonly ISalesCustomerMatchService _salesCustomerMatchService;
+    private readonly IAixvolinkClient _aixvolinkClient;
 
     public PhoneOrderProcessJobService(
         ISalesClient salesClient,
@@ -74,7 +75,8 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         TwilioSettings twilioSettings,
         ISalesCustomerMatchService salesCustomerMatchService,
         IPosDataProvider posDataProvider,
-        ICacheManager cacheManager)
+        ICacheManager cacheManager,
+        IAixvolinkClient aixvolinkClient)
     {
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
@@ -98,6 +100,7 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _salesCustomerMatchService = salesCustomerMatchService;
         _posDataProvider = posDataProvider;
         _cacheManager = cacheManager;
+        _aixvolinkClient = aixvolinkClient;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)

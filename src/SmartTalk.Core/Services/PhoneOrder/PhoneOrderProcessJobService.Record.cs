@@ -9,7 +9,7 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Enums.STT;
 using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json;
+using System.Text.RegularExpressions;
 using Smarties.Messages.DTO.OpenAi;
 using Smarties.Messages.Enums.OpenAi;
 using Smarties.Messages.Requests.Ask;
@@ -29,6 +29,12 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 using System.ClientModel;
 using System.Text.Encodings.Web;
 using System.Diagnostics;
+using System.Text.Json;
+using Newtonsoft.Json;
+using SmartTalk.Core.Domain.Sales;
+using SmartTalk.Core.Services.Sale;
+using SmartTalk.Messages.Dto.Aixvolink;
+using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
 
@@ -65,6 +71,19 @@ public partial class PhoneOrderProcessJobService
         if (record == null) return;
         
         Log.Information("Transcription results : {@results}", callBack.Results);
+
+        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
+
+        var axivolinkRequest = new AixvolinkCallResultsCallbackRequest
+        {
+            RecordId = record.Id,
+            RecordingUrl = record.Url,
+            CallTime = record.CreatedDate,
+            CallerNumber = record.IncomingCallNumber,
+            CalleeNumber = assistant.AnsweringNumber
+        };
+
+        await _aixvolinkClient.CallResultsCallbackAsync(axivolinkRequest, cancellationToken).ConfigureAwait(false);
 
         try
         {

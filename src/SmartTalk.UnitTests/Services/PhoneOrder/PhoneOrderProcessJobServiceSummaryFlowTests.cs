@@ -536,7 +536,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 new TwilioSettings(configuration),
                 SalesCustomerMatchService,
                 PosDataProvider,
-                CacheManager);
+                CacheManager,
+                AixvolinkClient);
         }
 
         public PhoneOrderRecord Record { get; }
@@ -598,6 +599,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
         public IPosDataProvider PosDataProvider { get; } = Substitute.For<IPosDataProvider>();
 
         public ICacheManager CacheManager { get; } = Substitute.For<ICacheManager>();
+        
+        public IAixvolinkClient AixvolinkClient { get; } = Substitute.For<IAixvolinkClient>();
     }
 
     private sealed class TestPhoneOrderProcessJobService : PhoneOrderProcessJobService
@@ -626,7 +629,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
             TwilioSettings twilioSettings,
             ISalesCustomerMatchService salesCustomerMatchService,
             IPosDataProvider posDataProvider,
-            ICacheManager cacheManager)
+            ICacheManager cacheManager,
+            IAixvolinkClient aixvolinkClient)
             : base(
                 salesClient,
                 ffmpegService,
@@ -649,7 +653,8 @@ public class PhoneOrderProcessJobServiceSummaryFlowTests
                 twilioSettings,
                 salesCustomerMatchService,
                 posDataProvider,
-                cacheManager)
+                cacheManager,
+                aixvolinkClient)
         {
         }
 
