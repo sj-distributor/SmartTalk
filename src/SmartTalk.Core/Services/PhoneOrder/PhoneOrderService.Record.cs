@@ -1494,7 +1494,6 @@ public partial class PhoneOrderService
             : await _phoneOrderDataProvider
                 .GetPhoneOrderRecordByOmePhoneAsync(
                     request.CallerNumber,
-                    request.TransferCallNumber,
                     request.CallTime,
                     cancellationToken)
                 .ConfigureAwait(false);
