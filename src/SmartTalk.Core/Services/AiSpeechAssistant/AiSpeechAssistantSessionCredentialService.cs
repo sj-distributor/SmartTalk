@@ -26,6 +26,8 @@ public interface IAiSpeechAssistantSessionCredentialService : IScopedDependency
     Task StoreAsync(AiSpeechAssistantSession session, CancellationToken cancellationToken = default);
 
     Task<AiSpeechAssistantSessionCredential> GetValidAsync(Guid sessionId, CancellationToken cancellationToken = default);
+
+    Task InvalidateAsync(Guid sessionId, CancellationToken cancellationToken = default);
 }
 
 public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssistantSessionCredentialService
@@ -74,7 +76,7 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
         var session = await _dataProvider
             .GetAiSpeechAssistantSessionBySessionIdAsync(sessionId, cancellationToken)
             .ConfigureAwait(false);
-        if (session == null) return null;
+        if (session == null || session.Count > 0) return null;
 
         credential = CreateCredential(session);
         if (!IsValid(credential, sessionId)) return null;
@@ -86,6 +88,14 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
             cancellationToken).ConfigureAwait(false);
 
         return credential;
+    }
+
+    public Task InvalidateAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        return _cacheManager.RemoveAsync(
+            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId),
+            new RedisCachingSetting(),
+            cancellationToken);
     }
 
     private bool IsValid(AiSpeechAssistantSessionCredential credential, Guid sessionId)
