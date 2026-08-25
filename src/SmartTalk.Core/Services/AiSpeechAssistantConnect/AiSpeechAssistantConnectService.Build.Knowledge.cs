@@ -26,8 +26,22 @@ public partial class AiSpeechAssistantConnectService
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
+        ResolveCallQuestion();
 
         Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
+    }
+
+    private void ResolveCallQuestion()
+    {
+        _ctx.Prompt = ResolveCallQuestionPrompt(_ctx.Prompt, _ctx.Question);
+    }
+
+    private static string ResolveCallQuestionPrompt(string prompt, string question)
+    {
+        if (string.IsNullOrEmpty(prompt) || !prompt.Contains("#{question}", StringComparison.OrdinalIgnoreCase))
+            return prompt;
+
+        return prompt.Replace("#{question}", question ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task LoadAssistantInfoAsync(CancellationToken cancellationToken)
