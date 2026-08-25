@@ -5,7 +5,9 @@ public class ExtractedOrderDto
     public string StoreName { get; set; } = string.Empty;
     
     public string StoreNumber { get; set; } = string.Empty;
-    
+
+    public string StoreAddress { get; set; } = string.Empty;
+
     public DateTime DeliveryDate { get; set; }
     
     public bool IsDeleteWholeOrder { get; set; }

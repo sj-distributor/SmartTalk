@@ -718,13 +718,36 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
             }
 
             if (materialOverviewResponse?.Data != null && materialOverviewResponse.Data.Any())
-                historyItems.AddRange(materialOverviewResponse.Data
-                    .SelectMany(x => x.Items ?? [])
-                    .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
-                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)));
+                historyItems.AddRange(BuildHistoryItemsWithCustomerAliases(materialOverviewResponse.Data));
         }
 
         return historyItems;
+    }
+
+    private static IEnumerable<(string Material, string MaterialDesc, DateTime? InvoiceDate)> BuildHistoryItemsWithCustomerAliases(
+        IEnumerable<CustomerMaterialOverviewDto> materialOverviews)
+    {
+        foreach (var overview in materialOverviews ?? [])
+        {
+            var aliasesByLevelCode = (overview.Level5Habits ?? [])
+                .Where(x => !string.IsNullOrWhiteSpace(x.LevelCode5))
+                .GroupBy(x => x.LevelCode5, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First().CustomerLikeNames ?? [], StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in (overview.Items ?? []).Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)))
+            {
+                aliasesByLevelCode.TryGetValue(item.LevelCode5 ?? string.Empty, out var aliases);
+                var aliasText = string.Join(", ", (aliases ?? [])
+                    .Select(x => x.CustomerLikeName)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+                var description = string.IsNullOrWhiteSpace(aliasText)
+                    ? item.MaterialDescription
+                    : $"{item.MaterialDescription} (Aliases: {aliasText})";
+
+                yield return (item.MaterialNumber, description, item.LastInvoiceDate);
+            }
+        }
     }
     
     private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, CancellationToken cancellationToken)

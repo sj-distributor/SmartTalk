@@ -40,7 +40,7 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
 
         if (!string.IsNullOrWhiteSpace(crmToken))
         {
-            var phoneMatch = await MatchByPhonesAsync([primaryPhoneNumber, secondaryPhoneNumber], crmToken, cancellationToken).ConfigureAwait(false);
+            var phoneMatch = await MatchByPhonesAsync([primaryPhoneNumber, secondaryPhoneNumber], storeName, crmToken, cancellationToken).ConfigureAwait(false);
             if (phoneMatch.SoldToIds.Count > 0)
                 return phoneMatch;
 
@@ -107,7 +107,7 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
         }
     }
 
-    private async Task<SalesCustomerMatchResult> MatchByPhonesAsync(IEnumerable<string> phoneNumbers, string crmToken, CancellationToken cancellationToken)
+    private async Task<SalesCustomerMatchResult> MatchByPhonesAsync(IEnumerable<string> phoneNumbers, string storeName, string crmToken, CancellationToken cancellationToken)
     {
         var normalizedPhones = phoneNumbers
             .Select(NormalizePhone)
@@ -140,6 +140,17 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
 
             if (soldToIds.Count == 0) continue;
 
+            var storeMatchedCustomer = MatchCustomerByStoreDetails(customers, storeName);
+            if (storeMatchedCustomer != null)
+            {
+                var storeMatchedSoldToId = NormalizeCustomerId(storeMatchedCustomer.SapId);
+                return new SalesCustomerMatchResult
+                {
+                    SoldToId = storeMatchedSoldToId,
+                    SoldToIds = [storeMatchedSoldToId]
+                };
+            }
+
             return new SalesCustomerMatchResult
             {
                 SoldToId = soldToIds.Count == 1 ? soldToIds[0] : string.Empty,
@@ -148,6 +159,64 @@ public class SalesCustomerMatchService : ISalesCustomerMatchService
         }
 
         return new SalesCustomerMatchResult();
+    }
+
+    private static GetCustomersPhoneNumberDataDto MatchCustomerByStoreDetails(
+        IEnumerable<GetCustomersPhoneNumberDataDto> customers,
+        string storeName)
+    {
+        var query = NormalizeMatchText(storeName);
+        if (string.IsNullOrWhiteSpace(query)) return null;
+
+        var scoredCandidates = (customers ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.SapId))
+            .Select(customer => new
+            {
+                Customer = customer,
+                Score = GetStoreMatchScore(query, customer)
+            })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .ToList();
+
+        if (scoredCandidates.Count == 0) return null;
+
+        var best = scoredCandidates[0];
+        return scoredCandidates.Count == 1 || best.Score > scoredCandidates[1].Score
+            ? best.Customer
+            : null;
+    }
+
+    private static int GetStoreMatchScore(string query, GetCustomersPhoneNumberDataDto customer)
+    {
+        var fields = new[]
+        {
+            customer.RestaurantNameRemark,
+            customer.RestaurantCnName,
+            customer.CustomerName,
+            customer.Street
+        };
+
+        var score = 0;
+        foreach (var field in fields)
+        {
+            var value = NormalizeMatchText(field);
+            if (string.IsNullOrWhiteSpace(value)) continue;
+
+            if (string.Equals(query, value, StringComparison.Ordinal))
+                score += 100;
+            else if (value.Contains(query, StringComparison.Ordinal) || query.Contains(value, StringComparison.Ordinal))
+                score += 50;
+        }
+
+        return score;
+    }
+
+    private static string NormalizeMatchText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+        return new string(value.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
     }
 
     private async Task<SalesCustomerMatchResult> MatchByStoreNameAsync(string storeName, CancellationToken cancellationToken)

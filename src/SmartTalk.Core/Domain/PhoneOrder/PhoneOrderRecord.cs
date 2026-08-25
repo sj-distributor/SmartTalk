@@ -62,6 +62,9 @@ public class PhoneOrderRecord : IEntity
     
     [Column("customer_name"), StringLength(50)]
     public string CustomerName { get; set; }
+
+    [Column("customer_id"), StringLength(50)]
+    public string CustomerId { get; set; }
     
     [Column("comments")]
     public string Comments { get; set; }
