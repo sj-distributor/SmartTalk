@@ -46,7 +46,7 @@ public partial class AiSpeechAssistantConnectService
                 Voice = assistant.ModelVoice ?? "alloy",
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
-                Prompt = prompt,   // 代客致电: 有 instruction 则用作本通指令 (non-breaking)
+                Prompt = prompt,
                 Tools = _ctx.FunctionCalls
                     .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
                     .Select(DeserializeSessionToolContent)
@@ -84,7 +84,7 @@ public partial class AiSpeechAssistantConnectService
 
     private string BuildSessionPrompt()
     {
-        var prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt;
+        var prompt = ResolveCallQuestionSessionPrompt(_ctx.Prompt, _ctx.Instruction, _ctx.Question);
 
         if (!string.IsNullOrWhiteSpace(_ctx.Instruction) &&
             !string.IsNullOrWhiteSpace(_ctx.CustomerItemsPromptValue))
@@ -151,6 +151,12 @@ public partial class AiSpeechAssistantConnectService
         }
 
         return tool;
+    }
+
+    private static string ResolveCallQuestionSessionPrompt(string prompt, string instruction, string question)
+    {
+        var effectivePrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : prompt;
+        return ResolveCallQuestionPrompt(effectivePrompt, question);
     }
 
     private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)
