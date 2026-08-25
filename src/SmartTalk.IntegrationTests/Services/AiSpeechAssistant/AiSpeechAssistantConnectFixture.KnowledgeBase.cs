@@ -46,7 +46,7 @@ public partial class AiSpeechAssistantConnectFixture
             await repository.InsertAsync(new AiSpeechAssistantKnowledge
             {
                 AssistantId = assistant.Id,
-                Prompt = "Profile: #{user_profile}. Time: #{current_time}. Phone: #{customer_phone}. Date: #{pst_date}. Question: #{question}.",
+                Prompt = "Profile: #{user_profile}. Time: #{current_time}. Phone: #{customer_phone}. Date: #{pst_date}.",
                 IsActive = true, Version = "1.0"
             });
             await repository.InsertAsync(new Core.Domain.AIAssistant.AiSpeechAssistantUserProfile
@@ -92,13 +92,13 @@ public partial class AiSpeechAssistantConnectFixture
         sessionUpdate.ShouldNotContain("#{current_time}");
         sessionUpdate.ShouldNotContain("#{customer_phone}");
         sessionUpdate.ShouldNotContain("#{pst_date}");
-        sessionUpdate.ShouldNotContain("#{question}");
     }
 
     [Fact]
     public async Task ShouldUseInstructionAsPrompt_WhenConnectCommandHasInstruction()
     {
-        // 保留既有调用契约: Instruction 有值时继续覆盖 DB Assistant prompt。
+        // 代客致电 (KitchChat AI Call): connect URL 带 ?instruction= 时, 发给 OpenAI 的 session 指令应是该 instruction,
+        // 而不是 DB assistant prompt (non-breaking 覆盖)。无 instruction 时 ShouldReplacePromptVariables 已覆盖 = 照旧用 DB prompt。
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
             var agent = new Agent
@@ -157,79 +157,8 @@ public partial class AiSpeechAssistantConnectFixture
 
         openaiWs.SentMessages.ShouldNotBeEmpty();
         var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
-        sessionUpdate.ShouldContain("INSTRUCTION_MARKER_use_this_as_prompt");
-        sessionUpdate.ShouldNotContain("DB_PROMPT_MARKER_should_be_overridden");
-    }
-
-    [Fact]
-    public async Task ShouldDecodeAndReplaceQuestionInAssistantPrompt_WhenConnectCommandHasEncodedQuestion()
-    {
-        // 代客致电只替换 Assistant knowledge prompt 中的 #{question}; 固定 persona 与通话流程仍来自 DB prompt。
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var agent = new Agent
-            {
-                Name = "TestAgent", IsReceiveCall = true, Type = AgentType.Assistant, ServiceHours = null
-            };
-            await repository.InsertAsync(agent);
-
-            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
-            {
-                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
-                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
-            };
-            await repository.InsertAsync(assistant);
-            await unitOfWork.SaveChangesAsync();
-
-            await repository.InsertAsync(new AgentAssistant { AgentId = agent.Id, AssistantId = assistant.Id });
-            await repository.InsertAsync(new AiSpeechAssistantKnowledge
-            {
-                AssistantId = assistant.Id,
-                Prompt = "DB_PROMPT_MARKER_before_question\n#{question}\nDB_PROMPT_MARKER_after_question",
-                IsActive = true, Version = "1.0"
-            });
-        });
-
-        var twilioWs = new MockWebSocket();
-        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
-        {
-            @event = "start",
-            start = new { callSid = "CA_INSTR", streamSid = "MZ_INSTR" }
-        }));
-
-        var openaiWs = CreateProviderMock();
-        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
-
-        const string question = "1. What time do you close today?\n2. Is there a wait for four people?";
-        var encodedQuestion = Convert.ToBase64String(Encoding.UTF8.GetBytes(question))
-            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-        var command = new ConnectAiSpeechAssistantCommand
-        {
-            From = TestCallerNumber,
-            To = TestDidNumber,
-            Host = TestHost,
-            EncodedQuestion = encodedQuestion,
-            TwilioWebSocket = twilioWs
-        };
-
-        await Run<IMediator>(async mediator =>
-        {
-            await mediator.SendAsync(command);
-        }, builder =>
-        {
-            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
-            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            openaiWs.Register(builder);
-        });
-
-        openaiWs.SentMessages.ShouldNotBeEmpty();
-        var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
-        sessionUpdate.ShouldContain("DB_PROMPT_MARKER_before_question");
-        sessionUpdate.ShouldContain("1. What time do you close today?");
-        sessionUpdate.ShouldContain("2. Is there a wait for four people?");
-        sessionUpdate.ShouldContain("DB_PROMPT_MARKER_after_question");
-        sessionUpdate.ShouldNotContain("#{question}");
+        sessionUpdate.ShouldContain("INSTRUCTION_MARKER_use_this_as_prompt");          // 用了 instruction
+        sessionUpdate.ShouldNotContain("DB_PROMPT_MARKER_should_be_overridden");       // 没用 DB prompt
     }
 
     [Fact]
