@@ -14,6 +14,7 @@ public partial class AiSpeechAssistantConnectService
         AssistantId = command.AssistantId,
         NumberId = command.NumberId,
         Instruction = command.Instruction,
+        Question = command.Question,
         TwilioWebSocket = command.TwilioWebSocket,
         OrderRecordType = command.OrderRecordType,
         LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = command.From }

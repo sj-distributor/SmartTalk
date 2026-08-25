@@ -55,12 +55,17 @@ public class AiSpeechAssistantController : ControllerBase
     
     [AllowAnonymous]
     [HttpGet("outbound/connect")]
-    [HttpGet("outbound/connect/{from}/{to}/{id}/{numberId}")]
-    public async Task OutboundConnectAiSpeechAssistantAsync(string from, string to, int id, int numberId, [FromQuery] string instruction = null)
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/question/{encodedQuestion}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}/question/{encodedQuestion}")]
+    public async Task OutboundConnectAiSpeechAssistantAsync(
+        string from, string to, int id, int? numberId = null, string encodedQuestion = null, [FromQuery] string instruction = null)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {numberId}", from, to, id, numberId);
+            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {numberId}, hasInstruction: {HasInstruction}, hasQuestion: {HasQuestion}",
+                from, to, id, numberId, !string.IsNullOrWhiteSpace(instruction), !string.IsNullOrWhiteSpace(encodedQuestion));
             var command = new ConnectAiSpeechAssistantCommand
             {
                 From = from,
@@ -69,6 +74,7 @@ public class AiSpeechAssistantController : ControllerBase
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
                 Instruction = instruction,
+                EncodedQuestion = encodedQuestion,
                 TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 OrderRecordType = PhoneOrderRecordType.OutBount,
             };
