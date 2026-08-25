@@ -127,27 +127,25 @@ public partial class PhoneOrderDataProvider
         List<DialogueScenarios> scenarios = null, int? assistantId = null, List<string> orderIds = null,
         CancellationToken cancellationToken = default)
     {
-        var agentsQuery = from agent in _repository.Query<Agent>()
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into
+        var agentsQuery = from agent in _repository.QueryNoTracking<Agent>()
+            join agentAssistant in _repository.QueryNoTracking<AgentAssistant>() on agent.Id equals agentAssistant.AgentId into
                 agentAssistantGroups
             from agentAssistant in agentAssistantGroups.DefaultIfEmpty()
-            join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on
+            join assistant in _repository.QueryNoTracking<Domain.AISpeechAssistant.AiSpeechAssistant>() on
                 agentAssistant.AssistantId equals assistant.Id into assistantGroups
             from assistant in assistantGroups.DefaultIfEmpty()
             where (agentIds == null || !agentIds.Any() || agentIds.Contains(agent.Id)) &&
                   (string.IsNullOrEmpty(name) || assistant == null || assistant.Name.Contains(name))
-            select agent;
+            select agent.Id;
         Log.Information("GetPhoneOrderRecordsAsync: agentIds: {@agentIds}", agentIds);
 
-        var agents = (await agentsQuery.ToListAsync(cancellationToken).ConfigureAwait(false)).Select(x => x.Id).Distinct().ToList();
+        var agents = await agentsQuery.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
 
         if (agents.Count == 0) return [];
         
-        var query = from record in _repository.Query<PhoneOrderRecord>()
+        var query = from record in _repository.QueryNoTracking<PhoneOrderRecord>()
             where record.Status == PhoneOrderRecordStatus.Sent && agents.Contains(record.AgentId)
             select record;
-
-        Log.Information("GetPhoneOrderRecordsAsync: recordCount: {@RecordCount}", query.Count());
 
         if (scenarios is { Count: > 0 })
         {

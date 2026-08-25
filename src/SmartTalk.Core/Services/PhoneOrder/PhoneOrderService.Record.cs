@@ -1397,17 +1397,19 @@ public partial class PhoneOrderService
         var unreviewedRecordIds = await _posDataProvider.GetAiDraftOrderRecordIdsByRecordIdsAsync(recordIds, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         var reservationRecordIds = records.Where(x => x.Scenario is DialogueScenarios.Reservation or DialogueScenarios.InformationNotification or DialogueScenarios.ThirdPartyOrderNotification).Select(x => x.Id).ToList();
-        var unreviewedReservationRecordIds = await _phoneOrderDataProvider.GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(reservationRecordIds, cancellationToken).ConfigureAwait(false);
+        var unreviewedReservationRecordIds = reservationRecordIds.Count == 0
+            ? []
+            : await _phoneOrderDataProvider.GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(reservationRecordIds, cancellationToken).ConfigureAwait(false);
         
         Log.Information("Get store unreview record ids: {@UnreviewedRecordIds}", unreviewedRecordIds);
         
         var result = unreviewedReservationRecordIds
             .Union(unreviewedRecordIds)
-            .ToList();
+            .ToHashSet();
         
         records.ForEach(x => x.IsUnreviewed = result.Contains(x.Id));
         
-        Log.Information("Enrich complete records: {@Records}", records);
+        Log.Information("Enrich complete records count: {RecordCount}, unreviewed count: {UnreviewedCount}", records.Count, result.Count);
     }
     
     public async Task<GetPhoneOrderRecordScenarioResponse> GetPhoneOrderRecordScenarioAsync(GetPhoneOrderRecordScenarioRequest request, CancellationToken cancellationToken)
