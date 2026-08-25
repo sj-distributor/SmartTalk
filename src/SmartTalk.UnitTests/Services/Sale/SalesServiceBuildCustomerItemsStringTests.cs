@@ -187,4 +187,32 @@ public class SalesServiceBuildCustomerItemsStringTests
         overviewRequests[1].ShouldBe(customerIds.Skip(10).Take(10).ToList());
         overviewRequests[2].ShouldBe(customerIds.Skip(20).ToList());
     }
+
+    [Fact]
+    public async Task BuildDeliveryProgressListAsync_ShouldRenderEstimatedDeliveryTimeInPst()
+    {
+        var crmClient = Substitute.For<ICrmClient>();
+        var salesClient = Substitute.For<ISalesClient>();
+
+        salesClient.GetOrderArrivalTimeAsync(Arg.Any<GetOrderArrivalTimeRequestDto>(), Arg.Any<CancellationToken>())
+            .Returns(new GetOrderArrivalTimeResponseDto
+            {
+                Data =
+                [
+                    new GetOrderArrivalTimeDataDto
+                    {
+                        CustomerId = "000010001",
+                        SalesOrderNumber = "SO-1",
+                        OrderStatus = 4,
+                        EstimatedDeliveryTime = new DateTime(2026, 8, 25, 20, 30, 0, DateTimeKind.Utc)
+                    }
+                ]
+            });
+
+        var service = new SalesService(crmClient, salesClient);
+
+        var result = await service.BuildDeliveryProgressListAsync(["10001"], CancellationToken.None);
+
+        result.ShouldContain("预计送到时间：2026-08-25 13:30:00");
+    }
 }

@@ -276,7 +276,6 @@ public partial class AiSpeechAssistantConnectService
 
         _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_progress}", deliveryProgressText);
     }
-
     private void PrepareCustomerItemsPromptTemplate()
     {
         if (!_ctx.Prompt.Contains(CustomerItemsPromptMarker, StringComparison.Ordinal)) return;
@@ -297,6 +296,7 @@ public partial class AiSpeechAssistantConnectService
 
         return _ctx.Prompt;
     }
+
 
     // ── Menu items ────────────────────────────────────────────────────────
 
@@ -802,6 +802,25 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
+    private List<string> GetAssistantSoldToIds()
+    {
+        if (string.IsNullOrWhiteSpace(_ctx.Assistant?.Name))
+            return [];
+
+        var soldToIds = new List<string>();
+
+        foreach (var soldToId in _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmedSoldToId = soldToId.Trim();
+            if (string.IsNullOrWhiteSpace(trimmedSoldToId)) continue;
+            if (soldToIds.Contains(trimmedSoldToId, StringComparer.OrdinalIgnoreCase)) continue;
+
+            soldToIds.Add(trimmedSoldToId);
+        }
+
+        return soldToIds;
+    }
+
     // ── Delivery info (CRM 送货日 / delivery_info) ─────────────────────────
 
     private sealed record DeliveryInfoFetchResult(string DeliveryValue);
@@ -826,25 +845,6 @@ public partial class AiSpeechAssistantConnectService
         if (result == null) return;
 
         _ctx.Prompt = ApplyDeliveryInfoTokens(_ctx.Prompt, result.DeliveryValue);
-    }
-
-    private List<string> GetAssistantSoldToIds()
-    {
-        if (string.IsNullOrWhiteSpace(_ctx.Assistant?.Name))
-            return [];
-
-        var soldToIds = new List<string>();
-
-        foreach (var soldToId in _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var trimmedSoldToId = soldToId.Trim();
-            if (string.IsNullOrWhiteSpace(trimmedSoldToId)) continue;
-            if (soldToIds.Contains(trimmedSoldToId, StringComparer.OrdinalIgnoreCase)) continue;
-
-            soldToIds.Add(trimmedSoldToId);
-        }
-
-        return soldToIds;
     }
 
     /// <summary>
