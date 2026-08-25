@@ -98,7 +98,28 @@ public class AiResourceSyncService : IAiResourceSyncService
 
     public async Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
-        var inputContext = await LoadSyncInputContextAsync(command, cancellationToken).ConfigureAwait(false);
+        var company = await GetSalesCompanyAsync(cancellationToken).ConfigureAwait(false);
+        if (!command.IsManual)
+        {
+            var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(
+                companyId: company.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var preflightStats = new AiResourceSyncExecutionStatsDto();
+            if (!TryValidateAutomaticSyncLanguageMappings(mappings, preflightStats))
+            {
+                Log.Warning("CRM sync skipped because automatic sync scene mappings are incomplete. CompanyId={CompanyId}", company.Id);
+
+                return new AiResourceSyncExecutionResult
+                {
+                    TotalCount = 0,
+                    ShardCount = 0,
+                    Shards = [],
+                    Stats = preflightStats,
+                    IsInitialRelease = false
+                };
+            }
+        }
+
+        var inputContext = await LoadSyncInputContextAsync(command, company, cancellationToken).ConfigureAwait(false);
         Log.Information("CRM sync start. Customers={CustomerCount}, IsFullSync={IsFullSync}, IsInitialRelease={IsInitialRelease}", inputContext.Customers.Count, inputContext.IsFullSync, inputContext.IsInitialRelease);
 
         if (inputContext.Customers.Count == 0)
@@ -113,7 +134,9 @@ public class AiResourceSyncService : IAiResourceSyncService
             };
         }
 
-        var executionContext = await BuildSyncExecutionContextAsync(inputContext.Company, inputContext.CustomerGroups, cancellationToken).ConfigureAwait(false);
+        var sourceSceneLookup = await BuildSourceSceneLookupAsync(inputContext.Company.Id, cancellationToken).ConfigureAwait(false);
+        var executionContext = await BuildSyncExecutionContextAsync(
+            inputContext.Company, inputContext.CustomerGroups, sourceSceneLookup, cancellationToken).ConfigureAwait(false);
         var shardResults = await ExecuteShardSyncAsync(command, inputContext, executionContext, cancellationToken).ConfigureAwait(false);
         await FinalizeSyncAsync(inputContext, executionContext.AssistantContext, cancellationToken).ConfigureAwait(false);
 
@@ -127,9 +150,9 @@ public class AiResourceSyncService : IAiResourceSyncService
         };
     }
     
-    private async Task<AiResourceSyncInputContext> LoadSyncInputContextAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
+    private async Task<AiResourceSyncInputContext> LoadSyncInputContextAsync(AiResourceSyncCommand command, Company company, CancellationToken cancellationToken)
     {
-        var customerLoadResult = await LoadSyncCustomersAsync(command, cancellationToken).ConfigureAwait(false);
+        var customerLoadResult = await LoadSyncCustomersAsync(command, company, cancellationToken).ConfigureAwait(false);
         var customers = customerLoadResult.Customers;
         var customerGroups = AiResourceSyncGrouping.BuildCustomerGroups(customers);
 
@@ -146,13 +169,12 @@ public class AiResourceSyncService : IAiResourceSyncService
         };
     }
 
-    private async Task<AiResourceSyncExecutionContext> BuildSyncExecutionContextAsync(Company company, List<CrmSalesAutoSyncCustomerGroup> customerGroups, CancellationToken cancellationToken)
+    private async Task<AiResourceSyncExecutionContext> BuildSyncExecutionContextAsync(Company company, List<CrmSalesAutoSyncCustomerGroup> customerGroups, SourceSceneLookup sourceSceneLookup, CancellationToken cancellationToken)
     {
         var existingCrmAssistants = await LoadExistingCrmAssistantsAsync(company.Id, cancellationToken).ConfigureAwait(false);
         var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
         Log.Information("Stores loaded. Count={StoreCount}", existingStores.Count);
 
-        var sourceSceneLookup = await BuildSourceSceneLookupAsync(company.Id, cancellationToken).ConfigureAwait(false);
         Log.Information("Scenes loaded. Count={SceneCount}", sourceSceneLookup.MappingScenes.Count);
 
         if (company.Name.Equals(_salesSetting.CompanyName, StringComparison.OrdinalIgnoreCase) && sourceSceneLookup.MappingScenes.Count == 0)
@@ -304,11 +326,17 @@ public class AiResourceSyncService : IAiResourceSyncService
             .ToList();
     }
 
-    private async Task<AiResourceSyncCustomerLoadResult> LoadSyncCustomersAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
+    private async Task<Company> GetSalesCompanyAsync(CancellationToken cancellationToken)
     {
         var company = await _posDataProvider.GetPosCompanyByNameAsync(_salesSetting.CompanyName, cancellationToken).ConfigureAwait(false);
         if (company == null) throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
 
+        return company;
+    }
+
+    private async Task<AiResourceSyncCustomerLoadResult> LoadSyncCustomersAsync(
+        AiResourceSyncCommand command, Company company, CancellationToken cancellationToken)
+    {
         var isInitialRelease = command.IsFullSync && !await _aiSpeechAssistantDataProvider.HasCrmAutoSyncAssistantsInCompanyAsync(company.Id, cancellationToken).ConfigureAwait(false);
 
         if (isInitialRelease || command.IsFullSync)
@@ -1543,5 +1571,21 @@ public class AiResourceSyncService : IAiResourceSyncService
         {
             return names;
         }
+    }
+    
+    private static bool TryValidateAutomaticSyncLanguageMappings(
+        List<KnowledgeSceneLanguageMapping> mappings, AiResourceSyncExecutionStatsDto stats)
+    {
+        var missingLanguages = Enum.GetValues<AutoAddLanguage>()
+            .Where(language => mappings.All(x => x.Language != language))
+            .ToList();
+
+        if (missingLanguages.Count == 0)
+            return true;
+
+        var missingLanguageNames = string.Join(", ", missingLanguages);
+        stats.Warnings.Add(
+            $"Automatic CRM sync skipped because these languages have no active scene mapping: {missingLanguageNames}.");
+        return false;
     }
 }
