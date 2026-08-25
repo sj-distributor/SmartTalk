@@ -11,6 +11,10 @@ public partial class RealtimeAiService
 
     private async Task SendToClientAsync(object payload)
     {
+        // null payload signals the client adapter chose to drop the frame
+        // (e.g. Twilio adapter when streamSid is not yet known). Skip the send.
+        if (payload is null) return;
+
         if (_ctx.WebSocket is not { State: WebSocketState.Open }) return;
 
         await _ctx.WsSendLock.WaitAsync(_ctx.SessionCts?.Token ?? CancellationToken.None).ConfigureAwait(false);

@@ -1,4 +1,4 @@
-using System.Text;
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.Sales;
 using SmartTalk.Messages.Dto.Sales;
@@ -7,6 +7,8 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ISalesClient : IScopedDependency
 {
+    Task<GetCustomerMaterialOverviewResponseDto> GetCustomerMaterialOverviewAsync(GetCustomerMaterialOverviewRequestDto request, CancellationToken cancellationToken);
+
     Task<GetAskInfoDetailListByCustomerResponseDto> GetAskInfoDetailListByCustomerAsync(GetAskInfoDetailListByCustomerRequestDto request, CancellationToken cancellationToken);
     
     Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken);
@@ -14,10 +16,18 @@ public interface ISalesClient : IScopedDependency
     Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken);
     
     Task<GetOrderArrivalTimeResponseDto> GetOrderArrivalTimeAsync(GetOrderArrivalTimeRequestDto request, CancellationToken cancellationToken);
-    
-    Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken); 
+
+    Task<GetCustomerNumbersByNameResponseDto> GetCustomerNumbersByNameAsync(GetCustomerNumbersByNameRequestDto request, CancellationToken cancellationToken);
 
     Task<GetCustomerLevel5HabitResponseDto> GetCustomerLevel5HabitAsync(GetCustomerLevel5HabitRequstDto request, CancellationToken cancellationToken);
+
+    Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken);
+
+    Task<GetAiOrderItemsByDeliveryDateResponseDto> GetAiOrderItemsByDeliveryDateAsync(GetAiOrderItemsByDeliveryDateRequestDto request, CancellationToken cancellationToken);
+
+    Task<QueryGoodsStatusResponseDto> QueryGoodsStatusAsync(QueryGoodsStatusRequestDto request, CancellationToken cancellationToken);
+
+    Task<GetOrderInformationByCustomerIdResponseDto> GetOrderInformationByCustomerIdAsync(GetOrderInformationByCustomerIdRequestDto request, CancellationToken cancellationToken);
 }
 
 public class SalesClient : ISalesClient
@@ -43,29 +53,63 @@ public class SalesClient : ISalesClient
 
     public async Task<GetAskInfoDetailListByCustomerResponseDto> GetAskInfoDetailListByCustomerAsync(GetAskInfoDetailListByCustomerRequestDto request, CancellationToken cancellationToken)
     {
-        if (request.CustomerNumbers == null || request.CustomerNumbers.Count == 0)
+        var customerNumbers = NormalizeCustomerNumbers(request?.CustomerNumbers);
+        if (customerNumbers.Count == 0)
             throw new ArgumentException("CustomerNumbers cannot be null or empty.");
-        
-        var queryString = new StringBuilder("?");
-        
-        foreach (var customerNumber in request.CustomerNumbers)
-        {
-            queryString.Append("CustomerNumbers=").Append(Uri.EscapeDataString(customerNumber)).Append('&');
-        }
-        
-        var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAskInfoDetailListByCustomer" + queryString.ToString().TrimEnd('&');
 
-        return await _httpClientFactory.GetAsync<GetAskInfoDetailListByCustomerResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await _httpClientFactory.PostAsJsonAsync<GetAskInfoDetailListByCustomerResponseDto>(
+                $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAskInfoDetailListByCustomer",
+                new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = customerNumbers },
+                headers: _headers,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<GetCustomerMaterialOverviewResponseDto> GetCustomerMaterialOverviewAsync(GetCustomerMaterialOverviewRequestDto request, CancellationToken cancellationToken)
+    {
+        var customerNumbers = NormalizeCustomerNumbers(request?.CustomerNumbers);
+        if (customerNumbers.Count == 0)
+            throw new ArgumentException("CustomerNumbers cannot be null or empty.");
+
+        return await _httpClientFactory.PostAsJsonAsync<GetCustomerMaterialOverviewResponseDto>(
+                $"{_salesSetting.BaseUrl}/api/SalesOrder/GetCustomerMaterialOverview",
+                new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = customerNumbers },
+                headers: _headers,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(request.CustomerNumber))
+        var customerNumbers = ResolveOrderHistoryCustomerNumbers(request);
+        if (customerNumbers.Count == 0)
             throw new ArgumentException("CustomerNumbers cannot be null or empty.");
-        
-        var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetOrderHistoryByCustomer?customerNumber={request.CustomerNumber}";
-        
-        return await _httpClientFactory.GetAsync<GetOrderHistoryByCustomerResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return await _httpClientFactory.PostAsJsonAsync<GetOrderHistoryByCustomerResponseDto>(
+                $"{_salesSetting.BaseUrl}/api/SalesOrder/GetOrderHistoryByCustomer",
+                new GetOrderHistoryByCustomerRequestDto { CustomerNumbers = customerNumbers },
+                headers: _headers,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static List<string> ResolveOrderHistoryCustomerNumbers(GetOrderHistoryByCustomerRequestDto request)
+    {
+        var customerNumbers = request?.CustomerNumbers ?? Enumerable.Empty<string>();
+
+        if (!string.IsNullOrWhiteSpace(request?.CustomerNumber))
+            customerNumbers = customerNumbers.Append(request.CustomerNumber);
+
+        return NormalizeCustomerNumbers(customerNumbers);
+    }
+
+    private static List<string> NormalizeCustomerNumbers(IEnumerable<string> customerNumbers)
+    {
+        return (customerNumbers ?? Enumerable.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public async Task<SalesResponseDto> GenerateAiOrdersAsync(GenerateAiOrdersRequestDto request, CancellationToken cancellationToken)
@@ -102,5 +146,45 @@ public class SalesClient : ISalesClient
         };
         
         return await _httpClientFactory.PostAsJsonAsync<GetCustomerLevel5HabitResponseDto>($"{_salesCustomerHabitSetting.BaseUrl}/api/CustomerInfo/QueryHistoryCustomerLevel5Habit", request, headers: header, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DeleteAiOrderResponseDto> DeleteAiOrderAsync(DeleteAiOrderRequestDto request, CancellationToken cancellationToken)
+    {
+        return await _httpClientFactory.PostAsJsonAsync<DeleteAiOrderResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/DeleteAiOrder", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<GetAiOrderItemsByDeliveryDateResponseDto> GetAiOrderItemsByDeliveryDateAsync(GetAiOrderItemsByDeliveryDateRequestDto request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.CustomerNumber))
+            Log.Information("CustomerNumbers cannot be null or empty.");
+
+        var deliveryDate = request.DeliveryDate.ToString("yyyy-MM-dd");
+
+        var url = $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAiOrderItemsByDeliveryDate" + $"?customerNumber={Uri.EscapeDataString(request.CustomerNumber)}"
+                  + $"&deliveryDate={deliveryDate}" + $"&includePrintedQuantity={request.IncludePrintedQuantity}";
+
+        return await _httpClientFactory.GetAsync<GetAiOrderItemsByDeliveryDateResponseDto>(url, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<QueryGoodsStatusResponseDto> QueryGoodsStatusAsync(QueryGoodsStatusRequestDto request, CancellationToken cancellationToken)
+    {
+        if (request?.List == null || request.List.Count == 0)
+            throw new ArgumentException("List cannot be null or empty.");
+
+        var url = $"{_salesSetting.BaseUrl}/api/GoodsStatus/QueryGoodsStatus";
+
+        var response = await _httpClientFactory.PostAsJsonAsync<QueryGoodsStatusResponseDto>(url, request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return response;
+    }
+
+    public async Task<GetOrderInformationByCustomerIdResponseDto> GetOrderInformationByCustomerIdAsync(GetOrderInformationByCustomerIdRequestDto request, CancellationToken cancellationToken)
+    {
+        if (request?.CustomerIds == null || request.CustomerIds.Count == 0)
+            throw new ArgumentException("CustomerIds cannot be null or empty.");
+
+        var url = $"{_salesSetting.BaseUrl}/api/SmartalkAI/GetOrderInformationByCustomerId";
+
+        return await _httpClientFactory.PostAsJsonAsync<GetOrderInformationByCustomerIdResponseDto>(url, request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

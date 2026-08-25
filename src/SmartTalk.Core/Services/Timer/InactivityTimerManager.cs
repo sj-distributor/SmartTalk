@@ -67,6 +67,11 @@ public class InactivityTimerManager : IInactivityTimerManager
         try
         {
             await Task.Delay(entry.Timeout, entry.Cts.Token).ConfigureAwait(false);
+            
+            // The timer may have been replaced for the same sessionId while this task
+            // was waiting. Only the current active entry is allowed to invoke callback.
+            if (!_timers.TryGetValue(sessionId, out var activeEntry) || !ReferenceEquals(activeEntry, entry)) return;
+            
             await entry.OnTimeout().ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
@@ -80,10 +85,9 @@ public class InactivityTimerManager : IInactivityTimerManager
         }
         finally
         {
-            // Remove only if the current dictionary value is exactly this timer entry.
-            // Prevents an older timer's finally from removing a newer timer for the same session.
-            ((ICollection<KeyValuePair<string, TimerEntry>>)_timers)
-                .Remove(new KeyValuePair<string, TimerEntry>(sessionId, entry));
+            // Remove only if this exact entry is still mapped. Avoid deleting a newer
+            // timer that might have been started for the same session in the meantime.
+            _timers.TryRemove(new KeyValuePair<string, TimerEntry>(sessionId, entry));
         }
     }
 }

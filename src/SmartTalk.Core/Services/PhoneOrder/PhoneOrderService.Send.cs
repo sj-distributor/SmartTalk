@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.WeChat;
 using SmartTalk.Messages.Commands.PhoneOrder;
 using SmartTalk.Messages.Enums.WeChat;
@@ -94,7 +95,7 @@ public partial class PhoneOrderService : IPhoneOrderService
     private static (DateTimeOffset today, DateTimeOffset yesterday) PstTime()
     {
         var utcNow = DateTimeOffset.UtcNow;
-        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        var pstZone = PstTimeZone.Get();
 
         var today = TimeZoneInfo.ConvertTime(utcNow, pstZone);
         var yesterday = today.AddDays(-1);

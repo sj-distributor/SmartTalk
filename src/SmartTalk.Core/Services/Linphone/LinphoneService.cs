@@ -5,6 +5,7 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.Linphone;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Linphone;
 using SmartTalk.Messages.Enums.Linphone;
 using SmartTalk.Messages.Requests.Linphone;
@@ -256,7 +257,7 @@ public class LinphoneService : ILinphoneService
     public async Task<GetLinphoneDataResponse> GetLinphoneDataAsync(GetLinphoneDataRequest request, CancellationToken cancellationToken)
     {
         var specifiedDate = request.Time.Date;
-        var pstOffset = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles").GetUtcOffset(specifiedDate);
+        var pstOffset = PstTimeZone.Get().GetUtcOffset(specifiedDate);
         var startPst = new DateTimeOffset(specifiedDate, pstOffset);
         var endPst = startPst.AddDays(1);
 
@@ -276,7 +277,7 @@ public class LinphoneService : ILinphoneService
 
             var linphoneDates = new List<LinphoneData>();
             
-            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+            var pacificZone = PstTimeZone.Get();
             
             var tasks = externalLinphoneGroupedCdrs.Select(async group =>
             {

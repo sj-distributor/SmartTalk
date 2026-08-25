@@ -20,7 +20,7 @@ public class AutoTestMapping : Profile
         
 
         CreateMap<ExtractedOrderItemDto, AutoTestInputDetail>()
-            .ForMember(dest => dest.ItemName, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.ItemName, opt => opt.MapFrom(src => src.AiMaterialDesc))
             .ForMember(dest => dest.Quantity, opt => opt.MapFrom(src => src.Quantity))
             .ForMember(dest => dest.ItemId, opt => opt.MapFrom(src => src.MaterialNumber));
         

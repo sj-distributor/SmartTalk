@@ -165,6 +165,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<AiSpeechAssistantKnowledgeDetail>  GetAiSpeechAssistantKnowledgeDetailByDetailIdAsync(int detailId, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledgeDetail>> GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
+    
+    Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgeAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -200,7 +202,13 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
         var result = await assistantInfo.FirstOrDefaultAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return (result.assistant, result.knowledge, result.userProfile);
+        // Use null-conditional access so a no-match (FirstOrDefaultAsync returns null on the
+        // anonymous projection) yields a (null, null, null) tuple instead of NRE'ing on
+        // `result.assistant`. Callers that assume non-null tuple elements (V1) keep their
+        // existing crash semantics — they will now NRE on the next deref of the returned
+        // null instead of inside this method, which is functionally equivalent. Callers that
+        // null-check (V2's LoadAssistantInfoAsync) can react cleanly.
+        return (result?.assistant, result?.knowledge, result?.userProfile);
     }
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByNumbersAsync(string didNumber, CancellationToken cancellationToken)
@@ -406,11 +414,24 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
     public async Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AiSpeechAssistantKnowledge>()
+        var knowledges = await _repository.Query<AiSpeechAssistantKnowledge>()
             .Where(x => x.AssistantId == assistantId)
-            .OrderByDescending(x => x.Version)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return knowledges
+            .OrderByDescending(x => ParseKnowledgeVersion(x.Version))
             .ThenByDescending(x => x.CreatedDate)
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            .FirstOrDefault();
+    }
+
+    private static (int Major, int Minor) ParseKnowledgeVersion(string version)
+    {
+        var versionParts = version?.Split('.');
+        return versionParts?.Length == 2
+               && int.TryParse(versionParts[0], out var major)
+               && int.TryParse(versionParts[1], out var minor)
+            ? (major, minor)
+            : (-1, -1);
     }
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken)
@@ -918,5 +939,13 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         var query = _repository.Query<AiSpeechAssistantKnowledgeDetail>().Where(x => knowledgeIds.Contains(x.KnowledgeId));
 
         return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    
+    public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgeAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default)
+    {
+        if (knowledgeIds == null || !knowledgeIds.Any())
+            return new List<AiSpeechAssistantKnowledge>();
+
+        return await _repository.Query<AiSpeechAssistantKnowledge>().Where(k => knowledgeIds.Contains(k.Id)).ToListAsync(cancellationToken);
     }
 }

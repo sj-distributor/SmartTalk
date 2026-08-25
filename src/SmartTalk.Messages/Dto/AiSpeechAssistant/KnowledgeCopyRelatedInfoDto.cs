@@ -11,4 +11,6 @@ public class KnowledgeCopyRelatedInfoDto
     public int KnowledgeId { get; set; }
     
     public string AiAgentName { get; set; }
+
+    public List<AiSpeechAssistantKnowledgeSceneRelationDto> SceneRelations { get; set; } = new();
 }

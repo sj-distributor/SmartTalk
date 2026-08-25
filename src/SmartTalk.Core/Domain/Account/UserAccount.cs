@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Security;
 using SmartTalk.Core.Domain.System;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.Pos;
 using SmartTalk.Messages.Enums;
@@ -17,7 +18,7 @@ namespace SmartTalk.Core.Domain.Account
         public UserAccount()
         {
             Uuid = Guid.NewGuid();
-            CreatedOn = new DateTimeOffset(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles")).DateTime, TimeSpan.Zero);
+            CreatedOn = new DateTimeOffset(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get()).DateTime, TimeSpan.Zero);
             ModifiedOn = DateTimeOffset.Now;
         }
         

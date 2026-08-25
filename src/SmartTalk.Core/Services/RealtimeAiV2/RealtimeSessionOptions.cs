@@ -58,9 +58,12 @@ public class RealtimeAiModelConfig
     public object TurnDetection { get; set; }
 
     /// <summary>
-    /// OpenAI-specific input audio noise reduction configuration. Ignored by other providers.
+    /// Vendor-specific model options, carried opaquely so this shared config stays vendor-agnostic.
+    /// The consumer sets a vendor-owned options object (e.g. <c>OpenAiRealtimeModelOptions</c>) and the
+    /// matching inference adapter casts and reads it; other adapters ignore it. Null when the provider
+    /// needs no extra options.
     /// </summary>
-    public object InputAudioNoiseReduction { get; set; }
+    public object VendorOptions { get; set; }
 }
 
 /// <summary>
@@ -108,6 +111,8 @@ public class RealtimeSessionOptions
     
     public RealtimeAiModelConfig ModelConfig { get; set; }
 
+    public RealtimeAiTtsConfig TtsConfig { get; set; }
+
     public RealtimeAiConnectionProfile ConnectionProfile { get; set; }
 
     public WebSocket WebSocket { get; set; }
@@ -118,6 +123,12 @@ public class RealtimeSessionOptions
     /// When true, the service buffers all audio (user + AI) and produces a WAV file on session end.
     /// </summary>
     public bool EnableRecording { get; set; }
+
+    /// <summary>
+    /// Optional hard cap for the entire realtime session. When reached, the service
+    /// closes the client WebSocket and runs the normal session cleanup flow.
+    /// </summary>
+    public TimeSpan? MaxSessionDuration { get; set; }
 
     /// <summary>
     /// Optional idle follow-up configuration. When set, AI will proactively
@@ -173,6 +184,15 @@ public class RealtimeSessionOptions
     /// Parameters: (sessionId, wavBytes).
     /// </summary>
     public Func<string, byte[], Task> OnRecordingCompleteAsync { get; set; }
+
+    /// <summary>
+    /// Called when the provider reports token usage for an AI turn (currently OpenAI's
+    /// <c>response.done.response.usage</c>). Invoked once per turn that includes a usage
+    /// block. <c>null</c> callback skips the notification entirely — older provider
+    /// snapshots without usage data continue to work transparently. Use to log
+    /// per-call costs or push to a cost-tracking dashboard.
+    /// </summary>
+    public Func<RealtimeAiWssUsageData, Task> OnResponseUsageReceivedAsync { get; set; }
 }
 
 public class RealtimeSessionIdleFollowUp

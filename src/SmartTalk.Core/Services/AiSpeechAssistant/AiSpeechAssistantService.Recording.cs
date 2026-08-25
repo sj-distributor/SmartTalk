@@ -6,7 +6,9 @@ using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Commands.Attachments;
 using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.Caching;
-using SmartTalk.Messages.Enums.SpeechMatics;
+using SmartTalk.Core.Constants;
+using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 using Task = System.Threading.Tasks.Task;
 
@@ -84,9 +86,11 @@ public partial class AiSpeechAssistantService
         }
 
         record.Language = ConvertLanguageCode(language);
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(audioFileRawBytes, Guid.NewGuid().ToString("N") + ".wav", language, SpeechMaticsJobScenario.Released, cancellationToken).ConfigureAwait(false);
+        record.Status = PhoneOrderRecordStatus.Diarization;
 
-        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, true, cancellationToken).ConfigureAwait(false);
+
+        _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(x => x.HandleReleasedDiarizedTranscribeAsync(record.Id, cancellationToken), HangfireConstants.InternalHostingPhoneOrder);
     }
 
     private TranscriptionLanguage ConvertLanguageCode(string languageCode)
@@ -102,7 +106,7 @@ public partial class AiSpeechAssistantService
 
     private async Task<string> DetectAudioLanguageAsync(byte[] audioContent, CancellationToken cancellationToken)
     {
-        ChatClient client = new("gpt-4o-audio-preview", _openAiSettings.ApiKey);
+        ChatClient client = new("gpt-audio-1.5", _openAiSettings.ApiKey);
 
         var audioData = BinaryData.FromBytes(audioContent);
         List<ChatMessage> messages =

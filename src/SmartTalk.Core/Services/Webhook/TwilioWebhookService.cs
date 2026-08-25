@@ -1,6 +1,7 @@
 using Serilog;
 using AutoMapper;
 using SmartTalk.Core.Ioc;
+using SmartTalk.Core.Utils;
 using SmartTalk.Core.Extensions;
 using SmartTalk.Messages.Dto.WeChat;
 using System.Text.RegularExpressions;
@@ -138,7 +139,7 @@ public class TwilioWebhookService : ITwilioWebhookService
 
     private async Task SendWorkWechatRobotMessagesAsync(string content, bool atAll, CancellationToken cancellationToken)
     {
-        var pacificTime = DateTimeOffset.UtcNow.ConvertFromUtc(TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pacificTime = DateTimeOffset.UtcNow.ConvertFromUtc(PstTimeZone.Get());
         var currentDate = pacificTime.ToString("yyyy-MM-dd");
         var currentTime = pacificTime.ToString("HH:mm");
 

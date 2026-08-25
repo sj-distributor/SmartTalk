@@ -5,6 +5,8 @@ using SmartTalk.Core;
 using SmartTalk.Core.DbUpFile;
 using SmartTalk.Core.Settings;
 using SmartTalk.Core.Settings.Logging;
+using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using Autofac.Extensions.DependencyInjection;
 
 namespace SmartTalk.Api;
@@ -24,6 +26,18 @@ public class Program
         
         Log.Logger = new LoggerConfiguration()
             .Destructure.JsonNetTypes()
+            // Mask the MiniMax TTS credential so it never reaches logs when the session context
+            // (which carries RealtimeSessionOptions.TtsConfig) is destructured with {@Context}.
+            .Destructure.ByTransforming<RealtimeAiTtsConfig>(c => new
+            {
+                c.ProviderType,
+                c.Voice,
+                c.ServiceUrl,
+                c.TargetCodec,
+                c.SampleRate,
+                ApiKey = MaskApiKey(c.ApiKey),
+                c.ProviderSpecificConfig
+            })
             .Enrich.FromLogContext()
             .Enrich.WithProperty("Application", application)
             .WriteTo.Console()
@@ -52,6 +66,16 @@ public class Program
         }
     }
     
+    // Keeps the first/last 4 chars so ops can tell which key is configured, while hiding the body.
+    // Fully masks anything short enough that first4+last4 would expose (most of) the secret.
+    private static string MaskApiKey(string apiKey)
+    {
+        if (string.IsNullOrEmpty(apiKey)) return string.Empty;
+        if (apiKey.Length <= 8) return "***";
+
+        return $"{apiKey[..4]}***{apiKey[^4..]}";
+    }
+
     private static IHostBuilder CreateHostBuilder(string[] args, IConfiguration configuration) =>
         Host.CreateDefaultBuilder(args)
             .UseSerilog()

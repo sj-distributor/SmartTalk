@@ -1,6 +1,7 @@
 using System.ClientModel;
 using OpenAI;
 using OpenAI.Chat;
+using Serilog;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Settings.Qwen;
 using SmartTalk.Messages.Commands.SpeechMatics;
@@ -10,8 +11,6 @@ namespace SmartTalk.Core.Services.Audio.Provider;
 
 public class QwenAudioModelProvider : IAudioModelProvider
 {
-    private const string Model = "Qwen3-Omni-30B-A3B-Instruct";
-
     private readonly QwenSettings _qwenSettings;
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
 
@@ -51,7 +50,7 @@ public class QwenAudioModelProvider : IAudioModelProvider
         var requestBody = new
         {
             stream = false,
-            model = Model,
+            model = _qwenSettings.CrmModel,
             messages,
             modalities = new[] { "text" }
         };
@@ -60,15 +59,42 @@ public class QwenAudioModelProvider : IAudioModelProvider
         {
             { "Authorization", $"Bearer {_qwenSettings.CrmApiKey}" }
         };
+        var requestUrl = $"{_qwenSettings.CrmBaseUrl}/chat/completions";
         
+        Log.Information("LLM http call url: {CallUrl} ,headers: {CallHeader}", requestUrl, ToMaskedHeadersForLog(headers));
+
         var response = await _httpClientFactory.PostAsJsonAsync<QwenChatCompletionResponse>(
-            $"{_qwenSettings.CrmBaseUrl}/chat/completions",
+            requestUrl,
             requestBody,
             cancellationToken,
             timeout: TimeSpan.FromMinutes(10),
             headers: headers).ConfigureAwait(false);
         
         return response?.Choices?.FirstOrDefault()?.Message?.Content ?? string.Empty;
+    }
+    
+    private IReadOnlyDictionary<string, string> ToMaskedHeadersForLog(IReadOnlyDictionary<string, string> headers)
+    {
+        if (headers == null)
+            return new Dictionary<string, string>();
+
+        return headers.ToDictionary(p => p.Key, p => MaskHeaderValue(p.Value));
+    }
+    
+    private string MaskHeaderValue(string value)
+    {
+        const int visiblePrefixLength = 8;
+        const int visibleSuffixLength = 4;
+        const int minLengthToMask = visiblePrefixLength + visibleSuffixLength;
+
+        if (string.IsNullOrEmpty(value) || value.Length <= minLengthToMask)
+        {
+            return value;
+        }
+
+        var middleMask = new string('*', value.Length - minLengthToMask);
+
+        return $"{value[..visiblePrefixLength]}{middleMask}{value[^visibleSuffixLength..]}";
     }
 
     private class QwenChatCompletionResponse

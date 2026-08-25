@@ -1,6 +1,6 @@
+using System.Net.WebSockets;
 using Serilog;
 using AutoMapper;
-using Newtonsoft.Json;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Jobs;
@@ -12,8 +12,9 @@ using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Infrastructure;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
-using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
@@ -45,6 +46,9 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
     private readonly IFfmpegService _ffmpegService;
     private readonly IPosUtilService _posUtilService;
     private readonly IRealtimeAiService _realtimeAiService;
+    private readonly IAgentTransferCallRoutingService _agentTransferCallRoutingService;
+    private readonly RealtimeAiTtsConfigResolver _ttsConfigResolver;
+    private readonly IMiniMaxTtsSynthesizer _miniMaxTtsSynthesizer;
 
     #endregion
 
@@ -65,9 +69,12 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider, 
         IFfmpegService ffmpegService, 
         IPosUtilService posUtilService,
-        IRealtimeAiService realtimeAiService, 
-        IOpenaiClient openaiClient, 
-        ISmartiesClient smartiesClient, 
+        IRealtimeAiService realtimeAiService,
+        IAgentTransferCallRoutingService agentTransferCallRoutingService,
+        RealtimeAiTtsConfigResolver ttsConfigResolver,
+        IMiniMaxTtsSynthesizer miniMaxTtsSynthesizer,
+        IOpenaiClient openaiClient,
+        ISmartiesClient smartiesClient,
         ISmartTalkBackgroundJobClient backgroundJobClient)
     {
         _clock = clock;
@@ -79,6 +86,9 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _ffmpegService = ffmpegService;
         _posUtilService = posUtilService;
         _realtimeAiService = realtimeAiService;
+        _agentTransferCallRoutingService = agentTransferCallRoutingService;
+        _ttsConfigResolver = ttsConfigResolver;
+        _miniMaxTtsSynthesizer = miniMaxTtsSynthesizer;
         _openaiClient = openaiClient;
         _smartiesClient = smartiesClient;
         _backgroundJobClient = backgroundJobClient;
@@ -112,8 +122,40 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         {
             Log.Information("[AiAssistant] {Reason}, From: {From}, To: {To}", ex.Message, command.From, command.To);
         }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[AiAssistant] Unhandled error during connect, From: {From}, To: {To}", command.From, command.To);
+        }
+        finally
+        {
+            await TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
+        }
 
         return new AiSpeechAssistantConnectCloseEvent();
+    }
+
+    /// <summary>
+    /// Best-effort close of the Twilio WebSocket. Used by ConnectAsync's finally block
+    /// to guarantee the socket is released even when an unknown exception escapes — without
+    /// this, the socket dangles until the platform's idle timeout (~30s) and the caller
+    /// hears silence. No-op when the socket is already closed/aborted/null. Swallows all
+    /// errors during close because we cannot do better than best-effort here.
+    /// Public static for unit testability; not intended for external use.
+    /// </summary>
+    public static async Task TryCloseTwilioWebSocketAsync(WebSocket twilioWebSocket)
+    {
+        if (twilioWebSocket is null) return;
+        if (twilioWebSocket.State is WebSocketState.Closed or WebSocketState.Aborted or WebSocketState.None) return;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        try
+        {
+            await twilioWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Session ended", cts.Token).ConfigureAwait(false);
+        }
+        catch (WebSocketException) { }
+        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException) { }
     }
 
     private async Task<Agent> ResolveActiveAgentAsync(CancellationToken cancellationToken)
@@ -123,8 +165,15 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         if (agent?.IsReceiveCall != true)
             throw new AiAssistantNotAvailableException("No active agent");
 
+        var transferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
+
         _ctx.AgentId = agent.Id;
-        _ctx.TransferCallNumber = agent.TransferCallNumber;
+        _ctx.TimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
+        _ctx.AgentTransferCallConfigs = transferCallConfigs;
+        _ctx.TransferCallNumber = transferCallConfigs.Count > 0
+            ? _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(transferCallConfigs)
+            : agent.TransferCallNumber;
+        _ctx.HumanContactPhone = transferCallConfigs.Count > 0 ? null : agent.TransferCallNumber;
 
         return agent;
     }
@@ -146,8 +195,8 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
 
     private void EnsureServiceAvailable(Agent agent)
     {
-        (_ctx.IsInAiServiceHours, _ctx.IsEnableManualService) = CheckIfInServiceHours(
-            agent.ServiceHours, agent.IsTransferHuman, agent.TransferCallNumber, _clock.Now);
+        (_ctx.IsInAiServiceHours, _ctx.IsEnableManualService) = _agentTransferCallRoutingService.CheckIfInServiceHours(
+            agent.ServiceHours, agent.IsTransferHuman, _ctx.TransferCallNumber, _clock.Now, _ctx.TimeZone);
 
         Log.Information("[AiAssistant] Service hours checked, InService: {InService}, ManualFallback: {ManualFallback}", _ctx.IsInAiServiceHours, _ctx.IsEnableManualService);
 
@@ -155,23 +204,4 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
             throw new AiAssistantNotAvailableException("Out of service hours, no manual fallback");
     }
 
-    public static (bool IsInServiceHours, bool IsEnableManualService) CheckIfInServiceHours(
-        string serviceHoursJson, bool isTransferHuman, string transferCallNumber, DateTimeOffset utcNow)
-    {
-        if (serviceHoursJson == null)
-            return (true, isTransferHuman && !string.IsNullOrEmpty(transferCallNumber));
-
-        var pstZone = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        var pstTime = TimeZoneInfo.ConvertTime(utcNow, pstZone);
-
-        var workingHours = JsonConvert.DeserializeObject<List<AgentServiceHoursDto>>(serviceHoursJson);
-        var specificWorkingHours = workingHours?.FirstOrDefault(x => x.DayOfWeek == pstTime.DayOfWeek);
-
-        var pstTimeToMinute = new TimeSpan(pstTime.TimeOfDay.Hours, pstTime.TimeOfDay.Minutes, 0);
-
-        var isInService = specificWorkingHours != null &&
-                          specificWorkingHours.Hours.Any(x => x.Start <= pstTimeToMinute && x.End >= pstTimeToMinute);
-
-        return (isInService, isTransferHuman && !string.IsNullOrEmpty(transferCallNumber));
-    }
 }

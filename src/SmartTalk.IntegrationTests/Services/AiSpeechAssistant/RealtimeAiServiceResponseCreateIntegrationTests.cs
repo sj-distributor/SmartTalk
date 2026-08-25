@@ -5,6 +5,7 @@ using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Clients.Default;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.BuiltIn;
 using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.OpenAi;
@@ -42,7 +43,8 @@ public class RealtimeAiServiceResponseCreateIntegrationTests
         var switcher = new RealtimeAiSwitcher(
             [providerWs],
             [new DefaultRealtimeAiClientAdapter()],
-            [new OpenAiRealtimeAiProviderAdapter(new OpenAiSettings(config))]);
+            [new OpenAiRealtimeAiProviderAdapter(new OpenAiSettings(config))],
+            [new BuiltInRealtimeAiTtsProvider()]);
         
         var sut = new RealtimeAiService(switcher, new InactivityTimerManager());
 

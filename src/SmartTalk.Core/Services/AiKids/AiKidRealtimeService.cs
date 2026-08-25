@@ -5,6 +5,7 @@ using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAi.Services;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AiKids;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Dto.Smarties;
@@ -118,10 +119,15 @@ public class AiKidRealtimeService : IAiKidRealtimeService
     {
         if (assistant?.Knowledge == null || string.IsNullOrEmpty(assistant.Knowledge?.Prompt)) return string.Empty;
 
-        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time"));
+        var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-        var finalPrompt = assistant.Knowledge.Prompt
+        var finalPrompt = string.Join("\n\n", new[]
+            {
+                assistant.Knowledge.Prompt?.Trim(),
+                assistant.Knowledge.ScenePrompt?.Trim()
+            }
+            .Where(x => !string.IsNullOrWhiteSpace(x)))
             .Replace("#{current_time}", currentTime)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 

@@ -1,7 +1,12 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Serilog;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Messages.Constants;
+using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
@@ -26,28 +31,69 @@ public partial class AiSpeechAssistantConnectService
                 Voice = assistant.ModelVoice ?? "alloy",
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
-                Prompt = _ctx.Prompt,
+                Prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt,   // 代客致电: 有 instruction 则用作本通指令 (non-breaking)
                 Tools = _ctx.FunctionCalls
                     .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
                     .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
                     .ToList(),
                 TurnDetection = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TurnDirection),
-                InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction)
+                VendorOptions = new OpenAiRealtimeModelOptions
+                {
+                    InputAudioNoiseReduction = DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction),
+                    TranscriptionLanguage = ParseTranscriptionLanguage(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionLanguage)),
+                    TranscriptionModel = ParseTranscriptionModel(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.TranscriptionModel)),
+                    MaxResponseOutputTokens = ParseMaxResponseOutputTokens(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens)),
+                    OutputAudioSpeed = ParseOutputAudioSpeed(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.OutputAudioSpeed)),
+                    EnableRealtimeTracing = ParseEnableRealtimeTracing(DeserializeFunctionCallConfig(AiSpeechAssistantSessionConfigType.RealtimeTracing))
+                }
             },
             ConnectionProfile = new RealtimeAiConnectionProfile
             {
                 ProfileId = _ctx.Assistant.Id.ToString()
             },
+            TtsConfig = BuildTtsConfig(assistant),
             WebSocket = _ctx.TwilioWebSocket,
             Region = RealtimeAiServerRegion.US,
             EnableRecording = true,
             IdleFollowUp = BuildIdleFollowUp(),
             OnSessionReadyAsync = HandleSessionReadyAsync,
             OnClientStartAsync = HandleClientStartAsync,
+            OnClientStopAsync = HandleClientStopAsync,
+            OnSessionEndedAsync = HandleSessionEndedAsync,
             OnTranscriptionsCompletedAsync = HandleTranscriptionsCompletedAsync,
             OnRecordingCompleteAsync = HandleRecordingCompleteAsync,
-            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None)
+            OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
+            OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };
+    }
+
+    private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)
+    {
+        return _ttsConfigResolver.Resolve(new RealtimeAiTtsRequest
+        {
+            AssistantId = assistant.Id,
+            ModelVoice = assistant.ModelVoice
+        });
+    }
+
+    /// <summary>
+    /// Logs per-turn OpenAI token usage with assistant + call context so cost reports
+    /// can be reconstructed from structured Serilog properties. Intentionally fire-and-
+    /// forget — never throws to the realtime event loop. Future work can route the same
+    /// payload to a cost-tracking sink (e.g. AiSpeechAssistantCallReport.TokensUsed)
+    /// without touching the adapter side.
+    /// </summary>
+    private Task HandleResponseUsageReceivedAsync(RealtimeAiWssUsageData usage)
+    {
+        Log.Information(
+            "[AiAssistant] Token usage, AssistantId: {AssistantId}, CallSid: {CallSid}, " +
+            "Total: {Total}, Input: {Input}, Output: {Output}, Cached: {Cached}, " +
+            "InputAudio: {InputAudio}, InputText: {InputText}, OutputAudio: {OutputAudio}, OutputText: {OutputText}",
+            _ctx.Assistant?.Id, _ctx.CallSid,
+            usage.TotalTokens, usage.InputTokens, usage.OutputTokens, usage.CachedTokens,
+            usage.InputAudioTokens, usage.InputTextTokens, usage.OutputAudioTokens, usage.OutputTextTokens);
+
+        return Task.CompletedTask;
     }
 
     private RealtimeSessionIdleFollowUp BuildIdleFollowUp()
@@ -75,5 +121,115 @@ public partial class AiSpeechAssistantConnectService
         var content = _ctx.FunctionCalls.FirstOrDefault(x => x.Type == type && !string.IsNullOrWhiteSpace(x.Content))?.Content;
 
         return content != null ? JsonConvert.DeserializeObject<object>(content) : null;
+    }
+
+    /// <summary>
+    /// Extracts the <c>language</c> string from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.TranscriptionLanguage"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the transcription payload
+    /// byte-equivalent to the pre-hint behaviour: null input, non-JObject input,
+    /// missing <c>language</c> property, or empty / whitespace value. This is the only
+    /// place that interprets the JSON schema for the language hint — the adapter just
+    /// reads the resulting nullable string.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static string ParseTranscriptionLanguage(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var language = obj["language"]?.Value<string>();
+
+        return string.IsNullOrWhiteSpace(language) ? null : language;
+    }
+
+    /// <summary>
+    /// Extracts the <c>model</c> string from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.TranscriptionModel"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the adapter on its
+    /// compile-time default: null input, non-JObject input, missing <c>model</c>
+    /// property, or empty / whitespace value. The string itself is NOT validated
+    /// against a known list — operators may opt into future OpenAI models without
+    /// a code change, and OpenAI rejects unknown values server-side rather than us
+    /// silently falling back.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static string ParseTranscriptionModel(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var model = obj["model"]?.Value<string>();
+
+        return string.IsNullOrWhiteSpace(model) ? null : model;
+    }
+
+    /// <summary>
+    /// Extracts the <c>value</c> integer from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.MaxResponseOutputTokens"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the response cap unset
+    /// (so OpenAI uses its server-side default): null input, non-JObject input,
+    /// missing <c>value</c> property, non-integer value, or non-positive integer.
+    /// Non-positive caps are rejected here rather than passed through because they
+    /// would either be rejected by OpenAI server-side anyway (zero / negative) or
+    /// silently truncate AI responses to an empty turn (one), which is worse than
+    /// the default.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static int? ParseMaxResponseOutputTokens(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var token = obj["value"];
+
+        if (token == null || token.Type != JTokenType.Integer) return null;
+
+        var value = token.Value<int>();
+
+        return value > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// Extracts the <c>value</c> decimal from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.OutputAudioSpeed"/> config object.
+    /// Returns <c>null</c> for every shape that should leave the speed unset (so
+    /// OpenAI uses 1.0, current behaviour): null input, non-JObject input, missing
+    /// <c>value</c> property, non-numeric value, or non-positive value. The parser
+    /// does NOT enforce OpenAI's range (currently 0.25 – 1.5) — operators who set
+    /// out-of-range values are rejected by OpenAI server-side with a clear error,
+    /// rather than the adapter silently clamping into a different speed than the
+    /// operator intended.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static decimal? ParseOutputAudioSpeed(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var token = obj["value"];
+
+        if (token == null || (token.Type != JTokenType.Float && token.Type != JTokenType.Integer)) return null;
+
+        var value = token.Value<decimal>();
+
+        return value > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// Extracts the <c>enabled</c> boolean from a deserialised
+    /// <see cref="AiSpeechAssistantSessionConfigType.RealtimeTracing"/> config object.
+    /// Returns <c>null</c> for every shape that should leave tracing off (current
+    /// behaviour): null input, non-JObject input, missing <c>enabled</c> property,
+    /// non-boolean value, or explicit <c>false</c>. Only an explicit <c>true</c>
+    /// activates tracing; the parser distinguishes <c>false</c> from <c>null</c> so
+    /// an operator can persist an explicit "off" state alongside the inactive flag.
+    /// Public static so the schema-interpretation rules can be exhaustively unit tested.
+    /// </summary>
+    public static bool? ParseEnableRealtimeTracing(object deserialisedConfig)
+    {
+        if (deserialisedConfig is not JObject obj) return null;
+
+        var token = obj["enabled"];
+
+        if (token == null || token.Type != JTokenType.Boolean) return null;
+
+        return token.Value<bool>() ? true : null;
     }
 }

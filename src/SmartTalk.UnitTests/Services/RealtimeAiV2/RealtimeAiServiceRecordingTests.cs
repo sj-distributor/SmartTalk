@@ -82,7 +82,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
 
         var sessionTask = await StartSessionInBackgroundAsync(options);
 
-        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.audio.delta\"}");
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.output_audio.delta\"}");
         await Task.Delay(100);
 
         FakeWs.EnqueueClose();
@@ -240,7 +240,7 @@ public class RealtimeAiServiceRecordingTests : RealtimeAiServiceTestBase
         var sessionTask = await StartSessionInBackgroundAsync(options);
 
         // 1. Provider sends audio delta → IsAiSpeaking=true, AI audio (4 bytes) buffered
-        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.audio.delta\"}");
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.output_audio.delta\"}");
         await Task.Delay(50);
 
         // 2. Provider sends SpeechDetected → IsAiSpeaking should reset to false

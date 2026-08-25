@@ -1,6 +1,8 @@
 using NSubstitute;
 using Shouldly;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Services;
+using SmartTalk.Core.Services.Timer;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
@@ -370,5 +372,138 @@ public class RealtimeAiServiceIdleFollowUpTests : RealtimeAiServiceTestBase
 
         actionInvoked.ShouldBeFalse();
         ProviderAdapter.DidNotReceive().BuildTextUserMessage(Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ActiveConversation_RapidTurnsWithUserInterruptions_NoSpuriousFollowUpFires()
+    {
+        // End-to-end integration test for the idle-follow-up behaviour at the service
+        // level. The other RealtimeAiServiceIdleFollowUpTests in this file use the
+        // inherited TimerManager mock and therefore don't exercise the real timer
+        // cancellation path. This test bypasses the mock and constructs a separate
+        // SUT with a real InactivityTimerManager so that Start/Stop ordering against
+        // realistic AI-turn-completed / user-speech-detected events runs through
+        // production code end-to-end.
+        //
+        // What this test pins (the integration-level invariant):
+        //   When every AI-turn-completed event is followed by a user-speech-detected
+        //   event before the idle timeout elapses, the idle follow-up callback must
+        //   NEVER fire. In production this callback schedules a Hangfire
+        //   HangupCallAsync job that disconnects the caller, so any leak is a
+        //   call-stability bug.
+        //
+        // Background (the bug the InactivityTimerManager fix protects against):
+        //   1. OnAiTurnCompletedAsync starts timer T1 for the idle follow-up.
+        //   2. OnAiDetectedUserSpeechAsync calls StopTimer (cancels T1, removes from dict).
+        //   3. Next OnAiTurnCompletedAsync starts timer T2 (puts T2 in dict).
+        //   4. Pre-fix: T1's cancelled RunTimerAsync hits finally and unconditionally
+        //      TryRemoves the dict entry, clobbering T2.
+        //   5. T2 still runs (CTS never cancelled). Subsequent StopTimers become
+        //      no-ops for it.
+        //   6. After T2's timeout: OnTimeoutAsync fires → Hangfire schedules
+        //      HangupCallAsync → user disconnected mid-conversation.
+        //   Post-fix: the finally uses ICollection.Remove(KVP) with value-match, so
+        //   T1's cleanup cannot clobber T2's registration.
+        //
+        // Note on scope: this test pins the integration-level invariant under
+        // realistic event timings. It is not the deterministic regression trigger
+        // for the specific finally-vs-StartTimer race window — that is
+        // `InactivityTimerManagerTests.StartTimer_PreviousTimerFinally_ShouldNotRemoveNewTimer`,
+        // which uses TaskCompletionSource-controlled callback blocking to force
+        // the interleaving every run. This test catches regressions where the
+        // real timer manager fails to cooperate with the service-level event
+        // pipeline (e.g. StopTimer not wired to OnAiDetectedUserSpeechAsync,
+        // StartTimer not wired to OnAiTurnCompletedAsync).
+
+        var realTimerManager = new InactivityTimerManager();
+        var sut = new RealtimeAiService(Switcher, realTimerManager);
+
+        var followUpInvoked = 0;
+
+        // Route raw WS messages to the appropriate parsed event type. The default
+        // ProviderAdapter setup uses a single Returns value, but this test cycles
+        // between two distinct event types, so we route per call by inspecting the
+        // raw message contents.
+        ProviderAdapter.ParseMessage(Arg.Any<string>())
+            .Returns(ci =>
+            {
+                var raw = ci.ArgAt<string>(0);
+                if (raw.Contains("response.done"))
+                    return new ParsedRealtimeAiProviderEvent
+                    {
+                        Type = RealtimeAiWssEventType.ResponseTurnCompleted,
+                        Data = new List<RealtimeAiWssFunctionCallData>()
+                    };
+                if (raw.Contains("input_audio_buffer.speech_started"))
+                    return new ParsedRealtimeAiProviderEvent
+                    {
+                        Type = RealtimeAiWssEventType.SpeechDetected
+                    };
+                return new ParsedRealtimeAiProviderEvent { Type = RealtimeAiWssEventType.Unknown };
+            });
+
+        var options = CreateDefaultOptions(o =>
+        {
+            o.IdleFollowUp = new RealtimeSessionIdleFollowUp
+            {
+                // 1 second is the smallest value supported by TimeoutSeconds (int).
+                // Cycle below is faster than this so a correctly-cancelling timer
+                // never fires; any race-induced leak would surface as a spurious fire.
+                TimeoutSeconds = 1,
+                FollowUpMessage = "Are you still there?",
+                OnTimeoutAsync = () =>
+                {
+                    Interlocked.Increment(ref followUpInvoked);
+                    return Task.CompletedTask;
+                }
+            };
+        });
+
+        // Manually start the session against the SUT with the real timer manager.
+        // (The inherited StartSessionInBackgroundAsync helper uses the base's Sut
+        // which has the mock timer, so we duplicate the small amount of setup here.)
+        var sessionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sessionTask = Task.Run(async () =>
+        {
+            try
+            {
+                _ = Task.Delay(50).ContinueWith(_ => sessionStarted.TrySetResult());
+                await sut.ConnectAsync(options, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { sessionStarted.TrySetException(ex); }
+        });
+        await sessionStarted.Task.ConfigureAwait(false);
+        await Task.Delay(50).ConfigureAwait(false);
+
+        // Simulate a rapid 30-cycle conversation: AI-turn-completed → user-speech.
+        // Each AI-turn-completed starts the timer (1s timeout). Each user-speech
+        // stops it. The 30ms gap between events is far smaller than the 1s timeout,
+        // so a correctly-functioning timer never fires. If the race were present,
+        // the cumulative effect of 30 Start/Stop pairs would leak at least one
+        // entry into the "running but not in dict" state, and that entry would
+        // fire its callback ~1s later.
+        for (var i = 0; i < 30; i++)
+        {
+            await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+            await Task.Delay(15).ConfigureAwait(false);
+            await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"input_audio_buffer.speech_started\"}");
+            await Task.Delay(15).ConfigureAwait(false);
+        }
+
+        // Final cycle: simulate a final AI-turn-completed (timer starts) followed
+        // immediately by closing the WebSocket. Cleanup must cancel the timer; no
+        // follow-up should fire during cleanup.
+        await FakeWssClient.SimulateMessageReceivedAsync("{\"type\":\"response.done\"}");
+        await Task.Delay(50).ConfigureAwait(false);
+
+        FakeWs.EnqueueClose();
+        await sessionTask;
+
+        // Wait beyond the 1s timeout. Any leaked entry would fire by now.
+        await Task.Delay(1500).ConfigureAwait(false);
+
+        followUpInvoked.ShouldBe(0,
+            "Idle follow-up must never fire during an active conversation where every AI turn is followed by a user-speech-detected event");
     }
 }

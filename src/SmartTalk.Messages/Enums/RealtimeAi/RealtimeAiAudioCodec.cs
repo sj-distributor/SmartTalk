@@ -7,7 +7,7 @@ public enum RealtimeAiAudioCodec
     [Description("g711_ulaw")]
     MULAW,
     
-    [Description("g712_alaw")]
+    [Description("g711_alaw")]
     ALAW,
     
     [Description("pcm16")]

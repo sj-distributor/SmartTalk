@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
@@ -21,6 +22,9 @@ public class AiSpeechAssistantConnectContext
     public WebSocket TwilioWebSocket { get; set; }
     public PhoneOrderRecordType OrderRecordType { get; set; }
 
+    // 代客致电等场景: 调用方经 connect URL ?instruction= 传入的本通指令; 有值则覆盖 DB prompt (non-breaking)。
+    public string Instruction { get; set; }
+
     // Assistant & knowledge
     public string Prompt { get; set; }
     public string UserProfileJson { get; set; }
@@ -33,6 +37,8 @@ public class AiSpeechAssistantConnectContext
     public int? ForwardAssistantId { get; set; }
     public string HumanContactPhone { get; set; }
     public string TransferCallNumber { get; set; }
+    public List<AgentTransferCallConfig> AgentTransferCallConfigs { get; set; }
+    public TimeZoneInfo TimeZone { get; set; }
 
     // Service hours
     public bool IsInAiServiceHours { get; set; } = true;
@@ -41,6 +47,7 @@ public class AiSpeechAssistantConnectContext
     // Call state
     public bool IsTransfer { get; set; }
     public AiSpeechAssistantOrderDto OrderItems { get; set; }
+    public AiSpeechAssistantComplaintInfoDto ComplaintInfo { get; set; } = new();
     public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
     public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
 }

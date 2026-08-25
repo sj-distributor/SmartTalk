@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Serilog;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -67,27 +68,66 @@ public class TwilioRealtimeAiClientAdapter : IRealtimeAiClientAdapter
             return new ParsedClientMessage { Type = RealtimeAiClientMessageType.Unknown };
 
         var mediaType = media.TryGetProperty("type", out var t) ? t.GetString() : null;
+        var timestamp = ExtractMediaTimestamp(media);
 
         return mediaType switch
         {
-            "video" => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Image, Payload = payload },
-            _ => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = payload }
+            "video" => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Image, Payload = payload, Timestamp = timestamp },
+            _ => new ParsedClientMessage { Type = RealtimeAiClientMessageType.Audio, Payload = payload, Timestamp = timestamp }
         };
+    }
+
+    // Twilio doc'd shape is string ms; real payloads occasionally use the numeric form.
+    // Bad / missing timestamp must not drop the audio frame.
+    private static long? ExtractMediaTimestamp(JsonElement media)
+    {
+        if (!media.TryGetProperty("timestamp", out var tsProp)) return null;
+
+        if (tsProp.ValueKind == JsonValueKind.String && long.TryParse(tsProp.GetString(), out var parsed))
+            return parsed;
+
+        if (tsProp.ValueKind == JsonValueKind.Number && tsProp.TryGetInt64(out var direct))
+            return direct;
+
+        return null;
     }
 
     public object BuildAudioDeltaMessage(string base64Payload, string sessionId)
     {
-        return new { @event = "media", streamSid = _streamSid ?? sessionId, media = new { payload = base64Payload } };
+        if (TryWarnMissingStreamSid(sessionId, "media")) return null;
+
+        return new { @event = "media", streamSid = _streamSid, media = new { payload = base64Payload } };
     }
 
     public object BuildSpeechDetectedMessage(string sessionId)
     {
-        return new { @event = "clear", streamSid = _streamSid ?? sessionId };
+        if (TryWarnMissingStreamSid(sessionId, "clear")) return null;
+
+        return new { @event = "clear", streamSid = _streamSid };
     }
 
     public object BuildTurnCompletedMessage(string sessionId)
     {
-        return new { @event = "mark", streamSid = _streamSid ?? sessionId, mark = new { name = "turn_completed" } };
+        if (TryWarnMissingStreamSid(sessionId, "mark")) return null;
+
+        return new { @event = "mark", streamSid = _streamSid, mark = new { name = "turn_completed" } };
+    }
+
+    /// <summary>
+    /// Returns true (and logs once) when the Twilio start frame hasn't arrived yet.
+    /// In that race window the adapter has no valid streamSid; sending a frame with
+    /// any other value would cause Twilio to silently drop it. Dropping is preferable
+    /// to wasting bandwidth on a frame Twilio cannot route.
+    /// </summary>
+    private bool TryWarnMissingStreamSid(string sessionId, string eventName)
+    {
+        if (_streamSid != null) return false;
+
+        Log.Warning(
+            "[Twilio] Dropping outbound {EventName} frame: streamSid not yet set (Twilio start frame still pending). SessionId: {SessionId}",
+            eventName, sessionId);
+
+        return true;
     }
 
     public object BuildTranscriptionMessage(RealtimeAiWssEventType eventType, RealtimeAiWssTranscriptionData transcriptionData, string sessionId)
