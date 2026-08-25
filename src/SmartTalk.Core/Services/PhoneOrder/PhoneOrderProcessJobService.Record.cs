@@ -448,8 +448,6 @@ public partial class PhoneOrderProcessJobService
             }
         }
 
-        record.TranscriptionText = AddCustomerIdToTranscriptionText(record.TranscriptionText, aiSpeechAssistant, record.CustomerId);
-        
         var reports = new List<PhoneOrderRecordReport>();
 
         reports.Add(new PhoneOrderRecordReport
@@ -628,7 +626,6 @@ public partial class PhoneOrderProcessJobService
                 ? "你是一名電話錄音的分析員，通過聽取錄音內容和語氣情緒作出精確分析，冩出一份分析報告。\n\n" +
                   "分析報告的格式：交談主題：xxx\n\n " +
                   "來電號碼：#{call_from}\n\n " +
-                  "客人ID：#{customer_id}\n\n " +
                   "內容摘要:xxx \n\n " +
                   "客人情感與情緒(无法判断时默认为平缓): xxx \n\n " +
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
