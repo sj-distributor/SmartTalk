@@ -2,6 +2,7 @@ using System.Text;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
@@ -534,10 +535,19 @@ public class SalesService : ISalesService
             {
                 var order = orders[i];
                 builder.AppendLine(
-                    $"{i + 1}. 订单号码：{order.SalesOrderNumber} ，客户ID：{order.CustomerId} ，预计送到时间：{order.EstimatedDeliveryTime}");
+                    $"{i + 1}. 订单号码：{order.SalesOrderNumber} ，客户ID：{order.CustomerId} ，预计送到时间：{FormatUtcAsPst(order.EstimatedDeliveryTime)}");
             }
             builder.AppendLine();
         }
+    }
+
+    private static string FormatUtcAsPst(DateTime utcTime)
+    {
+        var specifiedUtcTime = utcTime.Kind == DateTimeKind.Utc
+            ? utcTime
+            : DateTime.SpecifyKind(utcTime, DateTimeKind.Utc);
+
+        return TimeZoneInfo.ConvertTimeFromUtc(specifiedUtcTime, PstTimeZone.Get()).ToString("yyyy-MM-dd HH:mm:ss");
     }
 
 }
