@@ -8,6 +8,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.AiSpeechAssistantConnect;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
 using SmartTalk.Core.Services.Sale;
@@ -61,6 +62,7 @@ public class SalesPlaceholderFixture
             backgroundJobClient: null!,
             twilioService: null!,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
+            aiSpeechAssistantConnectService: Substitute.For<IAiSpeechAssistantConnectService>(),
             aiSpeechAssistantSettings: new AiSpeechAssistantSettings(configuration),
             aiSpeechAssistantKnowledgePromptService: knowledgePromptService,
             knowledgeScenarioDataProvider: null!,

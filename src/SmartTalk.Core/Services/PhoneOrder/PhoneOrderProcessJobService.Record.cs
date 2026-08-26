@@ -428,15 +428,20 @@ public partial class PhoneOrderProcessJobService
 
         record.Status = PhoneOrderRecordStatus.Sent;
         record.TranscriptionText = completion.Content.FirstOrDefault()?.Text ?? "";
-        
+
+        var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+
+        record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
+        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
+
         var scenarioInformation = await IdentifyDialogueScenariosAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
         record.Scenario = scenarioInformation.Category;
         record.Remark = scenarioInformation.Remark;
 
-        var checkCustomerFriendly = await CheckCustomerFriendlyAsync(record.TranscriptionText, cancellationToken).ConfigureAwait(false);
+        await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, scenarioInformation.IsIncludeTodo, agent.Id, cancellationToken).ConfigureAwait(false);
 
-        record.IsCustomerFriendly = checkCustomerFriendly.IsCustomerFriendly;
-        record.IsHumanAnswered = checkCustomerFriendly.IsHumanAnswered;
+        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
         var sourceReportLanguage = record.Language;
         if (!isAixvolinkRecord)
@@ -459,7 +464,7 @@ public partial class PhoneOrderProcessJobService
                 Log.Error(ex, "Complaint feedback analysis failed for record {RecordId}. The record will be processed without complaint analysis.", record.Id);
             }
         }
-        
+
         var reports = new List<PhoneOrderRecordReport>();
 
         reports.Add(new PhoneOrderRecordReport
@@ -487,15 +492,9 @@ public partial class PhoneOrderProcessJobService
         });
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
-        
-        await _phoneOrderUtilService.GenerateWaitingProcessingEventAsync(record, scenarioInformation.IsIncludeTodo, agent.Id, cancellationToken).ConfigureAwait(false);
-        
-        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
-        
+
         Log.Information("Handle Smarties callback if required: {@Agent}、{@Record}", agent, record);
 
-        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
-        
         var hasPendingTasks = await _salesDataProvider.HasPendingTasksByRecordIdAsync(record.Id, cancellationToken).ConfigureAwait(false);
         
         if (!hasPendingTasks)
@@ -633,6 +632,11 @@ public partial class PhoneOrderProcessJobService
             customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
         
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
+        var configuredCustomerIds = (aiSpeechAssistant?.Name ?? string.Empty)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var customerId = !string.IsNullOrWhiteSpace(record.CustomerId)
+            ? record.CustomerId
+            : configuredCustomerIds.Length == 1 ? configuredCustomerIds[0] : string.Empty;
 
         var audioData = BinaryData.FromBytes(audioContent);
         var recordAnalyzePrompt = (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
@@ -644,6 +648,7 @@ public partial class PhoneOrderProcessJobService
                   "客人下單內容(如果沒有則忽略)：1. 牛肉(1箱)\n2. 雞腿肉(1箱)"
                 : aiSpeechAssistant.CustomRecordAnalyzePrompt)
             .Replace("#{call_from}", callFrom ?? "")
+            .Replace("#{customer_id}", customerId ?? "")
             .Replace("#{current_time}", currentTime ?? "")
             .Replace("#{call_to}", callTo ?? "")
             .Replace("#{customer_items}", customerItemsString ?? "")
@@ -717,11 +722,40 @@ public partial class PhoneOrderProcessJobService
         return (result.IsHumanAnswered, result.IsCustomerFriendly);
     }
 
+    internal static string AddCustomerIdToTranscriptionText(
+        string transcriptionText,
+        Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,
+        string customerId)
+    {
+        var configuredCustomerIds = (aiSpeechAssistant?.Name ?? string.Empty)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var resolvedCustomerId = !string.IsNullOrWhiteSpace(customerId)
+            ? customerId.Trim()
+            : configuredCustomerIds.Length == 1
+                ? configuredCustomerIds[0]
+                : configuredCustomerIds.Length > 1 ? "未匹配到" : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(resolvedCustomerId))
+            return transcriptionText;
+
+        var normalizedText = Regex.Replace(
+            transcriptionText ?? string.Empty,
+            @"(?m)^客人ID：.*(?:\r?\n)?",
+            string.Empty).TrimStart();
+
+        return $"客人ID：{resolvedCustomerId}\n\n{normalizedText}";
+    }
+
     private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
         switch (agent.Type)
         {
             case AgentType.Sales:
+                var configuredSoldToIds = (aiSpeechAssistant.Name ?? string.Empty)
+                    .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (configuredSoldToIds.Length == 1)
+                    record.CustomerId = configuredSoldToIds[0];
+
                 if (!string.IsNullOrEmpty(record.TranscriptionText))
                 {
                     if (!aiSpeechAssistant.IsAllowOrderPush)
@@ -778,6 +812,8 @@ public partial class PhoneOrderProcessJobService
         var pacificNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
         var businessKeyCounters = new Dictionary<string, int>();
 
+        var resolvedSoldToIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var storeOrder in extractedOrders)
         { 
             var businessKeySequence = GetNextPhoneOrderPushTaskBusinessKeySequence(storeOrder, businessKeyCounters);
@@ -786,6 +822,8 @@ public partial class PhoneOrderProcessJobService
                 ? aixvolinkPreCustomerMatch
                 : await ResolveSalesCustomerMatchAsync(record, storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
             var soldToId = customerMatch.SoldToId;
+            if (!string.IsNullOrWhiteSpace(soldToId))
+                resolvedSoldToIds.Add(soldToId);
             var matchedSoldToIds = customerMatch.SoldToIds.Count > 0
                 ? customerMatch.SoldToIds
                 : isAixvolinkRecord
@@ -811,6 +849,8 @@ public partial class PhoneOrderProcessJobService
 
             await CreateGenerateOrderTaskAsync(record, storeOrder, draftOrder, businessKey, cancellationToken).ConfigureAwait(false);
         }
+
+        record.CustomerId = resolvedSoldToIds.Count == 1 ? resolvedSoldToIds.Single() : null;
 
         await _phoneOrderDataProvider.UpdatePhoneOrderRecordsAsync(record, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
@@ -867,7 +907,7 @@ public partial class PhoneOrderProcessJobService
             "12. 如果是“改成/只要/變成/剩下”目標數量語義，請務必標記 IsTargetQuantity = true。\n\n" +
             
             "請嚴格傳回一個 JSON 對象，頂層字段為 \"stores\"，每个店铺对象包含：" +
-            "StoreName（可空字符串）, StoreNumber（可空字符串）, DeliveryDate（可空字符串）, " +
+            "StoreName（可空字符串）, StoreNumber（可空字符串）, StoreAddress（可空字符串，包含门牌号）, DeliveryDate（可空字符串）, " +
             "IsDeleteWholeOrder（boolean，默認 false）, IsUndoCancel（boolean，默認 false）, " +
             "orders（数组，元素包含 name, quantity, unit, materialNumber, markForDelete, restored, IsTargetQuantity）。\n" +
             
@@ -937,6 +977,7 @@ public partial class PhoneOrderProcessJobService
                 {
                     StoreName = storeElement.TryGetProperty("StoreName", out var sn) ? sn.GetString() ?? "" : "",
                     StoreNumber = storeElement.TryGetProperty("StoreNumber", out var snum) ? snum.GetString() ?? "" : "",
+                    StoreAddress = storeElement.TryGetProperty("StoreAddress", out var sa) ? sa.GetString() ?? "" : "",
                     DeliveryDate = storeElement.TryGetProperty("DeliveryDate", out var dd) && DateTime.TryParse(dd.GetString(), out var dt) ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : DateTime.UtcNow.AddDays(1),
                     IsDeleteWholeOrder = storeElement.TryGetProperty("IsDeleteWholeOrder", out var del) && del.GetBoolean(),
                     IsUndoCancel = storeElement.TryGetProperty("IsUndoCancel", out var undo) && undo.GetBoolean()
@@ -1009,13 +1050,36 @@ public partial class PhoneOrderProcessJobService
             }
 
             if (materialOverviewResponse?.Data != null && materialOverviewResponse.Data.Any())
-                historyItems.AddRange(materialOverviewResponse.Data
-                    .SelectMany(x => x.Items ?? [])
-                    .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
-                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)));
+                historyItems.AddRange(BuildHistoryItemsWithCustomerAliases(materialOverviewResponse.Data));
         }
 
         return historyItems;
+    }
+
+    private static IEnumerable<(string Material, string MaterialDesc, DateTime? InvoiceDate)> BuildHistoryItemsWithCustomerAliases(
+        IEnumerable<CustomerMaterialOverviewDto> materialOverviews)
+    {
+        foreach (var overview in materialOverviews ?? [])
+        {
+            var aliasesByLevelCode = (overview.Level5Habits ?? [])
+                .Where(x => !string.IsNullOrWhiteSpace(x.LevelCode5))
+                .GroupBy(x => x.LevelCode5, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x.Key, x => x.First().CustomerLikeNames ?? [], StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in (overview.Items ?? []).Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber)))
+            {
+                aliasesByLevelCode.TryGetValue(item.LevelCode5 ?? string.Empty, out var aliases);
+                var aliasText = string.Join(", ", (aliases ?? [])
+                    .Select(x => x.CustomerLikeName)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+                var description = string.IsNullOrWhiteSpace(aliasText)
+                    ? item.MaterialDescription
+                    : $"{item.MaterialDescription} (Aliases: {aliasText})";
+
+                yield return (item.MaterialNumber, description, item.LastInvoiceDate);
+            }
+        }
     }
 
     private string MatchMaterialNumber(string itemName, string baseNumber, string unit, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems)
@@ -1122,6 +1186,19 @@ public partial class PhoneOrderProcessJobService
     {
         if (!string.Equals(record.SourceProvider, PhoneOrderSourceProviders.Aixvolink, StringComparison.OrdinalIgnoreCase))
         {
+            if (soldToIds.Count > 1)
+            {
+                var crmMatch = await ResolveCustomerByPhoneAndStoreAsync(record, storeOrder, soldToIds, cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(crmMatch))
+                {
+                    return new SalesCustomerMatchResult
+                    {
+                        SoldToId = crmMatch,
+                        SoldToIds = [crmMatch]
+                    };
+                }
+            }
+
             var soldToId = await ResolveSoldToIdAsync(storeOrder, aiSpeechAssistant, soldToIds, cancellationToken).ConfigureAwait(false);
             return new SalesCustomerMatchResult
             {
@@ -1131,6 +1208,35 @@ public partial class PhoneOrderProcessJobService
         }
 
         return await ResolveAixvolinkCustomerMatchAsync(record, storeOrder.StoreName, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string> ResolveCustomerByPhoneAndStoreAsync(
+        PhoneOrderRecord record,
+        ExtractedOrderDto storeOrder,
+        IEnumerable<string> configuredSoldToIds,
+        CancellationToken cancellationToken)
+    {
+        var customerLookupPhoneNumbers = GetAixvolinkCustomerLookupNumbers(record);
+        var storeDetails = string.Join(" ", new[] { storeOrder.StoreName, storeOrder.StoreAddress }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+        var customerMatch = await _salesCustomerMatchService
+            .MatchCustomerAsync(
+                customerLookupPhoneNumbers[0],
+                customerLookupPhoneNumbers[1],
+                storeDetails,
+                customerLookupPhoneNumbers,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var configuredIds = configuredSoldToIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim().TrimStart('0'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var matchedId = customerMatch.SoldToId?.Trim().TrimStart('0');
+
+        return !string.IsNullOrWhiteSpace(matchedId) && configuredIds.Contains(matchedId)
+            ? matchedId
+            : string.Empty;
     }
 
     private async Task<SalesCustomerMatchResult> ResolveAixvolinkCustomerMatchAsync(

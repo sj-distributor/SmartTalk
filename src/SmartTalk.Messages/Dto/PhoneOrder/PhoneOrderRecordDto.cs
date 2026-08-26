@@ -37,6 +37,8 @@ public class PhoneOrderRecordDto
     public string PhoneNumber { get; set; }
     
     public string CustomerName { get; set; }
+
+    public string CustomerId { get; set; }
     
     public string Comments { get; set; }
     
@@ -61,8 +63,10 @@ public class PhoneOrderRecordDto
     public bool? IsHumanAnswered { get; set; }
     
     public bool IsUnreviewed { get; set; }
-    
-    public bool IsLockedScenario { get; set; }
-    
+
+    public int? UnSendCount { get; set; }
+
     public bool IsModifyScenario { get; set; }
+
+    public bool IsLockedScenario { get; set; }
 }

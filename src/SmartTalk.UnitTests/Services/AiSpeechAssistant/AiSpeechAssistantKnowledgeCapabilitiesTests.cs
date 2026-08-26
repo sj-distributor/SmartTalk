@@ -9,6 +9,7 @@ using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.AiSpeechAssistantConnect;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
@@ -731,9 +732,10 @@ public class AiSpeechAssistantKnowledgeCapabilitiesTests
                 Substitute.For<ISmartTalkBackgroundJobClient>(),
                 Substitute.For<ITwilioService>(),
                 harness.AiSpeechAssistantDataProvider,
-                new AiSpeechAssistantSettings(configuration),
+                Substitute.For<IAiSpeechAssistantConnectService>(),
                 Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
-                Substitute.For<IKnowledgeScenarioDataProvider>());
+                Substitute.For<IKnowledgeScenarioDataProvider>(),
+                new AiSpeechAssistantSettings(configuration));
 
             harness.AiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
                     Arg.Any<List<int>>(),

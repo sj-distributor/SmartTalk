@@ -16,9 +16,14 @@ public class ConnectAiSpeechAssistantCommand : ICommand
     
     public int? AssistantId { get; set; }
 
-    // 代客致电等场景: 调用方 (如 Smarties KitchChat) 经 connect URL 的 ?instruction= 传入本通电话的系统指令/prompt。
-    // 有值则用作本通对话指令 (覆盖 DB assistant prompt); 无值 = 照旧用 DB prompt (non-breaking)。
+    // 调用方传入的完整本通指令; 有值时沿用原逻辑覆盖 Assistant knowledge prompt。
     public string Instruction { get; set; }
+
+    // 调用方通过 URL path 传入的 URL-safe Base64 动态问题，由 AiSpeechAssistantService 解析。
+    public string EncodedQuestion { get; set; }
+
+    // 代客致电等场景: 调用方传入本通动态问题, 由 Assistant knowledge prompt 的 #{question} 占位符承接。
+    public string Question { get; set; }
 
     public WebSocket TwilioWebSocket { get; set; }
     

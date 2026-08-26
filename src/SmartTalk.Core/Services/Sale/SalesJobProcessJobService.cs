@@ -100,7 +100,6 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             Log.Information("Refreshing customer items cache for soldToIds: {SoldToIds}", ids);
 
             var customerItems = await _salesService.BuildCustomerItemsStringsAsync(ids, cancellationToken).ConfigureAwait(false);
-
             var cacheItems = ids.ToDictionary(
                 x => x,
                 x => customerItems.GetValueOrDefault(x) ?? string.Empty,

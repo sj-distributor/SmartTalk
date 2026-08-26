@@ -13,9 +13,8 @@ public interface ISalesDataProvider : IScopedDependency
     Task<List<Sales>> GetAllSalesAsync(CancellationToken cancellationToken);
     
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
-
     Task AddSalesAsync(Sales sales, bool forceSave = true, CancellationToken cancellationToken = default);
-    
+
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
@@ -25,7 +24,6 @@ public interface ISalesDataProvider : IScopedDependency
     Task UpsertCustomerItemsCacheAsync(string soldToId, string itemsString, bool forceSave, CancellationToken cancellationToken);
 
     Task UpsertDeliveryProgressCacheAsync(string soldToId, string deliveryProgressString, bool forceSave, CancellationToken cancellationToken);
-
     Task UpsertCustomerItemsCachesAsync(Dictionary<string, string> customerItems, CancellationToken cancellationToken);
 
     Task UpsertCustomerInfoCacheAsync(string phoneNumber, string cacheValue, bool forceSave, CancellationToken cancellationToken);
