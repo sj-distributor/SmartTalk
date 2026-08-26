@@ -1,3 +1,4 @@
+using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Settings.PhoneOrder;
 using SmartTalk.Messages.Dto.Aixvolink;
@@ -27,6 +28,38 @@ public class AixvolinkClient : IAixvolinkClient
             { "API-KEY", _setting.ApiKey }
         };
 
-        await _httpClientFactory.PostAsJsonAsync($"{_setting.BaseUrl}/api/external/smarttalk/call-results/callback", request, cancellationToken, headers: headers).ConfigureAwait(false);
+        var url = $"{_setting.BaseUrl}/api/external/smarttalk/call-results/callback";
+
+        Log.Information(
+            "Aixvolink callback request started. Url: {Url}, Request: {@Request}",
+            url,
+            request);
+
+        try
+        {
+            await _httpClientFactory
+                .PostAsJsonAsync(
+                    url,
+                    request,
+                    cancellationToken,
+                    headers: headers)
+                .ConfigureAwait(false);
+
+            Log.Information(
+                "Aixvolink callback request completed. Url: {Url}, RecordId: {RecordId}",
+                url,
+                request.RecordId);
+        }
+        catch (Exception e)
+        {
+            Log.Error(
+                e,
+                "Aixvolink callback request failed. Url: {Url}, RecordId: {RecordId}, Request: {@Request}",
+                url,
+                request.RecordId,
+                request);
+
+            throw;
+        }
     }
 }

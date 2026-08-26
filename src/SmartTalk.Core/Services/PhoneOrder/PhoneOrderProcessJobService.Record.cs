@@ -83,7 +83,24 @@ public partial class PhoneOrderProcessJobService
             CalleeNumber = assistant.AnsweringNumber
         };
 
-        await _aixvolinkClient.CallResultsCallbackAsync(axivolinkRequest, cancellationToken).ConfigureAwait(false);
+        Log.Information(
+            "Calling Aixvolink call results callback. JobId: {JobId}, RecordId: {RecordId}, Request: {@Request}",
+            speechMaticsJob.JobId,
+            record.Id,
+            axivolinkRequest);
+
+        try
+        {
+            await _aixvolinkClient.CallResultsCallbackAsync(axivolinkRequest, cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Aixvolink call results callback completed successfully. JobId: {JobId}, RecordId: {RecordId}", speechMaticsJob.JobId, record.Id);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Aixvolink call results callback failed. JobId: {JobId}, RecordId: {RecordId}, Request: {@Request}", speechMaticsJob.JobId, record.Id, axivolinkRequest);
+
+            throw;
+        }
 
         try
         {
