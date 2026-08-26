@@ -40,4 +40,14 @@ public class PhoneOrderProcessJobServiceRecordTests
         result.ShouldStartWith("客人ID：未匹配到");
         result.ShouldContain("內容摘要：未能確認客戶");
     }
+
+    [Fact]
+    public void UpdateCustomerIdLineInReport_ShouldReplaceTheExistingCustomerIdLine()
+    {
+        var result = PhoneOrderProcessJobService.UpdateCustomerIdLineInReport(
+            "來電號碼：+14084026529\n客人ID：\n內容摘要：已下單",
+            "12345");
+
+        result.ShouldBe("來電號碼：+14084026529\n客人ID：12345\n內容摘要：已下單");
+    }
 }
