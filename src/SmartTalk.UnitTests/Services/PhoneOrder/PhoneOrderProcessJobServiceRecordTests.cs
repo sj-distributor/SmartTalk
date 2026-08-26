@@ -42,6 +42,23 @@ public class PhoneOrderProcessJobServiceRecordTests
     }
 
     [Fact]
+    public void AddCustomerIdToTranscriptionText_ShouldShowNotMatchedWhenNoCustomerIdCanBeResolved()
+    {
+        var assistant = new AiSpeechAssistant
+        {
+            Name = string.Empty
+        };
+
+        var result = PhoneOrderProcessJobService.AddCustomerIdToTranscriptionText(
+            "內容摘要：未能確認客戶",
+            assistant,
+            string.Empty);
+
+        result.ShouldStartWith("客人ID：未匹配到");
+        result.ShouldContain("內容摘要：未能確認客戶");
+    }
+
+    [Fact]
     public void UpdateCustomerIdLineInReport_ShouldReplaceTheExistingCustomerIdLine()
     {
         var result = PhoneOrderProcessJobService.UpdateCustomerIdLineInReport(
@@ -49,5 +66,15 @@ public class PhoneOrderProcessJobServiceRecordTests
             "12345");
 
         result.ShouldBe("來電號碼：+14084026529\n客人ID：12345\n內容摘要：已下單");
+    }
+
+    [Fact]
+    public void UpdateCustomerIdLineInReport_ShouldRemoveDuplicatedCustomerIdOnNextLine()
+    {
+        var result = PhoneOrderProcessJobService.UpdateCustomerIdLineInReport(
+            "來電號碼：+14084026529\n客人ID：\n\n106991\n客戶情緒與語氣：耐心",
+            "106991");
+
+        result.ShouldBe("來電號碼：+14084026529\n客人ID：106991\n客戶情緒與語氣：耐心");
     }
 }
