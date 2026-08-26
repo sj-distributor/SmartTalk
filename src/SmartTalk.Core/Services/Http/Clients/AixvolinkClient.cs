@@ -19,8 +19,6 @@ public class AixvolinkClient : IAixvolinkClient
     {
         _setting = setting;
         _httpClientFactory = httpClientFactory;
-        
-        Log.Information("Aixvolink setting loaded. BaseUrl: {BaseUrl}, ApiKeyExists: {ApiKeyExists}", _setting.BaseUrl, !string.IsNullOrWhiteSpace(_setting.ApiKey));
     }
 
     public async Task CallResultsCallbackAsync(AixvolinkCallResultsCallbackRequest request, CancellationToken cancellationToken)
