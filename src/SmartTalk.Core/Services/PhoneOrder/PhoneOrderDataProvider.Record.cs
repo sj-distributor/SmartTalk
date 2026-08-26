@@ -30,6 +30,8 @@ public partial interface IPhoneOrderDataProvider
 
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAgentIdsAsync(List<int> agentIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
 
+    Task<List<PhoneOrderDashboardRecordProjection>> GetPhoneOrderDashboardRecordsAsync(List<int> agentIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
+
     Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAssistantIdsAsync(List<int> assistantIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default);
 
     Task<Dictionary<int, PhoneOrderRecord>> GetLatestPhoneOrderRecordsByAssistantIdsAsync(
@@ -110,6 +112,29 @@ public partial interface IPhoneOrderDataProvider
     Task<PhoneOrderRecordReport> GetOriginalPhoneOrderRecordReportAsync(int recordId, CancellationToken cancellationToken);
 }
 
+public class PhoneOrderDashboardRecordProjection
+{
+    public int AgentId { get; set; }
+
+    public PhoneOrderRecordStatus Status { get; set; }
+
+    public DateTimeOffset CreatedDate { get; set; }
+
+    public string PhoneNumber { get; set; }
+
+    public double? Duration { get; set; }
+
+    public bool? IsTransfer { get; set; }
+
+    public PhoneOrderRecordType OrderRecordType { get; set; }
+
+    public bool? IsCustomerFriendly { get; set; }
+
+    public bool? IsHumanAnswered { get; set; }
+
+    public DialogueScenarios? Scenario { get; set; }
+}
+
 public partial class PhoneOrderDataProvider
 {
     public async Task AddPhoneOrderRecordsAsync(List<PhoneOrderRecord> phoneOrderRecords, bool forceSave = true, CancellationToken cancellationToken = default)
@@ -188,6 +213,35 @@ public partial class PhoneOrderDataProvider
             query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
 
         return await query.OrderByDescending(record => record.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PhoneOrderDashboardRecordProjection>> GetPhoneOrderDashboardRecordsAsync(List<int> agentIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)
+    {
+        if (agentIds == null || agentIds.Count == 0) return [];
+
+        var query = _repository.QueryNoTracking<PhoneOrderRecord>()
+            .Where(record => agentIds.Contains(record.AgentId));
+
+        if (utcStart.HasValue && utcEnd.HasValue)
+            query = query.Where(record => record.CreatedDate >= utcStart.Value && record.CreatedDate < utcEnd.Value);
+
+        return await query
+            .OrderByDescending(record => record.CreatedDate)
+            .Select(record => new PhoneOrderDashboardRecordProjection
+            {
+                AgentId = record.AgentId,
+                Status = record.Status,
+                CreatedDate = record.CreatedDate,
+                PhoneNumber = record.PhoneNumber,
+                Duration = record.Duration,
+                IsTransfer = record.IsTransfer,
+                OrderRecordType = record.OrderRecordType,
+                IsCustomerFriendly = record.IsCustomerFriendly,
+                IsHumanAnswered = record.IsHumanAnswered,
+                Scenario = record.Scenario
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<List<PhoneOrderRecord>> GetPhoneOrderRecordsByAssistantIdsAsync(List<int> assistantIds, DateTimeOffset? utcStart = null, DateTimeOffset? utcEnd = null, CancellationToken cancellationToken = default)

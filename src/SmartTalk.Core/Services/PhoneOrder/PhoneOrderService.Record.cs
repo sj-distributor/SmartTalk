@@ -16,6 +16,7 @@ using Newtonsoft.Json.Linq;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Domain.SpeechMatics;
 using SmartTalk.Core.Services.Linphone;
+using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.PhoneOrder;
@@ -1155,12 +1156,12 @@ public partial class PhoneOrderService
 
         Log.Information("[PhoneDashboard] Fetch phone order records: Agents={@AgentIds}, Range={@Start}-{@End} (UTC: {@UtcStart}-{@UtcEnd})", command.AgentIds, command.StartDate, command.EndDate, utcStart, utcEnd);
         
-        var records = await _phoneOrderDataProvider.GetPhoneOrderRecordsByAgentIdsAsync(agentIds: command.AgentIds, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var records = await _phoneOrderDataProvider.GetPhoneOrderDashboardRecordsAsync(agentIds: command.AgentIds, utcStart: utcStart, utcEnd: utcEnd, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         Log.Information("[PhoneDashboard] Phone order records fetched: {@Count}", records?.Count ?? 0);
         
-        var posOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, null, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
-        var cancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, PosOrderModifiedStatus.Cancelled, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var posOrders = await _posDataProvider.GetPosOrderDashboardProjectionsAsync(command.StoreIds, true, utcStart, utcEnd, cancellationToken).ConfigureAwait(false);
+        var cancelledOrders = posOrders.Where(x => x.ModifiedStatus == PosOrderModifiedStatus.Cancelled).ToList();
 
         Log.Information("[PhoneDashboard] POS orders loaded: Total={@Total}, Cancelled={@Cancelled}", posOrders.Count, cancelledOrders.Count);
               
@@ -1176,11 +1177,10 @@ public partial class PhoneOrderService
             CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
         };
         
-        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderRecord>();
-        var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
+        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderDashboardRecordProjection>();
+        var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderDashboardRecordProjection>();
 
         var callInFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
-
         var callOutFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.OutBount && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
         
         Log.Information("[PhoneDashboard] Phone order Failed Count CallIn={@callInFailedCount}, CallOut={@callOutFailedCount}", callInFailedCount, callOutFailedCount);
@@ -1206,7 +1206,7 @@ public partial class PhoneOrderService
         };
     }
 
-    private static CallInDataDto BuildCallInData(List<PhoneOrderRecord> callInRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
+    private static CallInDataDto BuildCallInData(List<PhoneOrderDashboardRecordProjection> callInRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callInRecords.Count;
 
@@ -1241,7 +1241,7 @@ public partial class PhoneOrderService
         };
     }
 
-    private static CallOutDataDto BuildCallOutData(List<PhoneOrderRecord> callOutRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
+    private static CallOutDataDto BuildCallOutData(List<PhoneOrderDashboardRecordProjection> callOutRecords, int callInFailedCount, int? invalidCallSeconds, DateTimeOffset? start, DateTimeOffset? end, PhoneOrderDataDashDataType dataType)
     {
         var answeredCount = callOutRecords.Count;
         var effectiveCount = answeredCount - callOutRecords.Count(x => (x.Duration ?? 0) <= invalidCallSeconds);
@@ -1266,7 +1266,7 @@ public partial class PhoneOrderService
         };
     }
     
-    private static Dictionary<string, double> GroupDurationByRequestType(List<PhoneOrderRecord> records, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
+    private static Dictionary<string, double> GroupDurationByRequestType(List<PhoneOrderDashboardRecordProjection> records, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
     {
         if (startDate == null || endDate == null) return new Dictionary<string, double>();
         
@@ -1302,7 +1302,7 @@ public partial class PhoneOrderService
                 g => g.Sum(x => x.Duration ?? 0));
     }
 
-    private static List<ScenarioCallCountDto> BuildScenarioCallCounts(List<PhoneOrderRecord> records)
+    private static List<ScenarioCallCountDto> BuildScenarioCallCounts(List<PhoneOrderDashboardRecordProjection> records)
     {
         var scenarioCounts = records
             .Where(x => x.Scenario.HasValue)
@@ -1319,7 +1319,7 @@ public partial class PhoneOrderService
             .ToList();
     }
     
-    private static Dictionary<string, int> GroupCountByRequestType(List<PosOrder> orders, Func<PosOrder, DateTimeOffset> dateSelector, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
+    private static Dictionary<string, int> GroupCountByRequestType(List<PosOrderDashboardProjection> orders, Func<PosOrderDashboardProjection, DateTimeOffset> dateSelector, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
     {
         if (startDate == null || endDate == null || orders == null) return new Dictionary<string, int>();
 
@@ -1353,8 +1353,8 @@ public partial class PhoneOrderService
     }
 
     private async Task ApplyPeriodComparisonAsync(GetPhoneOrderDataDashboardCommand command,
-        List<PhoneOrderRecord> callInRecords, List<PhoneOrderRecord> callOutRecords, RestaurantDataDto restaurantData,
-        CallInDataDto callInData, CallOutDataDto callOutData, CancellationToken cancellationToken)
+        List<PhoneOrderDashboardRecordProjection> callInRecords, List<PhoneOrderDashboardRecordProjection> callOutRecords, 
+        RestaurantDataDto restaurantData, CallInDataDto callInData, CallOutDataDto callOutData, CancellationToken cancellationToken)
     {
         var periodDays = (command.EndDate - command.StartDate).TotalDays;
         if (periodDays <= 0) return;
@@ -1362,16 +1362,14 @@ public partial class PhoneOrderService
         var prevStartDate = command.StartDate.AddDays(-periodDays);
         var prevEndDate = command.EndDate.AddDays(-periodDays);
 
-        var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
-            agentIds: command.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderDashboardRecordsAsync(
+            agentIds: command.AgentIds, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderRecord>();
-        var prevCallOutRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
+        var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderDashboardRecordProjection>();
+        var prevCallOutRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderDashboardRecordProjection>();
 
-        var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var prevCancelledOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(
-            command.StoreIds, PosOrderModifiedStatus.Cancelled, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var prevPosOrders = await _posDataProvider.GetPosOrderDashboardProjectionsAsync(command.StoreIds, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var prevCancelledOrders = prevPosOrders.Where(x => x.ModifiedStatus == PosOrderModifiedStatus.Cancelled).ToList();
         
         var prevCallInCount = prevCallInRecords.Count;
         var currCallInCount = callInRecords.Count;
