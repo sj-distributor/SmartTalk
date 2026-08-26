@@ -406,11 +406,12 @@ public partial class PhoneOrderProcessJobService
 
         if (aiSpeechAssistant.CustomRecordAnalyzePrompt?.Contains("#{customer_id}", StringComparison.Ordinal) == true)
         {
-            record.TranscriptionText = UpdateCustomerIdLineInReport(record.TranscriptionText, record.CustomerId);
+            var resolvedCustomerId = ResolveCustomerId(record.CustomerId, aiSpeechAssistant?.Name);
+            record.TranscriptionText = UpdateCustomerIdLineInReport(record.TranscriptionText, resolvedCustomerId);
             Log.Information(
                 "Updated customer id in sales record analyze report. RecordId={RecordId}, CustomerId={CustomerId}",
                 record.Id,
-                record.CustomerId);
+                resolvedCustomerId);
         }
 
         var sourceReportLanguage = record.Language;
@@ -666,11 +667,7 @@ public partial class PhoneOrderProcessJobService
             customerItemsCacheList.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct());
         
         var (_, menuItems) = await _posUtilService.GeneratePosMenuItemsAsync(agent.Id, false, record.Language, cancellationToken).ConfigureAwait(false);
-        var configuredCustomerIds = (aiSpeechAssistant?.Name ?? string.Empty)
-            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var customerId = !string.IsNullOrWhiteSpace(record.CustomerId)
-            ? record.CustomerId
-            : configuredCustomerIds.Length == 1 ? configuredCustomerIds[0] : string.Empty;
+        var customerId = ResolveCustomerId(record.CustomerId, aiSpeechAssistant?.Name);
 
         var audioData = BinaryData.FromBytes(audioContent);
         var recordAnalyzePrompt = (string.IsNullOrEmpty(aiSpeechAssistant?.CustomRecordAnalyzePrompt)
@@ -717,13 +714,7 @@ public partial class PhoneOrderProcessJobService
         Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant,
         string customerId)
     {
-        var configuredCustomerIds = (aiSpeechAssistant?.Name ?? string.Empty)
-            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var resolvedCustomerId = !string.IsNullOrWhiteSpace(customerId)
-            ? customerId.Trim()
-            : configuredCustomerIds.Length == 1
-                ? configuredCustomerIds[0]
-                : configuredCustomerIds.Length > 1 ? "未匹配到" : string.Empty;
+        var resolvedCustomerId = ResolveCustomerId(customerId, aiSpeechAssistant?.Name);
 
         if (string.IsNullOrWhiteSpace(resolvedCustomerId))
             return transcriptionText;
@@ -736,15 +727,34 @@ public partial class PhoneOrderProcessJobService
         return $"客人ID：{resolvedCustomerId}\n\n{normalizedText}";
     }
 
+    internal static string ResolveCustomerId(string customerId, string assistantName)
+    {
+        var configuredCustomerIds = (assistantName ?? string.Empty)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (!string.IsNullOrWhiteSpace(customerId))
+            return customerId.Trim();
+
+        return configuredCustomerIds.Length == 1
+            ? configuredCustomerIds[0]
+            : "未匹配到";
+    }
+
     internal static string UpdateCustomerIdLineInReport(string reportText, string customerId)
     {
         if (string.IsNullOrWhiteSpace(reportText) || string.IsNullOrWhiteSpace(customerId))
             return reportText;
 
-        return Regex.Replace(
+        var resolvedCustomerId = customerId.Trim();
+        var updatedReportText = Regex.Replace(
             reportText,
-            @"(?m)^(客人ID\s*[：:]\s*).*$",
-            match => $"{match.Groups[1].Value}{customerId.Trim()}");
+            @"(?m)^(客人ID[ \t]*[：:][ \t]*).*$",
+            match => $"{match.Groups[1].Value}{resolvedCustomerId}");
+
+        return Regex.Replace(
+            updatedReportText,
+            $@"(?m)^(客人ID[ \t]*[：:][ \t]*{Regex.Escape(resolvedCustomerId)}[ \t]*)\r?\n(?:[ \t]*\r?\n)+[ \t]*{Regex.Escape(resolvedCustomerId)}[ \t]*(?=\r?\n|$)",
+            "$1");
     }
 
     private async Task MultiScenarioCustomProcessingAsync(Agent agent,
