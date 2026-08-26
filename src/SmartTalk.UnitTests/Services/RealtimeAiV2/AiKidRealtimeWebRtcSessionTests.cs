@@ -146,6 +146,57 @@ public class AiKidRealtimeWebRtcSessionTests
     }
 
     [Fact]
+    public async Task Initialize_SidebandConnectionFailure_HangsUpCreatedCall()
+    {
+        var fixture = CreateFixture();
+        fixture.Sideband.ConnectAsync(
+                Arg.Any<Uri>(),
+                Arg.Any<Dictionary<string, string>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("sideband failed")));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Session.InitializeAsync(
+                625,
+                RealtimeAiServerRegion.HK,
+                "offer",
+                CancellationToken.None,
+                CancellationToken.None));
+
+        Assert.Equal("sideband failed", exception.Message);
+        await fixture.CallClient.Received(1).HangupCallAsync(
+            "rtc_test_123",
+            "wss://api.openai.com/v1/realtime?model=gpt-realtime-test",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Initialize_HangupFailure_DoesNotHideSidebandConnectionFailure()
+    {
+        var fixture = CreateFixture();
+        fixture.Sideband.ConnectAsync(
+                Arg.Any<Uri>(),
+                Arg.Any<Dictionary<string, string>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("sideband failed")));
+        fixture.CallClient.HangupCallAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("hangup failed")));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Session.InitializeAsync(
+                625,
+                RealtimeAiServerRegion.HK,
+                "offer",
+                CancellationToken.None,
+                CancellationToken.None));
+
+        Assert.Equal("sideband failed", exception.Message);
+    }
+
+    [Fact]
     public async Task FunctionCall_IsExecutedOnServerAndReplyTriggersNextResponse()
     {
         var fixture = CreateFixture();

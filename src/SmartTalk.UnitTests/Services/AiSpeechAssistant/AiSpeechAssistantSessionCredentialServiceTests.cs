@@ -2,7 +2,9 @@ using NSubstitute;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching;
+using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Infrastructure;
+using SmartTalk.Messages.Enums.Caching;
 using Xunit;
 
 namespace SmartTalk.UnitTests.Services.InterviewSession;
@@ -117,6 +119,80 @@ public class AiSpeechAssistantSessionCredentialServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task ReserveWebRtcAsync_ConcurrentRequestsOnlyOneSucceeds()
+    {
+        var fixture = CreateFixture();
+        var credential = CreateCredential(Now.AddMinutes(30));
+        fixture.CacheManager.GetAsync<AiSpeechAssistantSessionCredential>(
+                Arg.Any<string>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ => credential);
+
+        var results = await Task.WhenAll(
+            fixture.Service.ReserveWebRtcAsync(credential.SessionId, "reservation-a"),
+            fixture.Service.ReserveWebRtcAsync(credential.SessionId, "reservation-b"));
+
+        Assert.Contains(AiSpeechAssistantSessionWebRtcTransitionStatus.Succeeded, results);
+        Assert.Contains(AiSpeechAssistantSessionWebRtcTransitionStatus.Conflict, results);
+        Assert.Equal(AiSpeechAssistantSessionWebRtcStatus.Creating, credential.WebRtcStatus);
+        Assert.Contains(credential.WebRtcReservationId, new[] { "reservation-a", "reservation-b" });
+    }
+
+    [Fact]
+    public async Task ActivateWebRtcAsync_BindsCallOwnedByReservation()
+    {
+        var fixture = CreateFixture();
+        var credential = CreateCredential(Now.AddMinutes(30));
+        credential.WebRtcStatus = AiSpeechAssistantSessionWebRtcStatus.Creating;
+        credential.WebRtcReservationId = "reservation-a";
+        fixture.CacheManager.GetAsync<AiSpeechAssistantSessionCredential>(
+                Arg.Any<string>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ => credential);
+
+        var result = await fixture.Service.ActivateWebRtcAsync(
+            credential.SessionId,
+            "reservation-a",
+            "rtc_test_123");
+
+        Assert.Equal(AiSpeechAssistantSessionWebRtcTransitionStatus.Succeeded, result);
+        Assert.Equal(AiSpeechAssistantSessionWebRtcStatus.Active, credential.WebRtcStatus);
+        Assert.Equal("rtc_test_123", credential.WebRtcCallId);
+        Assert.Null(credential.WebRtcReservationId);
+        Assert.True(await fixture.Service.IsWebRtcCallBoundAsync(
+            credential.SessionId,
+            "rtc_test_123"));
+        Assert.False(await fixture.Service.IsWebRtcCallBoundAsync(
+            credential.SessionId,
+            "rtc_other"));
+    }
+
+    [Fact]
+    public async Task ReleaseWebRtcReservationAsync_DoesNotReleaseAnotherReservation()
+    {
+        var fixture = CreateFixture();
+        var credential = CreateCredential(Now.AddMinutes(30));
+        credential.WebRtcStatus = AiSpeechAssistantSessionWebRtcStatus.Creating;
+        credential.WebRtcReservationId = "reservation-a";
+        fixture.CacheManager.GetAsync<AiSpeechAssistantSessionCredential>(
+                Arg.Any<string>(),
+                Arg.Any<ICachingSetting>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ => credential);
+
+        await fixture.Service.ReleaseWebRtcReservationAsync(
+            credential.SessionId,
+            "reservation-b");
+
+        Assert.Equal(AiSpeechAssistantSessionWebRtcStatus.Creating, credential.WebRtcStatus);
+        Assert.Equal("reservation-a", credential.WebRtcReservationId);
+        await fixture.CacheManager.DidNotReceiveWithAnyArgs()
+            .SetAsync(default, default, default, default);
+    }
+
     private static Fixture CreateFixture()
     {
         var clock = Substitute.For<IClock>();
@@ -124,9 +200,30 @@ public class AiSpeechAssistantSessionCredentialServiceTests
 
         var cacheManager = Substitute.For<ICacheManager>();
         var dataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
+        var redisSafeRunner = Substitute.For<IRedisSafeRunner>();
+        var redisLock = new SemaphoreSlim(1, 1);
+        redisSafeRunner.ExecuteWithLockAsync(
+                Arg.Any<string>(),
+                Arg.Any<Func<Task>>(),
+                Arg.Any<TimeSpan?>(),
+                Arg.Any<TimeSpan?>(),
+                Arg.Any<TimeSpan?>(),
+                Arg.Any<RedisServer>())
+            .Returns(async callInfo =>
+            {
+                await redisLock.WaitAsync();
+                try
+                {
+                    await callInfo.ArgAt<Func<Task>>(1)();
+                }
+                finally
+                {
+                    redisLock.Release();
+                }
+            });
 
         return new Fixture(
-            new AiSpeechAssistantSessionCredentialService(clock, cacheManager, dataProvider),
+            new AiSpeechAssistantSessionCredentialService(clock, cacheManager, dataProvider, redisSafeRunner),
             cacheManager,
             dataProvider);
     }
