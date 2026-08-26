@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
 
@@ -57,15 +58,40 @@ public class AiSpeechAssistantController : ControllerBase
     [HttpGet("outbound/connect")]
     [HttpGet("outbound/connect/{from}/{to}/{id:int}")]
     [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}")]
-    [HttpGet("outbound/connect/{from}/{to}/{id:int}/question/{encodedQuestion}")]
-    [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}/question/{encodedQuestion}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/prompt-variables/{encodedPromptVariables}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}/prompt-variables/{encodedPromptVariables}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/question/{legacyEncodedQuestion}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}/question/{legacyEncodedQuestion}")]
     public async Task OutboundConnectAiSpeechAssistantAsync(
-        string from, string to, int id, int? numberId = null, string encodedQuestion = null, [FromQuery] string instruction = null)
+        string from, string to, int id, int? numberId = null, string encodedPromptVariables = null,
+        string legacyEncodedQuestion = null, [FromQuery] string instruction = null)
+    {
+        await ConnectOutboundAiSpeechAssistantAsync(
+            from, to, id, numberId, encodedPromptVariables, legacyEncodedQuestion, instruction,
+            AiSpeechAssistantConnectionMode.Routed);
+    }
+
+    [AllowAnonymous]
+    [HttpGet("outbound/connect/direct/{from}/{to}/{id:int}")]
+    [HttpGet("outbound/connect/direct/{from}/{to}/{id:int}/{numberId:int}")]
+    [HttpGet("outbound/connect/direct/{from}/{to}/{id:int}/prompt-variables/{encodedPromptVariables}")]
+    [HttpGet("outbound/connect/direct/{from}/{to}/{id:int}/{numberId:int}/prompt-variables/{encodedPromptVariables}")]
+    public async Task DirectOutboundConnectAiSpeechAssistantAsync(
+        string from, string to, int id, int? numberId = null, string encodedPromptVariables = null, [FromQuery] string instruction = null)
+    {
+        await ConnectOutboundAiSpeechAssistantAsync(
+            from, to, id, numberId, encodedPromptVariables, null, instruction, AiSpeechAssistantConnectionMode.Direct);
+    }
+
+    private async Task ConnectOutboundAiSpeechAssistantAsync(
+        string from, string to, int id, int? numberId, string encodedPromptVariables,
+        string legacyEncodedQuestion, string instruction, AiSpeechAssistantConnectionMode connectionMode)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {numberId}, hasInstruction: {HasInstruction}, hasQuestion: {HasQuestion}",
-                from, to, id, numberId, !string.IsNullOrWhiteSpace(instruction), !string.IsNullOrWhiteSpace(encodedQuestion));
+            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {numberId}, mode: {ConnectionMode}, hasInstruction: {HasInstruction}, hasPromptVariables: {HasPromptVariables}, usesLegacyQuestion: {UsesLegacyQuestion}",
+                from, to, id, numberId, connectionMode, !string.IsNullOrWhiteSpace(instruction),
+                !string.IsNullOrWhiteSpace(encodedPromptVariables), !string.IsNullOrWhiteSpace(legacyEncodedQuestion));
             var command = new ConnectAiSpeechAssistantCommand
             {
                 From = from,
@@ -74,7 +100,9 @@ public class AiSpeechAssistantController : ControllerBase
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
                 Instruction = instruction,
-                EncodedQuestion = encodedQuestion,
+                EncodedPromptVariables = encodedPromptVariables,
+                EncodedLegacyQuestion = legacyEncodedQuestion,
+                ConnectionMode = connectionMode,
                 TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 OrderRecordType = PhoneOrderRecordType.OutBount,
             };

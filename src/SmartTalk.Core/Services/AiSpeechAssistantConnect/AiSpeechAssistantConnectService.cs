@@ -16,13 +16,15 @@ using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.Config;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts.MiniMax;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Events.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public interface IAiSpeechAssistantConnectService : IScopedDependency
 {
-    Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken);
+    Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(
+        ConnectAiSpeechAssistantCommand command, IReadOnlyDictionary<string, string> promptVariables, CancellationToken cancellationToken);
 }
 
 public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnectService
@@ -94,19 +96,29 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         _backgroundJobClient = backgroundJobClient;
     }
 
-    public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
+    public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAsync(
+        ConnectAiSpeechAssistantCommand command, IReadOnlyDictionary<string, string> promptVariables, CancellationToken cancellationToken)
     {
         Log.Information("[AiAssistant] Call connected, From: {From}, To: {To}", command.From, command.To);
 
         try
         {
-            _ctx = BuildContext(command);
+            _ctx = BuildContext(command, promptVariables);
 
-            var agent = await ResolveActiveAgentAsync(cancellationToken).ConfigureAwait(false);
+            if (_ctx.ConnectionMode == AiSpeechAssistantConnectionMode.Direct)
+            {
+                EnsureDirectAssistantSpecified();
+                Log.Information("[AiAssistant] Direct assistant mode, AssistantId: {AssistantId}, From: {From}, To: {To}",
+                    _ctx.AssistantId, _ctx.From, _ctx.To);
+            }
+            else
+            {
+                var agent = await ResolveActiveAgentAsync(cancellationToken).ConfigureAwait(false);
 
-            EnsureServiceAvailable(agent);
+                EnsureServiceAvailable(agent);
 
-            await ForwardIfRequiredAsync(cancellationToken).ConfigureAwait(false);
+                await ForwardIfRequiredAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             var options = await BuildSessionConfigAsync(cancellationToken).ConfigureAwait(false);
 
@@ -132,6 +144,12 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         }
 
         return new AiSpeechAssistantConnectCloseEvent();
+    }
+
+    private void EnsureDirectAssistantSpecified()
+    {
+        if (_ctx.AssistantId is not > 0)
+            throw new AiAssistantNotAvailableException("Direct assistant mode requires an assistant id");
     }
 
     /// <summary>

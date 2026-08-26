@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
@@ -18,15 +19,16 @@ public class AiSpeechAssistantConnectContext
     // Command
     public int? AssistantId { get; set; }
     public int? NumberId { get; set; }
-    public int AgentId { get; set; }
+    public int? AgentId { get; set; }
     public WebSocket TwilioWebSocket { get; set; }
     public PhoneOrderRecordType OrderRecordType { get; set; }
+    public AiSpeechAssistantConnectionMode ConnectionMode { get; set; }
 
     // 调用方传入的完整本通指令; 保留原有覆盖 Assistant knowledge prompt 的能力。
     public string Instruction { get; set; }
 
-    // 代客致电等场景: 调用方传入本通动态问题, 不覆盖 Assistant knowledge prompt。
-    public string Question { get; set; }
+    // 每通连接的模板变量；key 对应 Assistant prompt 中的 #{key} 占位符。
+    public IReadOnlyDictionary<string, string> PromptVariables { get; set; } = new Dictionary<string, string>();
 
     // Assistant & knowledge
     public string Prompt { get; set; }
@@ -40,7 +42,7 @@ public class AiSpeechAssistantConnectContext
     public int? ForwardAssistantId { get; set; }
     public string HumanContactPhone { get; set; }
     public string TransferCallNumber { get; set; }
-    public List<AgentTransferCallConfig> AgentTransferCallConfigs { get; set; }
+    public List<AgentTransferCallConfig> AgentTransferCallConfigs { get; set; } = [];
     public TimeZoneInfo TimeZone { get; set; }
 
     // Service hours

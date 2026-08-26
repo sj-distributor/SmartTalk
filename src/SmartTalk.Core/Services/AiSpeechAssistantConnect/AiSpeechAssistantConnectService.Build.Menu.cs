@@ -9,11 +9,14 @@ public partial class AiSpeechAssistantConnectService
 {
     private async Task<string> GenerateMenuItemsAsync(CancellationToken cancellationToken)
     {
-        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(_ctx.AgentId, cancellationToken).ConfigureAwait(false);
+        if (!_ctx.AgentId.HasValue) return null;
+
+        var agentId = _ctx.AgentId.Value;
+        var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         
         if (storeAgent == null) return null;
 
-        var (products, categories) = await LoadStoreMenuDataAsync(storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
+        var (products, categories) = await LoadStoreMenuDataAsync(agentId, storeAgent.StoreId, cancellationToken).ConfigureAwait(false);
         
         var selected = SelectMenuProducts(products);
         var grouped = GroupProductsByCategory(selected, categories);
@@ -21,9 +24,10 @@ public partial class AiSpeechAssistantConnectService
         return FormatMenu(grouped);
     }
 
-    private async Task<(List<PosProduct> Products, List<PosCategory> Categories)> LoadStoreMenuDataAsync(int storeId, CancellationToken cancellationToken)
+    private async Task<(List<PosProduct> Products, List<PosCategory> Categories)> LoadStoreMenuDataAsync(
+        int agentId, int storeId, CancellationToken cancellationToken)
     {
-        var products = await _posDataProvider.GetPosProductsByAgentIdAsync(_ctx.AgentId, cancellationToken).ConfigureAwait(false);
+        var products = await _posDataProvider.GetPosProductsByAgentIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         var categories = (await _posDataProvider.GetPosCategoriesAsync(storeId: storeId, cancellationToken: cancellationToken).ConfigureAwait(false)).DistinctBy(x => x.CategoryId).ToList();
 
         return (products, categories);

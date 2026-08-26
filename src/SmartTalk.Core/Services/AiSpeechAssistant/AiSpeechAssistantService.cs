@@ -69,6 +69,17 @@ public partial interface IAiSpeechAssistantService : IScopedDependency
 
 public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
+    private const int MaxEncodedPromptVariablesLength = 4096;
+    private const int MaxPromptVariableCount = 20;
+    private const int MaxPromptVariableKeyLength = 64;
+    private const int MaxPromptVariableValueLength = 2048;
+
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    private static readonly Regex PromptVariableKeyRegex = new(
+        "^[A-Za-z0-9_.-]{1,64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex PromptVariableTokenRegex = new(
+        "#\\{(?<key>[A-Za-z0-9_.-]{1,64})\\}", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     private readonly IClock _clock;
     private readonly IMapper _mapper;
     private readonly ICrmClient _crmClient;
@@ -206,45 +217,68 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        if (!TryDecodeCallQuestion(command.EncodedQuestion, out var question))
+        if (!TryResolvePromptVariables(
+                command.EncodedPromptVariables, command.EncodedLegacyQuestion, command.PromptVariables,
+                out var promptVariables, out var promptVariablesError))
         {
-            Log.Warning("The outbound call question is not valid URL-safe Base64, assistantId: {AssistantId}", command.AssistantId);
+            Log.Warning("The outbound call prompt variables are invalid, AssistantId: {AssistantId}, Reason: {Reason}",
+                command.AssistantId, promptVariablesError);
             await AiSpeechAssistantConnectService.TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
             return new AiSpeechAssistantConnectCloseEvent();
         }
 
-        command.Question = question;
+        if (command.ConnectionMode == AiSpeechAssistantConnectionMode.Direct && command.AssistantId is not > 0)
+        {
+            Log.Warning("Direct assistant mode requires an assistant id, From: {From}, To: {To}", command.From, command.To);
+            await AiSpeechAssistantConnectService.TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
+            return new AiSpeechAssistantConnectCloseEvent();
+        }
 
         if (_aiSpeechAssistantSettings.EngineVersion == 2)
-            return await _aiSpeechAssistantConnectService.ConnectAsync(command, cancellationToken).ConfigureAwait(false);
+            return await _aiSpeechAssistantConnectService.ConnectAsync(command, promptVariables, cancellationToken).ConfigureAwait(false);
 
         Log.Information($"The call from {command.From} to {command.To} is connected");
-        
-        var agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
-        
-        if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
+
+        Agent agent = null;
+
+        if (command.ConnectionMode == AiSpeechAssistantConnectionMode.Routed)
+        {
+            agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
+
+            Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
+
+            if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
+        }
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(
-            command.From, command.To, command.AssistantId, command.NumberId, agent.Id,
-            command.Instruction, command.Question, cancellationToken).ConfigureAwait(false);
-        
-        _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
-        _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
-        _aiSpeechAssistantStreamContext.TransferCallNumber = _agentTransferCallConfigs.Count > 0
-            ? _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(_agentTransferCallConfigs)
-            : agent.TransferCallNumber;
+        var isAssistantReady = await BuildingAiSpeechAssistantKnowledgeBaseAsync(
+            command.From, command.To, command.AssistantId, command.NumberId, agent?.Id,
+            command.Instruction, promptVariables, command.ConnectionMode == AiSpeechAssistantConnectionMode.Routed,
+            cancellationToken).ConfigureAwait(false);
 
-        (_aiSpeechAssistantStreamContext.IsInAiServiceHours, _aiSpeechAssistantStreamContext.IsEnableManualService) =
-            _agentTransferCallRoutingService.CheckIfInServiceHours(
-                agent.ServiceHours, agent.IsTransferHuman, _aiSpeechAssistantStreamContext.TransferCallNumber,
-                _clock.Now, _agentTimeZone);
-
-        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
+        if (!isAssistantReady)
+        {
+            await AiSpeechAssistantConnectService.TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
             return new AiSpeechAssistantConnectCloseEvent();
+        }
+
+        if (agent != null)
+        {
+            _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
+            _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
+            _aiSpeechAssistantStreamContext.TransferCallNumber = _agentTransferCallConfigs.Count > 0
+                ? _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(_agentTransferCallConfigs)
+                : agent.TransferCallNumber;
+
+            (_aiSpeechAssistantStreamContext.IsInAiServiceHours, _aiSpeechAssistantStreamContext.IsEnableManualService) =
+                _agentTransferCallRoutingService.CheckIfInServiceHours(
+                    agent.ServiceHours, agent.IsTransferHuman, _aiSpeechAssistantStreamContext.TransferCallNumber,
+                    _clock.Now, _agentTimeZone);
+
+            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
+                return new AiSpeechAssistantConnectCloseEvent();
+        }
         
         _aiSpeechAssistantStreamContext.HumanContactPhone =
             _aiSpeechAssistantStreamContext.ShouldForward || _agentTransferCallConfigs.Count > 0
@@ -272,33 +306,151 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return new AiSpeechAssistantConnectCloseEvent();
     }
 
-    private static bool TryDecodeCallQuestion(string encodedQuestion, out string question)
+    internal static bool TryResolvePromptVariables(
+        string encodedPromptVariables, IReadOnlyDictionary<string, string> suppliedPromptVariables,
+        out IReadOnlyDictionary<string, string> resolvedPromptVariables, out string error)
     {
-        question = null;
-
-        if (string.IsNullOrWhiteSpace(encodedQuestion)) return true;
-
-        try
-        {
-            var value = encodedQuestion.Replace('-', '+').Replace('_', '/');
-            value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
-            question = Encoding.UTF8.GetString(Convert.FromBase64String(value));
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
+        return TryResolvePromptVariables(
+            encodedPromptVariables, null, suppliedPromptVariables, out resolvedPromptVariables, out error);
     }
 
-    private static string ResolveCallQuestionSessionPrompt(string prompt, string instruction, string question)
+    internal static bool TryResolvePromptVariables(
+        string encodedPromptVariables, string encodedLegacyQuestion,
+        IReadOnlyDictionary<string, string> suppliedPromptVariables,
+        out IReadOnlyDictionary<string, string> resolvedPromptVariables, out string error)
     {
-        var effectivePrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : prompt;
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        error = null;
 
-        if (string.IsNullOrEmpty(effectivePrompt) || !effectivePrompt.Contains("#{question}", StringComparison.OrdinalIgnoreCase))
-            return effectivePrompt;
+        if (!string.IsNullOrWhiteSpace(encodedPromptVariables) && !string.IsNullOrWhiteSpace(encodedLegacyQuestion))
+        {
+            resolvedPromptVariables = new Dictionary<string, string>();
+            error = "Prompt variables and legacy question cannot be supplied together";
+            return false;
+        }
 
-        return effectivePrompt.Replace("#{question}", question ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(encodedPromptVariables))
+        {
+            if (encodedPromptVariables.Length > MaxEncodedPromptVariablesLength)
+            {
+                resolvedPromptVariables = new Dictionary<string, string>();
+                error = $"Encoded payload exceeds {MaxEncodedPromptVariablesLength} characters";
+                return false;
+            }
+
+            try
+            {
+                var value = encodedPromptVariables.Replace('-', '+').Replace('_', '/');
+                value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
+                var decodedPayload = StrictUtf8.GetString(Convert.FromBase64String(value));
+
+                using var document = JsonDocument.Parse(decodedPayload);
+
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new global::System.Text.Json.JsonException("Prompt variables payload must be a JSON object");
+
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    if (property.Value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+                        throw new global::System.Text.Json.JsonException("Prompt variable values must be strings");
+
+                    variables[property.Name] = property.Value.ValueKind == JsonValueKind.Null
+                        ? string.Empty
+                        : property.Value.GetString();
+                }
+            }
+            catch (Exception exception) when (exception is FormatException or DecoderFallbackException or global::System.Text.Json.JsonException)
+            {
+                resolvedPromptVariables = new Dictionary<string, string>();
+                error = "Payload is not valid URL-safe Base64 UTF-8 prompt variables JSON";
+                return false;
+            }
+        }
+
+        var hasLegacyQuestion = !string.IsNullOrWhiteSpace(encodedLegacyQuestion);
+
+        if (hasLegacyQuestion)
+        {
+            try
+            {
+                var value = encodedLegacyQuestion.Replace('-', '+').Replace('_', '/');
+                value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
+                variables["question"] = Encoding.UTF8.GetString(Convert.FromBase64String(value));
+            }
+            catch (FormatException)
+            {
+                resolvedPromptVariables = new Dictionary<string, string>();
+                error = "Legacy question is not valid URL-safe Base64 text";
+                return false;
+            }
+        }
+
+        if (suppliedPromptVariables != null)
+        {
+            foreach (var (key, value) in suppliedPromptVariables)
+                variables[key] = value ?? string.Empty;
+        }
+
+        if (!TryValidatePromptVariables(variables, hasLegacyQuestion, out error))
+        {
+            resolvedPromptVariables = new Dictionary<string, string>();
+            return false;
+        }
+
+        resolvedPromptVariables = variables;
+        return true;
+    }
+
+    internal static string ResolvePromptVariables(string prompt, IReadOnlyDictionary<string, string> promptVariables)
+    {
+        if (string.IsNullOrEmpty(prompt)) return prompt;
+
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (promptVariables != null)
+        {
+            foreach (var (key, value) in promptVariables)
+                variables[key] = value;
+        }
+
+        return PromptVariableTokenRegex.Replace(prompt, match =>
+        {
+            var key = match.Groups["key"].Value;
+
+            if (variables.TryGetValue(key, out var value)) return value ?? string.Empty;
+
+            // 兼容既有 question 合约：旧调用未提供 question 时会把占位符清空，而不是传给模型。
+            return key.Equals("question", StringComparison.OrdinalIgnoreCase) ? string.Empty : match.Value;
+        });
+    }
+
+    private static bool TryValidatePromptVariables(
+        IReadOnlyDictionary<string, string> promptVariables, bool allowUnboundedLegacyQuestion, out string error)
+    {
+        if (promptVariables.Count > MaxPromptVariableCount)
+        {
+            error = $"Prompt variables exceed {MaxPromptVariableCount} entries";
+            return false;
+        }
+
+        foreach (var (key, value) in promptVariables)
+        {
+            if (string.IsNullOrWhiteSpace(key) || key.Length > MaxPromptVariableKeyLength || !PromptVariableKeyRegex.IsMatch(key))
+            {
+                error = "Prompt variable key is invalid";
+                return false;
+            }
+
+            if ((value?.Length ?? 0) > MaxPromptVariableValueLength &&
+                !(allowUnboundedLegacyQuestion && key.Equals("question", StringComparison.OrdinalIgnoreCase)))
+            {
+                error = $"Prompt variable value exceeds {MaxPromptVariableValueLength} characters";
+                return false;
+            }
+        }
+
+        error = null;
+        return true;
     }
 
     private void InitAiSpeechAssistantStreamContext(string host, string from)
@@ -307,17 +459,24 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
 
-    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(
+    private async Task<bool> BuildingAiSpeechAssistantKnowledgeBaseAsync(
         string from, string to, int? assistantId, int? numberId, int? agentId,
-        string instruction, string question, CancellationToken cancellationToken)
+        string instruction, IReadOnlyDictionary<string, string> promptVariables, bool allowInboundRouting,
+        CancellationToken cancellationToken)
     {
-        var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Inbound route: {@inboundRoute}", inboundRoute);
+        string forwardNumber = null;
+        int? forwardAssistantId = null;
 
-        var (forwardNumber, forwardAssistantId) = DecideDestinationByInboundRoute(inboundRoute);
+        if (allowInboundRouting)
+        {
+            var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Forward number: {@forwardNumber} or Forward assistant id: {forwardAssistantId}", forwardNumber, forwardAssistantId);
+            Log.Information("Inbound route: {@inboundRoute}", inboundRoute);
+
+            (forwardNumber, forwardAssistantId) = DecideDestinationByInboundRoute(inboundRoute);
+
+            Log.Information("Forward number: {@forwardNumber} or Forward assistant id: {forwardAssistantId}", forwardNumber, forwardAssistantId);
+        }
         
         if (!string.IsNullOrEmpty(forwardNumber))
         {
@@ -325,13 +484,21 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _aiSpeechAssistantStreamContext.ShouldForward = true;
             _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
-            return;
+            return true;
         }
         
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
-        
-        Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
+
+        Log.Information("Matching AI speech assistant, AssistantId: {AssistantId}, HasKnowledge: {HasKnowledge}, HasUserProfile: {HasUserProfile}",
+            assistant?.Id, knowledge != null, userProfile != null);
+
+        if (assistant == null || knowledge == null)
+        {
+            Log.Warning("AI speech assistant or active knowledge is unavailable, RequestedAssistantId: {RequestedAssistantId}, From: {From}, To: {To}",
+                forwardAssistantId ?? assistantId, from, to);
+            return false;
+        }
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
@@ -362,9 +529,11 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         }
         
-        if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))
+        if (finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))
         {
-            var menuItems = await GenerateMenuItemsAsync(agentId.Value, cancellationToken).ConfigureAwait(false);
+            var menuItems = agentId.HasValue
+                ? await GenerateMenuItemsAsync(agentId.Value, cancellationToken).ConfigureAwait(false)
+                : null;
             
             finalPrompt = finalPrompt.Replace("#{menu_items}", string.IsNullOrWhiteSpace(menuItems) ? "" : menuItems);
         }
@@ -383,11 +552,15 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
         }
         
-        _aiSpeechAssistantStreamContext.LastPrompt = ResolveCallQuestionSessionPrompt(finalPrompt, instruction, question);
+        var effectivePrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : finalPrompt;
+        _aiSpeechAssistantStreamContext.LastPrompt = ResolvePromptVariables(effectivePrompt, promptVariables);
 
-        Log.Information($"The final prompt: {_aiSpeechAssistantStreamContext.LastPrompt}");
+        Log.Information("The final prompt is resolved, PromptLength: {PromptLength}, PromptVariableCount: {PromptVariableCount}",
+            _aiSpeechAssistantStreamContext.LastPrompt?.Length ?? 0, promptVariables?.Count ?? 0);
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
+
+        return true;
     }
     
     private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)

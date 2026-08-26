@@ -17,6 +17,13 @@ public partial class AiSpeechAssistantConnectService
     private RealtimeSessionOptions BuildSessionOptions()
     {
         var assistant = _ctx.Assistant;
+        var sourcePrompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt;
+        var resolvedPrompt = AiSpeechAssistantService.ResolvePromptVariables(sourcePrompt, _ctx.PromptVariables);
+
+        _ctx.Prompt = resolvedPrompt;
+
+        if (!string.IsNullOrWhiteSpace(_ctx.Instruction))
+            _ctx.Instruction = resolvedPrompt;
 
         return new RealtimeSessionOptions
         {
@@ -31,7 +38,7 @@ public partial class AiSpeechAssistantConnectService
                 Voice = assistant.ModelVoice ?? "alloy",
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
-                Prompt = ResolveCallQuestionSessionPrompt(_ctx.Prompt, _ctx.Instruction, _ctx.Question),
+                Prompt = resolvedPrompt,
                 Tools = _ctx.FunctionCalls
                     .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
                     .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
@@ -65,12 +72,6 @@ public partial class AiSpeechAssistantConnectService
             OnFunctionCallAsync = (data, actions) => OnFunctionCallAsync(data, actions, CancellationToken.None),
             OnResponseUsageReceivedAsync = HandleResponseUsageReceivedAsync
         };
-    }
-
-    private static string ResolveCallQuestionSessionPrompt(string prompt, string instruction, string question)
-    {
-        var effectivePrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : prompt;
-        return ResolveCallQuestionPrompt(effectivePrompt, question);
     }
 
     private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)

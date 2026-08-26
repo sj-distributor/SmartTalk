@@ -26,28 +26,18 @@ public partial class AiSpeechAssistantConnectService
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
-        ResolveCallQuestion();
 
-        Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
-    }
-
-    private void ResolveCallQuestion()
-    {
-        _ctx.Prompt = ResolveCallQuestionPrompt(_ctx.Prompt, _ctx.Question);
-    }
-
-    private static string ResolveCallQuestionPrompt(string prompt, string question)
-    {
-        if (string.IsNullOrEmpty(prompt) || !prompt.Contains("#{question}", StringComparison.OrdinalIgnoreCase))
-            return prompt;
-
-        return prompt.Replace("#{question}", question ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Log.Information("[AiAssistant] Prompt data resolved, PromptLength: {PromptLength}", _ctx.Prompt?.Length ?? 0);
     }
 
     private async Task LoadAssistantInfoAsync(CancellationToken cancellationToken)
     {
+        var targetAssistantId = _ctx.ConnectionMode == AiSpeechAssistantConnectionMode.Direct
+            ? _ctx.AssistantId
+            : _ctx.ForwardAssistantId ?? _ctx.AssistantId;
+
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantInfoByNumbersAsync(_ctx.From, _ctx.To, _ctx.ForwardAssistantId ?? _ctx.AssistantId, cancellationToken).ConfigureAwait(false);
+            .GetAiSpeechAssistantInfoByNumbersAsync(_ctx.From, _ctx.To, targetAssistantId, cancellationToken).ConfigureAwait(false);
 
         Log.Information("[AiAssistant] Assistant matched, AssistantId: {AssistantId}, HasProfile: {HasProfile}, From: {From}, To: {To}", assistant?.Id, userProfile != null, _ctx.From, _ctx.To);
 
@@ -274,13 +264,20 @@ public partial class AiSpeechAssistantConnectService
 
         if (!needProducts && !needStoreHours) return null;
 
+        if (!_ctx.AgentId.HasValue)
+        {
+            Log.Warning("[AiAssistant] POS prompt variables skipped because no agent is associated with the direct assistant call, AssistantId: {AssistantId}",
+                _ctx.AssistantId);
+            return new PosPromptFetchResult(needProducts, needStoreHours, [], null);
+        }
+
         var language = ResolvePosPromptLanguage();
         var products = needProducts
-            ? await _posUtilService.GetPosMenuProductBriefsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
+            ? await _posUtilService.GetPosMenuProductBriefsAsync(_ctx.AgentId.Value, language, cancellationToken).ConfigureAwait(false)
             : new List<PosMenuProductBriefDto>();
 
         var storeHours = needStoreHours
-            ? await _posUtilService.GetPosStoreTimePeriodsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
+            ? await _posUtilService.GetPosStoreTimePeriodsAsync(_ctx.AgentId.Value, language, cancellationToken).ConfigureAwait(false)
             : null;
 
         return new PosPromptFetchResult(needProducts, needStoreHours, products, storeHours);
