@@ -42,7 +42,7 @@ public interface ISalesDataProvider : IScopedDependency
 
     Task<bool> HasPendingTasksByRecordIdAsync(int recordId, CancellationToken cancellationToken);
 
-    Task<List<int>> GetIncompleteRecordsWithAllTasksSentAsync(int batchSize, CancellationToken cancellationToken);
+    Task<List<int>> GetIncompleteRecordsWithAllTasksSentAsync(DateTimeOffset startTime, DateTimeOffset endTime, int batchSize, CancellationToken cancellationToken);
     
     Task<PhoneOrderPushTask> GetRecordPushTaskByRecordIdAsync(int recordId, CancellationToken cancellationToken);
 
@@ -367,12 +367,14 @@ public class SalesDataProvider : ISalesDataProvider
         return await _repository.Query<PhoneOrderPushTask>().AnyAsync(t => t.RecordId == recordId && t.Status != PhoneOrderPushTaskStatus.Sent, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<List<int>> GetIncompleteRecordsWithAllTasksSentAsync(int batchSize, CancellationToken cancellationToken)
+    public async Task<List<int>> GetIncompleteRecordsWithAllTasksSentAsync(DateTimeOffset startTime, DateTimeOffset endTime, int batchSize, CancellationToken cancellationToken)
     {
         var taskQuery = _repository.Query<PhoneOrderPushTask>();
 
         return await _repository.Query<PhoneOrderRecord>()
             .Where(record => !record.IsCompleted
+                             && record.CreatedDate >= startTime
+                             && record.CreatedDate < endTime
                              && taskQuery.Any(task => task.RecordId == record.Id)
                              && !taskQuery.Any(task =>
                                  task.RecordId == record.Id && task.Status != PhoneOrderPushTaskStatus.Sent))
