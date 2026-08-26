@@ -430,6 +430,15 @@ public partial class PhoneOrderProcessJobService
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
 
+        if (aiSpeechAssistant.CustomRecordAnalyzePrompt?.Contains("#{customer_id}", StringComparison.Ordinal) == true)
+        {
+            record.TranscriptionText = UpdateCustomerIdLineInReport(record.TranscriptionText, record.CustomerId);
+            Log.Information(
+                "Updated customer id in sales record analyze report. RecordId={RecordId}, CustomerId={CustomerId}",
+                record.Id,
+                record.CustomerId);
+        }
+
         var sourceReportLanguage = record.Language;
         if (!isAixvolinkRecord)
         {
@@ -731,6 +740,17 @@ public partial class PhoneOrderProcessJobService
             string.Empty).TrimStart();
 
         return $"客人ID：{resolvedCustomerId}\n\n{normalizedText}";
+    }
+    
+    internal static string UpdateCustomerIdLineInReport(string reportText, string customerId)
+    {
+        if (string.IsNullOrWhiteSpace(reportText) || string.IsNullOrWhiteSpace(customerId))
+            return reportText;
+
+        return Regex.Replace(
+            reportText,
+            @"(?m)^(客人ID\s*[：:]\s*).*$",
+            match => $"{match.Groups[1].Value}{customerId.Trim()}");
     }
 
     private async Task MultiScenarioCustomProcessingAsync(Agent agent, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, PhoneOrderRecord record, CancellationToken cancellationToken)
