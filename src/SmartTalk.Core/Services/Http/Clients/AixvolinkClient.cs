@@ -19,6 +19,8 @@ public class AixvolinkClient : IAixvolinkClient
     {
         _setting = setting;
         _httpClientFactory = httpClientFactory;
+        
+        Log.Information("Aixvolink setting loaded. BaseUrl: {BaseUrl}, ApiKeyExists: {ApiKeyExists}", _setting.BaseUrl, !string.IsNullOrWhiteSpace(_setting.ApiKey));
     }
 
     public async Task CallResultsCallbackAsync(AixvolinkCallResultsCallbackRequest request, CancellationToken cancellationToken)
@@ -30,36 +32,8 @@ public class AixvolinkClient : IAixvolinkClient
 
         var url = $"{_setting.BaseUrl}/api/external/smarttalk/call-results/callback";
 
-        Log.Information(
-            "Aixvolink callback request started. Url: {Url}, Request: {@Request}",
-            url,
-            request);
+        Log.Information("Aixvolink callback request started. Url: {Url}, Request: {@Request}", url, request);
 
-        try
-        {
-            await _httpClientFactory
-                .PostAsJsonAsync(
-                    url,
-                    request,
-                    cancellationToken,
-                    headers: headers)
-                .ConfigureAwait(false);
-
-            Log.Information(
-                "Aixvolink callback request completed. Url: {Url}, RecordId: {RecordId}",
-                url,
-                request.RecordId);
-        }
-        catch (Exception e)
-        {
-            Log.Error(
-                e,
-                "Aixvolink callback request failed. Url: {Url}, RecordId: {RecordId}, Request: {@Request}",
-                url,
-                request.RecordId,
-                request);
-
-            throw;
-        }
+        await _httpClientFactory.PostAsJsonAsync(url, request, cancellationToken, headers: headers).ConfigureAwait(false);
     }
 }
