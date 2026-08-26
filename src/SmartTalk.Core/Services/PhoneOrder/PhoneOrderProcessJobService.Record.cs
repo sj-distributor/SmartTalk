@@ -26,6 +26,7 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 using System.ClientModel;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Azure.Core;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Dto.Aixvolink;
@@ -66,19 +67,6 @@ public partial class PhoneOrderProcessJobService
         if (record == null) return;
 
         Log.Information("Transcription results : {@results}", callBack.Results);
-
-        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
-
-        var axivolinkRequest = new AixvolinkCallResultsCallbackRequest
-        {
-            RecordId = record.Id,
-            RecordingUrl = record.Url,
-            CallTime = record.CreatedDate,
-            CallerNumber = record.IncomingCallNumber,
-            CalleeNumber = assistant.AnsweringNumber
-        };
-
-        await _aixvolinkClient.CallResultsCallbackAsync(axivolinkRequest, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -466,6 +454,19 @@ public partial class PhoneOrderProcessJobService
         });
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
+
+        var callbackOmePhoneRequest = new AixvolinkCallResultsCallbackRequest
+        {
+            RecordId = record.Id,
+            RecordingUrl = record.Url,
+            CallTime = record.CreatedDate,
+            CallerNumber = record.IncomingCallNumber,
+            CalleeNumber = aiSpeechAssistant.AnsweringNumber
+        };
+        
+        await _aixvolinkClient.CallResultsCallbackAsync(callbackOmePhoneRequest, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Aixvolink call results callback completed successfully. RecordId={RecordId} , Request={Request} ", record.Id, callbackOmePhoneRequest);
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         

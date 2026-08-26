@@ -27,6 +27,6 @@ public class AixvolinkClient : IAixvolinkClient
             { "API-KEY", _setting.ApiKey }
         };
 
-        await _httpClientFactory.PostAsJsonAsync($"{_setting.BaseUrl}/api/external/smarttalk/call-results/callback", request, cancellationToken, headers: headers).ConfigureAwait(false);
+        await _httpClientFactory.PostAsJsonAsync<object>($"{_setting.BaseUrl}/api/external/smarttalk/call-results/callback", request, cancellationToken, headers: headers).ConfigureAwait(false);
     }
 }
