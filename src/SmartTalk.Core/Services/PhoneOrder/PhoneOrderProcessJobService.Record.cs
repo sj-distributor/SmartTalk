@@ -31,6 +31,7 @@ using System.Text.Encodings.Web;
 using System.Diagnostics;
 using System.Text.Json;
 using Newtonsoft.Json;
+using Azure.Core;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Sale;
 using SmartTalk.Messages.Dto.Aixvolink;
@@ -71,36 +72,6 @@ public partial class PhoneOrderProcessJobService
         if (record == null) return;
         
         Log.Information("Transcription results : {@results}", callBack.Results);
-
-        var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
-
-        Log.Information("Get AiSpeechAssistant : {@assistant}", assistant);
-
-        var axivolinkRequest = new AixvolinkCallResultsCallbackRequest
-        {
-            RecordId = record.Id,
-            RecordingUrl = record.Url,
-            CallTime = record.CreatedDate,
-            CallerNumber = record.IncomingCallNumber,
-            CalleeNumber = assistant?.AnsweringNumber
-        };
-
-        if (assistant == null)
-        {
-            Log.Warning("Aixvolink callback assistant not found, using IncomingCallNumber as CalleeNumber. RecordId: {RecordId}, AgentId: {AgentId}", record.Id, record.AgentId);
-        }
-
-        Log.Information("Calling Aixvolink call results callback. JobId: {JobId}, RecordId: {RecordId}, Request: {@Request}", speechMaticsJob.JobId, record.Id, axivolinkRequest);
-
-        try
-        {
-            await _aixvolinkClient.CallResultsCallbackAsync(axivolinkRequest, cancellationToken).ConfigureAwait(false);
-            Log.Information("Aixvolink call results callback completed successfully. JobId: {JobId}, RecordId: {RecordId}", speechMaticsJob.JobId, record.Id);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Aixvolink call results callback failed. JobId: {JobId}, RecordId: {RecordId}, Request: {@Request}", speechMaticsJob.JobId, record.Id, axivolinkRequest);
-        }
 
         try
         {
@@ -504,6 +475,23 @@ public partial class PhoneOrderProcessJobService
 
         Log.Information("Handle Smarties callback if required: {@Agent}、{@Record}", agent, record);
 
+        var callbackOmePhoneRequest = new AixvolinkCallResultsCallbackRequest
+        {
+            RecordId = record.Id,
+            RecordingUrl = record.Url,
+            CallTime = record.CreatedDate,
+            CallerNumber = record.IncomingCallNumber,
+            CalleeNumber = aiSpeechAssistant.AnsweringNumber
+        };
+        
+        await _aixvolinkClient.CallResultsCallbackAsync(callbackOmePhoneRequest, cancellationToken).ConfigureAwait(false);
+        
+        Log.Information("Aixvolink call results callback completed successfully. RecordId={RecordId} , Request={Request} ", record.Id, callbackOmePhoneRequest);
+        
+        await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
+        await MultiScenarioCustomProcessingAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
+        
         var hasPendingTasks = await _salesDataProvider.HasPendingTasksByRecordIdAsync(record.Id, cancellationToken).ConfigureAwait(false);
         
         if (!hasPendingTasks)

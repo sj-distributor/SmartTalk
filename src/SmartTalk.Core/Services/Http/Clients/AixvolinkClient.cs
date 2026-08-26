@@ -30,8 +30,6 @@ public class AixvolinkClient : IAixvolinkClient
 
         var url = $"{_setting.BaseUrl}/api/external/smarttalk/call-results/callback";
 
-        Log.Information("Aixvolink callback request started. Url: {Url}, Request: {@Request}", url, request);
-
         await _httpClientFactory.PostAsJsonAsync<object>(url, request, cancellationToken, headers: headers).ConfigureAwait(false);
     }
 }
