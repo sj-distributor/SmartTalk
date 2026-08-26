@@ -69,14 +69,7 @@ public partial interface IAiSpeechAssistantService : IScopedDependency
 
 public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
-    private const int MaxEncodedPromptVariablesLength = 4096;
-    private const int MaxPromptVariableCount = 20;
-    private const int MaxPromptVariableKeyLength = 64;
-    private const int MaxPromptVariableValueLength = 2048;
-
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-    private static readonly Regex PromptVariableKeyRegex = new(
-        "^[A-Za-z0-9_.-]{1,64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex PromptVariableTokenRegex = new(
         "#\\{(?<key>[A-Za-z0-9_.-]{1,64})\\}", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
@@ -331,13 +324,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
         if (!string.IsNullOrWhiteSpace(encodedPromptVariables))
         {
-            if (encodedPromptVariables.Length > MaxEncodedPromptVariablesLength)
-            {
-                resolvedPromptVariables = new Dictionary<string, string>();
-                error = $"Encoded payload exceeds {MaxEncodedPromptVariablesLength} characters";
-                return false;
-            }
-
             try
             {
                 var value = encodedPromptVariables.Replace('-', '+').Replace('_', '/');
@@ -391,12 +377,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 variables[key] = value ?? string.Empty;
         }
 
-        if (!TryValidatePromptVariables(variables, hasLegacyQuestion, out error))
-        {
-            resolvedPromptVariables = new Dictionary<string, string>();
-            return false;
-        }
-
         resolvedPromptVariables = variables;
         return true;
     }
@@ -422,35 +402,6 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             // 兼容既有 question 合约：旧调用未提供 question 时会把占位符清空，而不是传给模型。
             return key.Equals("question", StringComparison.OrdinalIgnoreCase) ? string.Empty : match.Value;
         });
-    }
-
-    private static bool TryValidatePromptVariables(
-        IReadOnlyDictionary<string, string> promptVariables, bool allowUnboundedLegacyQuestion, out string error)
-    {
-        if (promptVariables.Count > MaxPromptVariableCount)
-        {
-            error = $"Prompt variables exceed {MaxPromptVariableCount} entries";
-            return false;
-        }
-
-        foreach (var (key, value) in promptVariables)
-        {
-            if (string.IsNullOrWhiteSpace(key) || key.Length > MaxPromptVariableKeyLength || !PromptVariableKeyRegex.IsMatch(key))
-            {
-                error = "Prompt variable key is invalid";
-                return false;
-            }
-
-            if ((value?.Length ?? 0) > MaxPromptVariableValueLength &&
-                !(allowUnboundedLegacyQuestion && key.Equals("question", StringComparison.OrdinalIgnoreCase)))
-            {
-                error = $"Prompt variable value exceeds {MaxPromptVariableValueLength} characters";
-                return false;
-            }
-        }
-
-        error = null;
-        return true;
     }
 
     private void InitAiSpeechAssistantStreamContext(string host, string from)

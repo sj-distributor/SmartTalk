@@ -7,7 +7,7 @@ using Xunit;
 namespace SmartTalk.UnitTests.Services.AiSpeechAssistantConnect;
 
 /// <summary>
-/// Covers per-call prompt-variable decoding, validation, merging and single-pass rendering.
+/// Covers per-call prompt-variable decoding, merging and single-pass rendering.
 /// </summary>
 public class AiSpeechAssistantPromptVariablesTests
 {
@@ -188,15 +188,6 @@ public class AiSpeechAssistantPromptVariablesTests
         AssertResolveFails(EncodeText(json));
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("question name")]
-    [InlineData("question/value")]
-    public void TryResolvePromptVariables_InvalidKey_ReturnsError(string key)
-    {
-        AssertResolveFails(EncodeJson(new Dictionary<string, string> { [key] = "value" }));
-    }
-
     [Fact]
     public void TryResolvePromptVariables_IdentifierCharactersAtKeyStart_ResolveSuccessfully()
     {
@@ -219,14 +210,6 @@ public class AiSpeechAssistantPromptVariablesTests
         resolved["-locale"].ShouldBe("hyphen");
     }
 
-    [Fact]
-    public void TryResolvePromptVariables_KeyLongerThan64Characters_ReturnsError()
-    {
-        var key = "a" + new string('b', 64);
-
-        AssertResolveFails(EncodeJson(new Dictionary<string, string> { [key] = "value" }));
-    }
-
     [Theory]
     [InlineData("{\"question\":123}")]
     [InlineData("{\"question\":true}")]
@@ -238,64 +221,26 @@ public class AiSpeechAssistantPromptVariablesTests
     }
 
     [Fact]
-    public void TryResolvePromptVariables_EncodedPayloadLongerThan4096Characters_ReturnsError()
-    {
-        AssertResolveFails(new string('A', 4097));
-    }
-
-    [Fact]
-    public void TryResolvePromptVariables_MoreThan20Variables_ReturnsError()
+    public void TryResolvePromptVariables_ValidJsonOutsidePreviousLimits_ResolvesSuccessfully()
     {
         var variables = Enumerable.Range(1, 21)
             .ToDictionary(index => $"variable_{index}", index => index.ToString());
-
-        AssertResolveFails(EncodeJson(variables));
-    }
-
-    [Fact]
-    public void TryResolvePromptVariables_ValueLongerThan2048Characters_ReturnsError()
-    {
-        var variables = new Dictionary<string, string>
-        {
-            ["question"] = new string('a', 2049)
-        };
-
-        AssertResolveFails(EncodeJson(variables));
-    }
-
-    [Fact]
-    public void TryResolvePromptVariables_ValuesAtValidationBoundaries_ResolveSuccessfully()
-    {
-        var variables = Enumerable.Range(1, 20)
-            .ToDictionary(index => $"variable_{index}", index => index == 20 ? new string('a', 2048) : index.ToString());
-        var longestValidKey = "a" + new string('b', 63);
-        variables.Remove("variable_1");
-        variables[longestValidKey] = "valid";
+        var longKey = new string('k', 65);
+        var longValue = new string('a', 4097);
+        const string previouslyInvalidKey = "question/value";
+        variables[longKey] = longValue;
+        variables[previouslyInvalidKey] = "accepted";
+        var encoded = EncodeJson(variables);
 
         var success = AiSpeechAssistantService.TryResolvePromptVariables(
-            EncodeJson(variables), null, out var resolved, out var error);
+            encoded, null, out var resolved, out var error);
 
         success.ShouldBeTrue();
         error.ShouldBeNull();
-        resolved.Count.ShouldBe(20);
-        resolved[longestValidKey].ShouldBe("valid");
-        resolved["variable_20"].Length.ShouldBe(2048);
-    }
-
-    [Fact]
-    public void TryResolvePromptVariables_InvalidSuppliedVariable_ReturnsError()
-    {
-        IReadOnlyDictionary<string, string> supplied = new Dictionary<string, string>
-        {
-            ["invalid key"] = "value"
-        };
-
-        var success = AiSpeechAssistantService.TryResolvePromptVariables(
-            null, supplied, out var resolved, out var error);
-
-        success.ShouldBeFalse();
-        resolved.ShouldBeEmpty();
-        string.IsNullOrWhiteSpace(error).ShouldBeFalse();
+        encoded.Length.ShouldBeGreaterThan(4096);
+        resolved.Count.ShouldBe(23);
+        resolved[longKey].ShouldBe(longValue);
+        resolved[previouslyInvalidKey].ShouldBe("accepted");
     }
 
     [Fact]
