@@ -73,7 +73,7 @@ public partial class PhoneOrderProcessJobService
         Log.Information("Transcription results : {@results}", callBack.Results);
 
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantByAgentIdAsync(record.AgentId, cancellationToken).ConfigureAwait(false);
-        
+
         Log.Information("Get AiSpeechAssistant : {@assistant}", assistant);
 
         var axivolinkRequest = new AixvolinkCallResultsCallbackRequest
@@ -82,12 +82,25 @@ public partial class PhoneOrderProcessJobService
             RecordingUrl = record.Url,
             CallTime = record.CreatedDate,
             CallerNumber = record.IncomingCallNumber,
-            CalleeNumber = assistant.AnsweringNumber
+            CalleeNumber = assistant?.AnsweringNumber
         };
+
+        if (assistant == null)
+        {
+            Log.Warning("Aixvolink callback assistant not found, using IncomingCallNumber as CalleeNumber. RecordId: {RecordId}, AgentId: {AgentId}", record.Id, record.AgentId);
+        }
 
         Log.Information("Calling Aixvolink call results callback. JobId: {JobId}, RecordId: {RecordId}, Request: {@Request}", speechMaticsJob.JobId, record.Id, axivolinkRequest);
 
-        await _aixvolinkClient.CallResultsCallbackAsync(axivolinkRequest, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _aixvolinkClient.CallResultsCallbackAsync(axivolinkRequest, cancellationToken).ConfigureAwait(false);
+            Log.Information("Aixvolink call results callback completed successfully. JobId: {JobId}, RecordId: {RecordId}", speechMaticsJob.JobId, record.Id);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Aixvolink call results callback failed. JobId: {JobId}, RecordId: {RecordId}, Request: {@Request}", speechMaticsJob.JobId, record.Id, axivolinkRequest);
+        }
 
         try
         {
