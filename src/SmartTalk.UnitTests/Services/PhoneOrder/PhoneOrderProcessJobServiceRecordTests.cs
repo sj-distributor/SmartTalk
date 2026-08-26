@@ -10,7 +10,7 @@ public class PhoneOrderProcessJobServiceRecordTests
     [Fact]
     public void AddCustomerIdToTranscriptionText_ShouldPrefixMatchedCustomerId()
     {
-        var assistant = new AiSpeechAssistant
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
         {
             Name = "12345/67890"
         };
@@ -27,7 +27,7 @@ public class PhoneOrderProcessJobServiceRecordTests
     [Fact]
     public void AddCustomerIdToTranscriptionText_ShouldShowNotMatchedWhenMultipleIdsRemainUnresolved()
     {
-        var assistant = new AiSpeechAssistant
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
         {
             Name = "12345/67890"
         };
