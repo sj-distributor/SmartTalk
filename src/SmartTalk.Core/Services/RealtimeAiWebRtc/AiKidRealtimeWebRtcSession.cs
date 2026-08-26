@@ -119,10 +119,18 @@ public sealed class AiKidRealtimeWebRtcSession : IAiKidRealtimeWebRtcSession, ID
             initializationCancellationToken).ConfigureAwait(false);
 
         _callId = call.CallId;
-        await _sidebandClient.ConnectAsync(
-            call.SidebandUri,
-            call.SidebandHeaders,
-            initializationCancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _sidebandClient.ConnectAsync(
+                call.SidebandUri,
+                call.SidebandHeaders,
+                initializationCancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await TryHangupCallAsync().ConfigureAwait(false);
+            throw;
+        }
 
         if (_options.EnableRecording)
         {

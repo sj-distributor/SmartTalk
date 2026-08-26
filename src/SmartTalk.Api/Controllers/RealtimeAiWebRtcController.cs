@@ -1,5 +1,4 @@
 using Mediator.Net;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
@@ -42,6 +41,9 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         RealtimeAiServerRegion region,
         CancellationToken cancellationToken)
     {
+        if (!TryGetTemporarySessionId(out var sessionId))
+            return InvalidSession();
+
         if (Request.ContentLength > MaxSdpLength)
             return BadRequest(new { error = $"SDP offer exceeds {MaxSdpLength} bytes." });
 
@@ -57,6 +59,7 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
                 CreateRealtimeAiWebRtcSessionCommand,
                 CreateRealtimeAiWebRtcSessionResponse>(new CreateRealtimeAiWebRtcSessionCommand
                 {
+                    SessionId = sessionId,
                     AssistantId = assistantId,
                     Region = region,
                     OfferSdp = offerSdp
@@ -75,6 +78,9 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message });
         }
 
+        if (response.IsSessionAlreadyBound)
+            return Conflict(new { error = "The interview session is already bound to a WebRTC call." });
+
         Response.Headers.CacheControl = "no-store";
         return Ok(new
         {
@@ -84,9 +90,17 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
     }
 
     [HttpPost("session/{callId}/ready")]
-    [AllowAnonymous]
+    [TemporarySessionAuthorize]
     public async Task<IActionResult> MarkClientReadyAsync(string callId, CancellationToken cancellationToken)
     {
+        if (!TryGetTemporarySessionId(out var sessionId))
+            return InvalidSession();
+
+        if (!await _sessionCredentialService
+                .IsWebRtcCallBoundAsync(sessionId, callId, cancellationToken)
+                .ConfigureAwait(false))
+            return NotFound();
+
         var response = await _mediator.SendAsync<
             MarkRealtimeAiWebRtcClientReadyCommand,
             MarkRealtimeAiWebRtcClientReadyResponse>(new MarkRealtimeAiWebRtcClientReadyCommand
@@ -108,6 +122,14 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
         [FromHeader(Name = RecordingFinalHeader)] bool isFinal,
         CancellationToken cancellationToken)
     {
+        if (!TryGetTemporarySessionId(out var sessionId))
+            return InvalidSession();
+
+        if (!await _sessionCredentialService
+                .IsWebRtcCallBoundAsync(sessionId, callId, cancellationToken)
+                .ConfigureAwait(false))
+            return NotFound();
+
         if (sequence is null or < 0)
             return BadRequest(new { error = $"{RecordingSequenceHeader} must be a non-negative integer." });
 
@@ -163,9 +185,13 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
     [TemporarySessionAuthorize]
     public async Task<IActionResult> StopSessionAsync(string callId, CancellationToken cancellationToken)
     {
-        var rawSessionId = User.FindFirst(TemporarySessionAuthenticationDefaults.SessionIdClaim)?.Value;
-        if (!Guid.TryParse(rawSessionId, out var sessionId))
-            return Unauthorized(new { code = StatusCodes.Status401Unauthorized, msg = InvalidSessionMessage });
+        if (!TryGetTemporarySessionId(out var sessionId))
+            return InvalidSession();
+
+        if (!await _sessionCredentialService
+                .IsWebRtcCallBoundAsync(sessionId, callId, cancellationToken)
+                .ConfigureAwait(false))
+            return NotFound();
 
         try
         {
@@ -186,5 +212,16 @@ public sealed class RealtimeAiWebRtcController : ControllerBase
                 .InvalidateAsync(sessionId, CancellationToken.None)
                 .ConfigureAwait(false);
         }
+    }
+
+    private bool TryGetTemporarySessionId(out Guid sessionId)
+    {
+        var rawSessionId = User.FindFirst(TemporarySessionAuthenticationDefaults.SessionIdClaim)?.Value;
+        return Guid.TryParse(rawSessionId, out sessionId);
+    }
+
+    private IActionResult InvalidSession()
+    {
+        return Unauthorized(new { code = StatusCodes.Status401Unauthorized, msg = InvalidSessionMessage });
     }
 }
