@@ -487,7 +487,7 @@ public partial class PhoneOrderProcessJobService
         
         await _aixvolinkClient.CallResultsCallbackAsync(callbackOmePhoneRequest, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Aixvolink call results callback completed successfully. RecordId={RecordId} , Request={Request} ", record.Id, callbackOmePhoneRequest);
+        Log.Information("Aixvolink call results callback completed successfully. RecordId={RecordId} , Request={@Request} ", record.Id, callbackOmePhoneRequest);
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         

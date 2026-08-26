@@ -1522,6 +1522,11 @@ public partial class PhoneOrderService
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        var (assistant, _) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken).ConfigureAwait(false);
+
+        if (assistant?.AnsweringNumber is null)
+            throw new Exception("This phone call does not belong to an AI-transferred call.");
+
         var report = await _phoneOrderDataProvider.GetPhoneOrderRecordReportAsync(null, request.Language, record.Id, cancellationToken).ConfigureAwait(false);
 
         return new GetPhoneOrderRecordReportByOmePhoneResponse
