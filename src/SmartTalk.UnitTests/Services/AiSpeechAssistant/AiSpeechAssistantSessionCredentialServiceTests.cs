@@ -1,9 +1,11 @@
+using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Infrastructure;
+using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Caching;
 using Xunit;
 
@@ -14,20 +16,20 @@ public class AiSpeechAssistantSessionCredentialServiceTests
     private static readonly DateTimeOffset Now = new(2026, 8, 19, 12, 0, 0, TimeSpan.FromHours(8));
 
     [Fact]
-    public async Task StoreAsync_SetsCredentialWithOneHourLifetime()
+    public async Task StoreAsync_UsesConfiguredCredentialLifetime()
     {
-        var fixture = CreateFixture();
+        var fixture = CreateFixture(sessionCredentialLifetimeMinutes: 90);
         var session = CreateSession(Now);
 
         await fixture.Service.StoreAsync(session);
 
         await fixture.CacheManager.Received(1).SetAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(session.SessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(session.SessionId),
             Arg.Is<AiSpeechAssistantSessionCredential>(x =>
                 x.SessionId == session.SessionId &&
                 x.AssistantId == session.AssistantId &&
-                x.ExpiresAt == Now.AddHours(1)),
-            Arg.Is<ICachingSetting>(x => x.Expiry == TimeSpan.FromHours(1)),
+                x.ExpiresAt == Now.AddMinutes(90)),
+            Arg.Is<ICachingSetting>(x => x.Expiry == TimeSpan.FromMinutes(90)),
             Arg.Any<CancellationToken>());
     }
 
@@ -64,17 +66,17 @@ public class AiSpeechAssistantSessionCredentialServiceTests
         Assert.NotNull(result);
         Assert.Equal(session.AssistantId, result.AssistantId);
         await fixture.CacheManager.Received(1).SetAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(session.SessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(session.SessionId),
             Arg.Any<AiSpeechAssistantSessionCredential>(),
-            Arg.Is<ICachingSetting>(x => x.Expiry == TimeSpan.FromMinutes(30)),
+            Arg.Is<ICachingSetting>(x => x.Expiry == TimeSpan.FromHours(23.5)),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task GetValidAsync_WhenCreatedOneHourAgo_ReturnsInvalid()
+    public async Task GetValidAsync_WhenCreatedTwentyFourHoursAgo_ReturnsInvalid()
     {
         var fixture = CreateFixture();
-        var session = CreateSession(Now.AddHours(-1));
+        var session = CreateSession(Now.AddHours(-24));
         fixture.DataProvider.GetAiSpeechAssistantSessionBySessionIdAsync(
                 session.SessionId,
                 Arg.Any<CancellationToken>())
@@ -114,7 +116,7 @@ public class AiSpeechAssistantSessionCredentialServiceTests
         await fixture.Service.InvalidateAsync(sessionId);
 
         await fixture.CacheManager.Received(1).RemoveAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(sessionId),
             Arg.Any<ICachingSetting>(),
             Arg.Any<CancellationToken>());
     }
@@ -193,7 +195,7 @@ public class AiSpeechAssistantSessionCredentialServiceTests
             .SetAsync(default, default, default, default);
     }
 
-    private static Fixture CreateFixture()
+    private static Fixture CreateFixture(int sessionCredentialLifetimeMinutes = 24 * 60)
     {
         var clock = Substitute.For<IClock>();
         clock.Now.Returns(Now);
@@ -223,7 +225,18 @@ public class AiSpeechAssistantSessionCredentialServiceTests
             });
 
         return new Fixture(
-            new AiSpeechAssistantSessionCredentialService(clock, cacheManager, dataProvider, redisSafeRunner),
+            new AiSpeechAssistantSessionCredentialService(
+                clock,
+                cacheManager,
+                dataProvider,
+                redisSafeRunner,
+                new AiSpeechAssistantSettings(new ConfigurationBuilder()
+                    .AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["AiSpeechAssistant:SessionCredentialLifetimeMinutes"] =
+                            sessionCredentialLifetimeMinutes.ToString()
+                    })
+                    .Build())),
             cacheManager,
             dataProvider);
     }
