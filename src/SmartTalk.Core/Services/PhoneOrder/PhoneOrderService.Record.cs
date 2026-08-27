@@ -1498,6 +1498,9 @@ public partial class PhoneOrderService
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        if (record is null) 
+            throw new Exception("This call have not any record.");
+
         var (assistant, _) = await _aiSpeechAssistantDataProvider.GetAgentAndAiSpeechAssistantAsync(record.AgentId, record.AssistantId, cancellationToken).ConfigureAwait(false);
 
         if (assistant?.AnsweringNumber is null)

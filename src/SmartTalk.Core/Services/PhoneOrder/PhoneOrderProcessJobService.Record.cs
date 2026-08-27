@@ -455,18 +455,25 @@ public partial class PhoneOrderProcessJobService
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
 
-        var callbackOmePhoneRequest = new AixvolinkCallResultsCallbackRequest
+        if (!string.IsNullOrWhiteSpace(record.IncomingCallNumber))
         {
-            RecordId = record.Id,
-            RecordingUrl = record.Url,
-            CallTime = record.CreatedDate,
-            CallerNumber = record.IncomingCallNumber,
-            CalleeNumber = aiSpeechAssistant.AnsweringNumber
-        };
+            var callbackOmePhoneRequest = new AixvolinkCallResultsCallbackRequest
+            {
+                RecordId = record.Id,
+                RecordingUrl = record.Url,
+                CallTime = record.CreatedDate,
+                CallerNumber = record.IncomingCallNumber,
+                CalleeNumber = aiSpeechAssistant.AnsweringNumber
+            };
         
-        await _aixvolinkClient.CallResultsCallbackAsync(callbackOmePhoneRequest, cancellationToken).ConfigureAwait(false);
+            await _aixvolinkClient.CallResultsCallbackAsync(callbackOmePhoneRequest, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Aixvolink call results callback completed successfully. RecordId={RecordId} , Request={@Request} ", record.Id, callbackOmePhoneRequest);
+            Log.Information("Aixvolink call results callback completed successfully. RecordId={RecordId} , Request={@Request} ", record.Id, callbackOmePhoneRequest);
+        }
+        else
+        {
+            Log.Information("Skip Aixvolink call results callback because IncomingCallNumber is empty. RecordId={RecordId}", record.Id);
+        }
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         
