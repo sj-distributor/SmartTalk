@@ -595,8 +595,16 @@ public partial class PhoneOrderDataProvider
 
     public async Task MarkRecordCompletedAsync(int recordId, CancellationToken cancellationToken = default)
     {
-        await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId && !r.IsCompleted)
+        var rowsAffected = await _repository.Query<PhoneOrderRecord>().Where(r => r.Id == recordId && !r.IsCompleted)
             .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.IsCompleted, true), cancellationToken).ConfigureAwait(false);
+        
+        if (rowsAffected > 0)
+        {
+            Log.Information("Marked phone order record completed. RecordId={RecordId}, RowsAffected={RowsAffected}", recordId, rowsAffected);
+            return;
+        }
+
+        Log.Warning("MarkRecordCompletedAsync matched no row. RecordId={RecordId}", recordId);
     }
 
     public async Task<List<int>> GetPhoneOrderReservationInfoUnreviewedRecordIdsAsync(List<int> recordIds, CancellationToken cancellationToken)
