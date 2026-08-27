@@ -69,10 +69,6 @@ public partial interface IAiSpeechAssistantService : IScopedDependency
 
 public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 {
-    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-    private static readonly Regex PromptVariableTokenRegex = new(
-        "#\\{(?<key>[A-Za-z0-9_.-]{1,64})\\}", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
-
     private readonly IClock _clock;
     private readonly IMapper _mapper;
     private readonly ICrmClient _crmClient;
@@ -328,7 +324,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             {
                 var value = encodedPromptVariables.Replace('-', '+').Replace('_', '/');
                 value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
-                var decodedPayload = StrictUtf8.GetString(Convert.FromBase64String(value));
+                var decodedPayload = Encoding.UTF8.GetString(Convert.FromBase64String(value));
 
                 using var document = JsonDocument.Parse(decodedPayload);
 
@@ -345,7 +341,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                         : property.Value.GetString();
                 }
             }
-            catch (Exception exception) when (exception is FormatException or DecoderFallbackException or global::System.Text.Json.JsonException)
+            catch (Exception exception) when (exception is FormatException or global::System.Text.Json.JsonException)
             {
                 resolvedPromptVariables = new Dictionary<string, string>();
                 error = "Payload is not valid URL-safe Base64 UTF-8 prompt variables JSON";
@@ -393,7 +389,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
                 variables[key] = value;
         }
 
-        return PromptVariableTokenRegex.Replace(prompt, match =>
+        return Regex.Replace(prompt, "#\\{(?<key>[^{}]+)\\}", match =>
         {
             var key = match.Groups["key"].Value;
 
@@ -401,7 +397,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
             // 兼容既有 question 合约：旧调用未提供 question 时会把占位符清空，而不是传给模型。
             return key.Equals("question", StringComparison.OrdinalIgnoreCase) ? string.Empty : match.Value;
-        });
+        }, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     }
 
     private void InitAiSpeechAssistantStreamContext(string host, string from)
