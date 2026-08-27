@@ -1104,7 +1104,7 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
         return details;
     }
-    
+
     public async Task<bool> HasCrmCustomerContactPhoneMapsAsync(CancellationToken cancellationToken = default)
     {
         return await _repository.Query<CrmCustomerContactPhoneMap>().AnyAsync(cancellationToken).ConfigureAwait(false);
