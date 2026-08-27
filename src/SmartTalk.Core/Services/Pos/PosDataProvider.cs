@@ -76,13 +76,6 @@ public partial interface IPosDataProvider : IScopedDependency
         int agentId, CancellationToken cancellationToken = default);
 }
 
-public class DashboardCompanyStoreProjection
-{
-    public DataDashBoardCompanyOptionDto Company { get; set; }
-    
-    public DataDashBoardStoreOptionDto Store { get; set; }
-}
-
 public partial class PosDataProvider : IPosDataProvider
 {
     private readonly IMapper _mapper;
