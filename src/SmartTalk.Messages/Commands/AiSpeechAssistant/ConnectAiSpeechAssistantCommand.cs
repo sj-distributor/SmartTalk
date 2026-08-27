@@ -1,6 +1,5 @@
 using System.Net.WebSockets;
 using Mediator.Net.Contracts;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 
 namespace SmartTalk.Messages.Commands.AiSpeechAssistant;
@@ -17,19 +16,12 @@ public class ConnectAiSpeechAssistantCommand : ICommand
     
     public int? AssistantId { get; set; }
 
-    // 调用方传入的完整本通指令; 有值时沿用原逻辑覆盖 Assistant knowledge prompt。
+    // 代客致电等场景: 调用方 (如 Smarties KitchChat) 经 connect URL 的 ?instruction= 传入本通电话的系统指令/prompt。
+    // 有值则用作本通对话指令 (覆盖 DB assistant prompt); 无值 = 照旧用 DB prompt (non-breaking)。
     public string Instruction { get; set; }
 
-    // URL-safe Base64 编码的 JSON prompt variables，由 AiSpeechAssistantService 在连接入口统一解析。
-    public string EncodedPromptVariables { get; set; }
-
-    // 仅兼容已发布的 /question/{value} 路由；内容是 URL-safe Base64 编码的纯文本，不参与 JSON 格式推断。
-    public string EncodedLegacyQuestion { get; set; }
-
-    // 内部调用方可直接提供已解析变量；key 对应 Assistant prompt 中的 #{key} 占位符。
-    public Dictionary<string, string> PromptVariables { get; set; }
-
-    public AiSpeechAssistantConnectionMode ConnectionMode { get; set; }
+    // 为不依赖店铺/Agent 的外呼指定 Assistant；默认 false 保持原有路由流程。
+    public bool UseDirectAssistant { get; set; }
 
     public WebSocket TwilioWebSocket { get; set; }
     

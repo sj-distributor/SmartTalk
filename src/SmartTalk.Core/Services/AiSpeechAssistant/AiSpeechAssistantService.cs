@@ -19,7 +19,6 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.Agents;
-using SmartTalk.Core.Services.AiSpeechAssistantConnect;
 using SmartTalk.Core.Services.Attachments;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
@@ -38,7 +37,6 @@ using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.STT;
 using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
-using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Services.Twilio;
 using SmartTalk.Core.Settings.WorkWeChat;
@@ -99,10 +97,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ITwilioService _twilioService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
-    private readonly IAiSpeechAssistantConnectService _aiSpeechAssistantConnectService;
     private readonly IAiSpeechAssistantKnowledgePromptService _aiSpeechAssistantKnowledgePromptService;
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
-    private readonly AiSpeechAssistantSettings _aiSpeechAssistantSettings;
 
     private StringBuilder _openaiEvent;
     private bool _shouldSendBuffToOpenAi;
@@ -142,10 +138,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ITwilioService twilioService,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
-        IAiSpeechAssistantConnectService aiSpeechAssistantConnectService,
         IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
         IKnowledgeScenarioDataProvider knowledgeScenarioDataProvider,
-        AiSpeechAssistantSettings aiSpeechAssistantSettings,
         WebSocket openaiWebSocket = null)
     {
         _clock = clock;
@@ -177,10 +171,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _twilioService = twilioService;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
-        _aiSpeechAssistantConnectService = aiSpeechAssistantConnectService;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
-        _aiSpeechAssistantSettings = aiSpeechAssistantSettings;
 
         _openaiEvent = new StringBuilder();
         _openaiWebSocket = openaiWebSocket ?? new ClientWebSocket();
@@ -206,68 +198,34 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        if (!TryResolvePromptVariables(
-                command.EncodedPromptVariables, command.EncodedLegacyQuestion, command.PromptVariables,
-                out var promptVariables, out var promptVariablesError))
-        {
-            Log.Warning("The outbound call prompt variables are invalid, AssistantId: {AssistantId}, Reason: {Reason}",
-                command.AssistantId, promptVariablesError);
-            await AiSpeechAssistantConnectService.TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
-            return new AiSpeechAssistantConnectCloseEvent();
-        }
-
-        if (command.ConnectionMode == AiSpeechAssistantConnectionMode.Direct && command.AssistantId is not > 0)
-        {
-            Log.Warning("Direct assistant mode requires an assistant id, From: {From}, To: {To}", command.From, command.To);
-            await AiSpeechAssistantConnectService.TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
-            return new AiSpeechAssistantConnectCloseEvent();
-        }
-
-        if (_aiSpeechAssistantSettings.EngineVersion == 2)
-            return await _aiSpeechAssistantConnectService.ConnectAsync(command, promptVariables, cancellationToken).ConfigureAwait(false);
+        if (command.UseDirectAssistant)
+            return await ConnectDirectAiSpeechAssistantAsync(command, cancellationToken).ConfigureAwait(false);
 
         Log.Information($"The call from {command.From} to {command.To} is connected");
 
-        Agent agent = null;
+        var agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
 
-        if (command.ConnectionMode == AiSpeechAssistantConnectionMode.Routed)
-        {
-            agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
+        Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
 
-            Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
-
-            if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
-        }
+        if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
-        var isAssistantReady = await BuildingAiSpeechAssistantKnowledgeBaseAsync(
-            command.From, command.To, command.AssistantId, command.NumberId, agent?.Id,
-            command.Instruction, promptVariables, command.ConnectionMode == AiSpeechAssistantConnectionMode.Routed,
-            cancellationToken).ConfigureAwait(false);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, command.Instruction, cancellationToken).ConfigureAwait(false);
 
-        if (!isAssistantReady)
-        {
-            await AiSpeechAssistantConnectService.TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
+        _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
+        _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
+        _aiSpeechAssistantStreamContext.TransferCallNumber = _agentTransferCallConfigs.Count > 0
+            ? _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(_agentTransferCallConfigs)
+            : agent.TransferCallNumber;
+
+        (_aiSpeechAssistantStreamContext.IsInAiServiceHours, _aiSpeechAssistantStreamContext.IsEnableManualService) =
+            _agentTransferCallRoutingService.CheckIfInServiceHours(
+                agent.ServiceHours, agent.IsTransferHuman, _aiSpeechAssistantStreamContext.TransferCallNumber,
+                _clock.Now, _agentTimeZone);
+
+        if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
             return new AiSpeechAssistantConnectCloseEvent();
-        }
-
-        if (agent != null)
-        {
-            _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
-            _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
-            _aiSpeechAssistantStreamContext.TransferCallNumber = _agentTransferCallConfigs.Count > 0
-                ? _agentTransferCallRoutingService.SelectDefaultTransferCallNumber(_agentTransferCallConfigs)
-                : agent.TransferCallNumber;
-
-            (_aiSpeechAssistantStreamContext.IsInAiServiceHours, _aiSpeechAssistantStreamContext.IsEnableManualService) =
-                _agentTransferCallRoutingService.CheckIfInServiceHours(
-                    agent.ServiceHours, agent.IsTransferHuman, _aiSpeechAssistantStreamContext.TransferCallNumber,
-                    _clock.Now, _agentTimeZone);
-
-            if (!_aiSpeechAssistantStreamContext.IsInAiServiceHours && !_aiSpeechAssistantStreamContext.IsEnableManualService)
-                return new AiSpeechAssistantConnectCloseEvent();
-        }
         
         _aiSpeechAssistantStreamContext.HumanContactPhone =
             _aiSpeechAssistantStreamContext.ShouldForward || _agentTransferCallConfigs.Count > 0
@@ -295,109 +253,43 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return new AiSpeechAssistantConnectCloseEvent();
     }
 
-    internal static bool TryResolvePromptVariables(
-        string encodedPromptVariables, IReadOnlyDictionary<string, string> suppliedPromptVariables,
-        out IReadOnlyDictionary<string, string> resolvedPromptVariables, out string error)
+    private async Task<AiSpeechAssistantConnectCloseEvent> ConnectDirectAiSpeechAssistantAsync(
+        ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        return TryResolvePromptVariables(
-            encodedPromptVariables, null, suppliedPromptVariables, out resolvedPromptVariables, out error);
-    }
-
-    internal static bool TryResolvePromptVariables(
-        string encodedPromptVariables, string encodedLegacyQuestion,
-        IReadOnlyDictionary<string, string> suppliedPromptVariables,
-        out IReadOnlyDictionary<string, string> resolvedPromptVariables, out string error)
-    {
-        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        error = null;
-
-        if (!string.IsNullOrWhiteSpace(encodedPromptVariables) && !string.IsNullOrWhiteSpace(encodedLegacyQuestion))
+        if (command.AssistantId is not > 0)
         {
-            resolvedPromptVariables = new Dictionary<string, string>();
-            error = "Prompt variables and legacy question cannot be supplied together";
-            return false;
+            Log.Warning("Direct AI speech assistant call requires a valid assistant id, From: {From}, To: {To}", command.From, command.To);
+            return new AiSpeechAssistantConnectCloseEvent();
         }
 
-        if (!string.IsNullOrWhiteSpace(encodedPromptVariables))
+        Log.Information("The direct call from {From} to {To} is connected with assistantId: {AssistantId}",
+            command.From, command.To, command.AssistantId);
+
+        InitAiSpeechAssistantStreamContext(command.Host, command.From);
+
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(
+            command.From, command.To, command.AssistantId, command.NumberId, null, command.Instruction,
+            cancellationToken, useDirectAssistant: true).ConfigureAwait(false);
+
+        _aiSpeechAssistantStreamContext.HumanContactPhone =
+            (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(
+                _aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
+
+        await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
+
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, command.OrderRecordType, cancellationToken);
+        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, cancellationToken);
+
+        try
         {
-            try
-            {
-                var value = encodedPromptVariables.Replace('-', '+').Replace('_', '/');
-                value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
-                var decodedPayload = Encoding.UTF8.GetString(Convert.FromBase64String(value));
-
-                using var document = JsonDocument.Parse(decodedPayload);
-
-                if (document.RootElement.ValueKind != JsonValueKind.Object)
-                    throw new global::System.Text.Json.JsonException("Prompt variables payload must be a JSON object");
-
-                foreach (var property in document.RootElement.EnumerateObject())
-                {
-                    if (property.Value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
-                        throw new global::System.Text.Json.JsonException("Prompt variable values must be strings");
-
-                    variables[property.Name] = property.Value.ValueKind == JsonValueKind.Null
-                        ? string.Empty
-                        : property.Value.GetString();
-                }
-            }
-            catch (Exception exception) when (exception is FormatException or global::System.Text.Json.JsonException)
-            {
-                resolvedPromptVariables = new Dictionary<string, string>();
-                error = "Payload is not valid URL-safe Base64 UTF-8 prompt variables JSON";
-                return false;
-            }
+            await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
+        }
+        catch (Exception ex)
+        {
+            Log.Information("Error in one of the tasks: " + ex.Message);
         }
 
-        var hasLegacyQuestion = !string.IsNullOrWhiteSpace(encodedLegacyQuestion);
-
-        if (hasLegacyQuestion)
-        {
-            try
-            {
-                var value = encodedLegacyQuestion.Replace('-', '+').Replace('_', '/');
-                value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
-                variables["question"] = Encoding.UTF8.GetString(Convert.FromBase64String(value));
-            }
-            catch (FormatException)
-            {
-                resolvedPromptVariables = new Dictionary<string, string>();
-                error = "Legacy question is not valid URL-safe Base64 text";
-                return false;
-            }
-        }
-
-        if (suppliedPromptVariables != null)
-        {
-            foreach (var (key, value) in suppliedPromptVariables)
-                variables[key] = value ?? string.Empty;
-        }
-
-        resolvedPromptVariables = variables;
-        return true;
-    }
-
-    internal static string ResolvePromptVariables(string prompt, IReadOnlyDictionary<string, string> promptVariables)
-    {
-        if (string.IsNullOrEmpty(prompt)) return prompt;
-
-        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        if (promptVariables != null)
-        {
-            foreach (var (key, value) in promptVariables)
-                variables[key] = value;
-        }
-
-        return Regex.Replace(prompt, "#\\{(?<key>[^{}]+)\\}", match =>
-        {
-            var key = match.Groups["key"].Value;
-
-            if (variables.TryGetValue(key, out var value)) return value ?? string.Empty;
-
-            // 兼容既有 question 合约：旧调用未提供 question 时会把占位符清空，而不是传给模型。
-            return key.Equals("question", StringComparison.OrdinalIgnoreCase) ? string.Empty : match.Value;
-        }, RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        return new AiSpeechAssistantConnectCloseEvent();
     }
 
     private void InitAiSpeechAssistantStreamContext(string host, string from)
@@ -406,15 +298,14 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _aiSpeechAssistantStreamContext.LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = from };
     }
 
-    private async Task<bool> BuildingAiSpeechAssistantKnowledgeBaseAsync(
-        string from, string to, int? assistantId, int? numberId, int? agentId,
-        string instruction, IReadOnlyDictionary<string, string> promptVariables, bool allowInboundRouting,
-        CancellationToken cancellationToken)
+    private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(
+        string from, string to, int? assistantId, int? numberId, int? agentId, string instruction,
+        CancellationToken cancellationToken, bool useDirectAssistant = false)
     {
         string forwardNumber = null;
         int? forwardAssistantId = null;
 
-        if (allowInboundRouting)
+        if (!useDirectAssistant)
         {
             var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
 
@@ -431,21 +322,13 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             _aiSpeechAssistantStreamContext.ShouldForward = true;
             _aiSpeechAssistantStreamContext.ForwardPhoneNumber = forwardNumber;
 
-            return true;
+            return;
         }
         
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Matching AI speech assistant, AssistantId: {AssistantId}, HasKnowledge: {HasKnowledge}, HasUserProfile: {HasUserProfile}",
-            assistant?.Id, knowledge != null, userProfile != null);
-
-        if (assistant == null || knowledge == null)
-        {
-            Log.Warning("AI speech assistant or active knowledge is unavailable, RequestedAssistantId: {RequestedAssistantId}, From: {From}, To: {To}",
-                forwardAssistantId ?? assistantId, from, to);
-            return false;
-        }
+        Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
         var currentTime = pstTime.ToString("yyyy-MM-dd HH:mm:ss");
@@ -476,11 +359,9 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             }
         }
         
-        if (finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))
+        if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))
         {
-            var menuItems = agentId.HasValue
-                ? await GenerateMenuItemsAsync(agentId.Value, cancellationToken).ConfigureAwait(false)
-                : null;
+            var menuItems = await GenerateMenuItemsAsync(agentId.Value, cancellationToken).ConfigureAwait(false);
             
             finalPrompt = finalPrompt.Replace("#{menu_items}", string.IsNullOrWhiteSpace(menuItems) ? "" : menuItems);
         }
@@ -499,15 +380,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
         }
         
-        var effectivePrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : finalPrompt;
-        _aiSpeechAssistantStreamContext.LastPrompt = ResolvePromptVariables(effectivePrompt, promptVariables);
+        // 代客致电等场景: connect URL 带了 ?instruction= 则用它作本通对话指令 (覆盖 DB prompt); 无则照旧 (non-breaking)。
+        _aiSpeechAssistantStreamContext.LastPrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : finalPrompt;
 
-        Log.Information("The final prompt is resolved, PromptLength: {PromptLength}, PromptVariableCount: {PromptVariableCount}",
-            _aiSpeechAssistantStreamContext.LastPrompt?.Length ?? 0, promptVariables?.Count ?? 0);
+        Log.Information($"The final prompt: {_aiSpeechAssistantStreamContext.LastPrompt}");
         _aiSpeechAssistantStreamContext.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
         _aiSpeechAssistantStreamContext.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
-
-        return true;
     }
     
     private async Task<string> GenerateMenuItemsAsync(int agentId, CancellationToken cancellationToken = default)

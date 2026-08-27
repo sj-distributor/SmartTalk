@@ -1,5 +1,4 @@
 using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -14,12 +13,6 @@ public partial class AiSpeechAssistantConnectService
 
         _ctx.FunctionCalls = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistantId], _ctx.Assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
-
-        if (_ctx.ConnectionMode == AiSpeechAssistantConnectionMode.Direct)
-        {
-            _ctx.HumanContactPhone = (await _aiSpeechAssistantDataProvider
-                .GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false))?.HumanPhone;
-        }
 
         _ctx.Prompt = AiSpeechAssistantComplaintInfoHelper.AppendPromptInstructionIfEnabled(
             _ctx.Prompt,

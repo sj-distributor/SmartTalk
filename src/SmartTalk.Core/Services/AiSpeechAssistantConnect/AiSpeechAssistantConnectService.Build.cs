@@ -6,17 +6,15 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
-    private static AiSpeechAssistantConnectContext BuildContext(
-        ConnectAiSpeechAssistantCommand command, IReadOnlyDictionary<string, string> promptVariables) => new()
+    private static AiSpeechAssistantConnectContext BuildContext(ConnectAiSpeechAssistantCommand command) => new()
     {
         Host = command.Host,
         From = command.From,
         To = command.To,
         AssistantId = command.AssistantId,
         NumberId = command.NumberId,
+        UseDirectAssistant = command.UseDirectAssistant,
         Instruction = command.Instruction,
-        PromptVariables = promptVariables,
-        ConnectionMode = command.ConnectionMode,
         TwilioWebSocket = command.TwilioWebSocket,
         OrderRecordType = command.OrderRecordType,
         LastUserInfo = new AiSpeechAssistantUserInfoDto { PhoneNumber = command.From }

@@ -1,8 +1,6 @@
-using System.Net.WebSockets;
 using System.Text;
 using Autofac;
 using Mediator.Net;
-using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using NSubstitute;
 using Shouldly;
@@ -12,13 +10,11 @@ using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Http.Clients;
 using SmartTalk.Core.Services.Jobs;
-using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.IntegrationTests.Mocks;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.Smarties;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
-using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using Xunit;
 
@@ -50,7 +46,7 @@ public partial class AiSpeechAssistantConnectFixture
             await repository.InsertAsync(new AiSpeechAssistantKnowledge
             {
                 AssistantId = assistant.Id,
-                Prompt = "Profile: #{user_profile}. Time: #{current_time}. Phone: #{customer_phone}. Date: #{pst_date}. Question: #{question}.",
+                Prompt = "Profile: #{user_profile}. Time: #{current_time}. Phone: #{customer_phone}. Date: #{pst_date}.",
                 IsActive = true, Version = "1.0"
             });
             await repository.InsertAsync(new Core.Domain.AIAssistant.AiSpeechAssistantUserProfile
@@ -96,13 +92,13 @@ public partial class AiSpeechAssistantConnectFixture
         sessionUpdate.ShouldNotContain("#{current_time}");
         sessionUpdate.ShouldNotContain("#{customer_phone}");
         sessionUpdate.ShouldNotContain("#{pst_date}");
-        sessionUpdate.ShouldNotContain("#{question}");
     }
 
     [Fact]
     public async Task ShouldUseInstructionAsPrompt_WhenConnectCommandHasInstruction()
     {
-        // 保留既有调用契约: Instruction 有值时继续覆盖 DB Assistant prompt。
+        // 代客致电 (KitchChat AI Call): connect URL 带 ?instruction= 时, 发给 OpenAI 的 session 指令应是该 instruction,
+        // 而不是 DB assistant prompt (non-breaking 覆盖)。无 instruction 时 ShouldReplacePromptVariables 已覆盖 = 照旧用 DB prompt。
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
         {
             var agent = new Agent
@@ -161,199 +157,8 @@ public partial class AiSpeechAssistantConnectFixture
 
         openaiWs.SentMessages.ShouldNotBeEmpty();
         var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
-        sessionUpdate.ShouldContain("INSTRUCTION_MARKER_use_this_as_prompt");
-        sessionUpdate.ShouldNotContain("DB_PROMPT_MARKER_should_be_overridden");
-    }
-
-    [Fact]
-    public async Task ShouldUseExplicitAssistantAndPromptVariables_WithoutAgentOrInboundRouting_WhenDirectMode()
-    {
-        var directAssistantId = 0;
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var directAssistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
-            {
-                Name = "DirectAssistant", AnsweringNumber = "+19999999991", ModelProvider = RealtimeAiProvider.OpenAi,
-                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
-            };
-            await repository.InsertAsync(directAssistant);
-
-            var routedAssistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
-            {
-                Name = "RoutedAssistant", ModelProvider = RealtimeAiProvider.OpenAi,
-                ModelVoice = "alloy", IsDefault = false, IsDisplay = true
-            };
-            await repository.InsertAsync(routedAssistant);
-            await unitOfWork.SaveChangesAsync();
-
-            directAssistantId = directAssistant.Id;
-
-            await repository.InsertAsync(new AiSpeechAssistantKnowledge
-            {
-                AssistantId = directAssistant.Id,
-                Prompt = "DIRECT_PROMPT_MARKER\nQuestion: #{question}\nMerchant: #{merchant_name}\nReference: #{reference_id}",
-                IsActive = true, Version = "1.0"
-            });
-            await repository.InsertAsync(new AiSpeechAssistantKnowledge
-            {
-                AssistantId = routedAssistant.Id,
-                Prompt = "ROUTED_PROMPT_MARKER_should_not_be_used",
-                IsActive = true, Version = "1.0"
-            });
-            await repository.InsertAsync(new AiSpeechAssistantInboundRoute
-            {
-                From = TestCallerNumber, To = TestDidNumber, ForwardAssistantId = routedAssistant.Id,
-                IsFullDay = true, DayOfWeek = "0,1,2,3,4,5,6", Priority = 1,
-                TimeZone = "Pacific Standard Time"
-            });
-        });
-
-        var twilioWs = new MockWebSocket();
-        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
-        {
-            @event = "start",
-            start = new { callSid = "CA_DIRECT_CONTEXT", streamSid = "MZ_DIRECT_CONTEXT" }
-        }));
-
-        var openaiWs = CreateProviderMock();
-        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
-
-        var command = new ConnectAiSpeechAssistantCommand
-        {
-            From = TestCallerNumber,
-            To = TestDidNumber,
-            Host = TestHost,
-            AssistantId = directAssistantId,
-            ConnectionMode = AiSpeechAssistantConnectionMode.Direct,
-            OrderRecordType = PhoneOrderRecordType.OutBount,
-            PromptVariables = new Dictionary<string, string>
-            {
-                ["question"] = "What time do you close today?",
-                ["merchant_name"] = "Lakeview Cafe",
-                ["reference_id"] = "CALL-2026-0007"
-            },
-            TwilioWebSocket = twilioWs
-        };
-
-        await Run<IMediator>(async mediator =>
-        {
-            await mediator.SendAsync(command);
-        }, builder =>
-        {
-            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
-            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-            openaiWs.Register(builder);
-        });
-
-        openaiWs.SentMessages.ShouldNotBeEmpty();
-        var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
-        sessionUpdate.ShouldContain("DIRECT_PROMPT_MARKER");
-        sessionUpdate.ShouldContain("What time do you close today?");
-        sessionUpdate.ShouldContain("Lakeview Cafe");
-        sessionUpdate.ShouldContain("CALL-2026-0007");
-        sessionUpdate.ShouldNotContain("ROUTED_PROMPT_MARKER_should_not_be_used");
-        sessionUpdate.ShouldNotContain("#{question}");
-        sessionUpdate.ShouldNotContain("#{merchant_name}");
-        sessionUpdate.ShouldNotContain("#{reference_id}");
-    }
-
-    [Fact]
-    public async Task ShouldUseExplicitAssistantAndPromptVariables_WithoutAgentOrInboundRouting_WhenDirectModeOnV1()
-    {
-        var directAssistantId = 0;
-
-        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
-        {
-            var directAssistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
-            {
-                Name = "DirectAssistantV1", AnsweringNumber = "+19999999992", ModelProvider = RealtimeAiProvider.OpenAi,
-                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
-            };
-            await repository.InsertAsync(directAssistant);
-
-            var routedAssistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
-            {
-                Name = "RoutedAssistantV1", ModelProvider = RealtimeAiProvider.OpenAi,
-                ModelVoice = "alloy", IsDefault = false, IsDisplay = true
-            };
-            await repository.InsertAsync(routedAssistant);
-            await unitOfWork.SaveChangesAsync();
-
-            directAssistantId = directAssistant.Id;
-
-            await repository.InsertAsync(new AiSpeechAssistantKnowledge
-            {
-                AssistantId = directAssistant.Id,
-                Prompt = "DIRECT_V1_PROMPT_MARKER\nQuestion: #{question}\nMerchant: #{merchant_name}",
-                IsActive = true, Version = "1.0"
-            });
-            await repository.InsertAsync(new AiSpeechAssistantKnowledge
-            {
-                AssistantId = routedAssistant.Id,
-                Prompt = "ROUTED_V1_PROMPT_MARKER_should_not_be_used",
-                IsActive = true, Version = "1.0"
-            });
-            await repository.InsertAsync(new AiSpeechAssistantInboundRoute
-            {
-                From = TestCallerNumber, To = TestDidNumber, ForwardAssistantId = routedAssistant.Id,
-                IsFullDay = true, DayOfWeek = "0,1,2,3,4,5,6", Priority = 1,
-                TimeZone = "Pacific Standard Time"
-            });
-        });
-
-        var twilioWs = new MockWebSocket();
-        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
-        {
-            @event = "start",
-            start = new { callSid = "CA_DIRECT_CONTEXT_V1", streamSid = "MZ_DIRECT_CONTEXT_V1" }
-        }));
-
-        var openaiWs = new MockWebSocket(waitForCloseSignal: true);
-        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
-
-        var command = new ConnectAiSpeechAssistantCommand
-        {
-            From = TestCallerNumber,
-            To = TestDidNumber,
-            Host = TestHost,
-            AssistantId = directAssistantId,
-            ConnectionMode = AiSpeechAssistantConnectionMode.Direct,
-            OrderRecordType = PhoneOrderRecordType.OutBount,
-            PromptVariables = new Dictionary<string, string>
-            {
-                ["question"] = "Do you have outdoor seating?",
-                ["merchant_name"] = "Harbor Bistro"
-            },
-            TwilioWebSocket = twilioWs
-        };
-
-        var engineConfig = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["AiSpeechAssistant:EngineVersion"] = "1"
-            })
-            .Build();
-
-        await Run<IMediator>(async mediator =>
-        {
-            await mediator.SendAsync(command);
-        }, builder =>
-        {
-            builder.RegisterInstance(new AiSpeechAssistantSettings(engineConfig));
-            builder.RegisterInstance(openaiWs).As<WebSocket>();
-            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
-            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
-        });
-
-        openaiWs.SentMessages.ShouldNotBeEmpty();
-        var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
-        sessionUpdate.ShouldContain("DIRECT_V1_PROMPT_MARKER");
-        sessionUpdate.ShouldContain("Do you have outdoor seating?");
-        sessionUpdate.ShouldContain("Harbor Bistro");
-        sessionUpdate.ShouldNotContain("ROUTED_V1_PROMPT_MARKER_should_not_be_used");
-        sessionUpdate.ShouldNotContain("#{question}");
-        sessionUpdate.ShouldNotContain("#{merchant_name}");
+        sessionUpdate.ShouldContain("INSTRUCTION_MARKER_use_this_as_prompt");          // 用了 instruction
+        sessionUpdate.ShouldNotContain("DB_PROMPT_MARKER_should_be_overridden");       // 没用 DB prompt
     }
 
     [Fact]
