@@ -44,7 +44,7 @@ public class PhoneOrderProcessJobServiceRecordTests
     [Fact]
     public void AddCustomerIdToTranscriptionText_ShouldShowNotMatchedWhenNoCustomerIdCanBeResolved()
     {
-        var assistant = new AiSpeechAssistant
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
         {
             Name = string.Empty
         };
