@@ -8,17 +8,25 @@ namespace SmartTalk.UnitTests.Services.PhoneOrder;
 public class PhoneOrderProcessJobServiceAiModelTests
 {
     [Fact]
-    public void ResolveAiModel_ShouldReturnOmePhoneAutomatic_ForAixvolinkSource()
+    public void ResolveAiModel_ShouldReturnSmartalk()
     {
-        var result = PhoneOrderProcessJobService.ResolveAiModel(PhoneOrderSourceProviders.Aixvolink);
+        var result = PhoneOrderProcessJobService.ResolveAiModel();
+
+        Assert.Equal("Smartalk", result);
+    }
+
+    [Fact]
+    public void ResolveOrderSource_ShouldReturnOmePhoneSemiAutomatic_ForAixvolinkSource()
+    {
+        var result = PhoneOrderProcessJobService.ResolveOrderSource(PhoneOrderSourceProviders.Aixvolink);
 
         Assert.Equal("OME PHONE 半自动", result);
     }
 
     [Fact]
-    public void ResolveAiModel_ShouldReturnOmePhoneSemiAutomatic_ForNonAixvolinkSource()
+    public void ResolveOrderSource_ShouldReturnOmePhoneAutomatic_ForNonAixvolinkSource()
     {
-        var result = PhoneOrderProcessJobService.ResolveAiModel("SpeechMatics");
+        var result = PhoneOrderProcessJobService.ResolveOrderSource("SpeechMatics");
 
         Assert.Equal("OME PHONE 全自动", result);
     }
