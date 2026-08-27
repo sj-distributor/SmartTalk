@@ -9,11 +9,15 @@ using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.System;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Messages.Dto.Pos;
+using SmartTalk.Messages.Requests.Pos;
 
 namespace SmartTalk.Core.Services.Pos;
 
 public partial interface IPosDataProvider : IScopedDependency
 {
+    Task<List<DashboardCompanyStoreProjection>> GetDashboardCompanyStoresAsync(
+        int? serviceProviderId = null, CancellationToken cancellationToken = default);
+    
     Task<(int Count, List<Company> Companies)> GetPosCompaniesAsync(
         int? pageIndex = null, int? pageSize = null, List<int> companyIds = null, int? serviceProviderId = null, string keyword = null,
         CancellationToken cancellationToken = default);
@@ -72,6 +76,13 @@ public partial interface IPosDataProvider : IScopedDependency
         int agentId, CancellationToken cancellationToken = default);
 }
 
+public class DashboardCompanyStoreProjection
+{
+    public DataDashBoardCompanyOptionDto Company { get; set; }
+    
+    public DataDashBoardStoreOptionDto Store { get; set; }
+}
+
 public partial class PosDataProvider : IPosDataProvider
 {
     private readonly IMapper _mapper;
@@ -83,6 +94,34 @@ public partial class PosDataProvider : IPosDataProvider
         _mapper = mapper;
         _repository = repository;
         _unitOfWork = unitOfWork;
+    }
+
+    public async Task<List<DashboardCompanyStoreProjection>> GetDashboardCompanyStoresAsync(
+        int? serviceProviderId = null, CancellationToken cancellationToken = default)
+    {
+        var query = from company in _repository.QueryNoTracking<Company>()
+            join store in _repository.QueryNoTracking<CompanyStore>() on company.Id equals store.CompanyId into storeGroups
+            from store in storeGroups.DefaultIfEmpty()
+            where !serviceProviderId.HasValue || company.ServiceProviderId == serviceProviderId.Value
+            orderby company.CreatedDate descending, store.CreatedDate descending
+            select new DashboardCompanyStoreProjection
+            {
+                Company = new DataDashBoardCompanyOptionDto
+                {
+                    Id = company.Id,
+                    Name = company.Name
+                },
+                Store = store == null
+                    ? null
+                    : new DataDashBoardStoreOptionDto
+                    {
+                        Id = store.Id,
+                        CompanyId = store.CompanyId,
+                        Names = store.Names
+                    }
+            };
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<(int Count, List<Company> Companies)> GetPosCompaniesAsync(

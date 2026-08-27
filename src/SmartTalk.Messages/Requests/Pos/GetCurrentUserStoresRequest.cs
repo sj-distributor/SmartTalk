@@ -19,4 +19,6 @@ public class GetCurrentUserStoresResponseData
     public CompanyStoreDto Store { get; set; }
     
     public List<int> AgentIds { get; set; }
+
+    public List<AgentDetailDto> Agents { get; set; }
 }
