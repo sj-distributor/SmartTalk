@@ -3,14 +3,13 @@ using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Caching.Redis;
 using SmartTalk.Core.Services.Infrastructure;
+using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.Caching;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistant;
 
-public static class AiSpeechAssistantSessionCredentialDefaults
+public static class AiSpeechAssistantSessionCredentialCacheKeys
 {
-    public static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
-
     public static string GetCacheKey(Guid sessionId) => $"ai-speech-assistant-session:{sessionId:D}";
 
     public static string GetWebRtcLockKey(Guid sessionId) => $"ai-speech-assistant-session-webrtc:{sessionId:D}";
@@ -81,17 +80,20 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
     private readonly ICacheManager _cacheManager;
     private readonly IAiSpeechAssistantDataProvider _dataProvider;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly AiSpeechAssistantSettings _settings;
 
     public AiSpeechAssistantSessionCredentialService(
         IClock clock,
         ICacheManager cacheManager,
         IAiSpeechAssistantDataProvider dataProvider,
-        IRedisSafeRunner redisSafeRunner)
+        IRedisSafeRunner redisSafeRunner,
+        AiSpeechAssistantSettings settings)
     {
         _clock = clock;
         _cacheManager = cacheManager;
         _dataProvider = dataProvider;
         _redisSafeRunner = redisSafeRunner;
+        _settings = settings;
     }
 
     public async Task StoreAsync(AiSpeechAssistantSession session, CancellationToken cancellationToken = default)
@@ -101,7 +103,7 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
         if (remainingLifetime <= TimeSpan.Zero) return;
 
         await _cacheManager.SetAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(session.SessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(session.SessionId),
             credential,
             new RedisCachingSetting(expiry: remainingLifetime),
             cancellationToken).ConfigureAwait(false);
@@ -113,7 +115,7 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
     {
         if (sessionId == Guid.Empty) return null;
 
-        var cacheKey = AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId);
+        var cacheKey = AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(sessionId);
         var credential = await _cacheManager.GetAsync<AiSpeechAssistantSessionCredential>(
             cacheKey,
             new RedisCachingSetting(),
@@ -225,7 +227,7 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
     public Task InvalidateAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         return _cacheManager.RemoveAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(sessionId),
             new RedisCachingSetting(),
             cancellationToken);
     }
@@ -235,7 +237,7 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
         CancellationToken cancellationToken)
     {
         return _cacheManager.GetAsync<AiSpeechAssistantSessionCredential>(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(sessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(sessionId),
             new RedisCachingSetting(),
             cancellationToken);
     }
@@ -248,7 +250,7 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
         if (remainingLifetime <= TimeSpan.Zero) return false;
 
         await _cacheManager.SetAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetCacheKey(credential.SessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetCacheKey(credential.SessionId),
             credential,
             new RedisCachingSetting(expiry: remainingLifetime),
             cancellationToken).ConfigureAwait(false);
@@ -262,7 +264,7 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
     {
         var result = AiSpeechAssistantSessionWebRtcTransitionStatus.Unavailable;
         await _redisSafeRunner.ExecuteWithLockAsync(
-            AiSpeechAssistantSessionCredentialDefaults.GetWebRtcLockKey(sessionId),
+            AiSpeechAssistantSessionCredentialCacheKeys.GetWebRtcLockKey(sessionId),
             async () =>
             {
                 var credential = await GetCachedCredentialAsync(sessionId, cancellationToken).ConfigureAwait(false);
@@ -287,13 +289,13 @@ public sealed class AiSpeechAssistantSessionCredentialService : IAiSpeechAssista
                _clock.Now < credential.ExpiresAt;
     }
 
-    private static AiSpeechAssistantSessionCredential CreateCredential(AiSpeechAssistantSession session)
+    private AiSpeechAssistantSessionCredential CreateCredential(AiSpeechAssistantSession session)
     {
         return new AiSpeechAssistantSessionCredential
         {
             SessionId = session.SessionId,
             AssistantId = session.AssistantId,
-            ExpiresAt = session.CreatedDate.Add(AiSpeechAssistantSessionCredentialDefaults.Lifetime)
+            ExpiresAt = session.CreatedDate.AddMinutes(_settings.SessionCredentialLifetimeMinutes)
         };
     }
 }
