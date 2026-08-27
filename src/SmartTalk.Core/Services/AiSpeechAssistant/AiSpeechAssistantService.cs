@@ -202,17 +202,17 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             return await ConnectDirectAiSpeechAssistantAsync(command, cancellationToken).ConfigureAwait(false);
 
         Log.Information($"The call from {command.From} to {command.To} is connected");
-
+        
         var agent = await _agentDataProvider.GetAgentByNumberAsync(command.To, command.AssistantId, cancellationToken).ConfigureAwait(false);
-
+        
         Log.Information("Get the agent: {@Agent} by {AssistantId} or {DidNumber}", agent, command.AssistantId, command.To);
-
+        
         if (agent == null || agent.IsReceiveCall == false) return new AiSpeechAssistantConnectCloseEvent();
 
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
         await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, command.Instruction, cancellationToken).ConfigureAwait(false);
-
+        
         _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
         _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
         _aiSpeechAssistantStreamContext.TransferCallNumber = _agentTransferCallConfigs.Count > 0
@@ -308,7 +308,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         if (!useDirectAssistant)
         {
             var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
-
+        
             Log.Information("Inbound route: {@inboundRoute}", inboundRoute);
 
             (forwardNumber, forwardAssistantId) = DecideDestinationByInboundRoute(inboundRoute);
@@ -327,7 +327,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(from, to, forwardAssistantId ?? assistantId, cancellationToken).ConfigureAwait(false);
-
+        
         Log.Information("Matching Ai speech assistant: {@Assistant}、{@Knowledge}、{@UserProfile}", assistant, knowledge, userProfile);
         
         var pstTime = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, PstTimeZone.Get());
