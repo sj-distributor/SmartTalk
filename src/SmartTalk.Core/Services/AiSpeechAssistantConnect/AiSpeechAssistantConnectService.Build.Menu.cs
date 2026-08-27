@@ -9,8 +9,6 @@ public partial class AiSpeechAssistantConnectService
 {
     private async Task<string> GenerateMenuItemsAsync(CancellationToken cancellationToken)
     {
-        if (_ctx.UseDirectAssistant) return null;
-
         var storeAgent = await _posDataProvider.GetPosAgentByAgentIdAsync(_ctx.AgentId, cancellationToken).ConfigureAwait(false);
         
         if (storeAgent == null) return null;

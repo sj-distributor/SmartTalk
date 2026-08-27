@@ -260,8 +260,6 @@ public partial class AiSpeechAssistantConnectService
 
         if (!needProducts && !needStoreHours) return null;
 
-        if (_ctx.UseDirectAssistant) return new PosPromptFetchResult(needProducts, needStoreHours, [], null);
-
         var language = ResolvePosPromptLanguage();
         var products = needProducts
             ? await _posUtilService.GetPosMenuProductBriefsAsync(_ctx.AgentId, language, cancellationToken).ConfigureAwait(false)
