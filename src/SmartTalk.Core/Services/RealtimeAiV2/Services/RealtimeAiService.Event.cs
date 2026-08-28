@@ -316,6 +316,12 @@ public partial class RealtimeAiService
     {
         await MarkProviderResponseCompletedAndDrainAsync().ConfigureAwait(false);
 
+        // The index of the turn being described, captured before the increment so this line joins to
+        // the ones already written for it. Every other per-turn line — turn started, first audio,
+        // token usage, the silence observations — reads the pre-increment value, so logging the
+        // post-increment one here joined the start of turn N to the completion of turn N-1.
+        var completedRound = _ctx.Round;
+
         _ctx.Round += 1;
         _ctx.IsAiSpeaking = false;
 
@@ -353,8 +359,8 @@ public partial class RealtimeAiService
         
         // Feeds the absolute turn ceiling the hardening plan adds later: without the real p99.9
         // that threshold would be a guess.
-        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}, ElapsedTurnMs: {ElapsedTurnMs}",
-            _ctx.SessionId, _ctx.Round, _ctx.TurnStartedAt == 0 ? 0 : (long)Stopwatch.GetElapsedTime(_ctx.TurnStartedAt).TotalMilliseconds);
+        Log.Information("[RealtimeAi] AI turn completed, SessionId: {SessionId}, Round: {Round}, TurnsCompleted: {TurnsCompleted}, ElapsedTurnMs: {ElapsedTurnMs}",
+            _ctx.SessionId, completedRound, _ctx.Round, _ctx.TurnStartedAt == 0 ? 0 : (long)Stopwatch.GetElapsedTime(_ctx.TurnStartedAt).TotalMilliseconds);
     }
 
     private async Task ForwardProviderTextToTtsAsync(string text)
