@@ -241,8 +241,7 @@ public partial class RealtimeAiService
             ? _ctx.TtsProvider.OutputCodec
             : _ctx.ProviderAdapter.GetPreferredCodec(clientCodec);
         var (sourceCodec, targetCodec) = source == AudioSource.Client ? (clientCodec, providerCodec) : (providerCodec, clientCodec);
-        var sourceSampleRate = ResolveAudioSampleRate(sourceCodec, source);
-        var targetSampleRate = ResolveAudioSampleRate(targetCodec, source == AudioSource.Client ? AudioSource.Provider : AudioSource.Client);
+        var (sourceSampleRate, targetSampleRate) = ResolveAudioSampleRates(source, clientCodec, providerCodec);
 
         var rawBytes = await RecordAudioIfRequiredAsync(base64Input, sourceCodec, source, sourceSampleRate).ConfigureAwait(false);
 
@@ -264,13 +263,26 @@ public partial class RealtimeAiService
         return Convert.ToBase64String(outputBytes);
     }
 
-    private int ResolveAudioSampleRate(RealtimeAiAudioCodec codec, AudioSource source)
-    {
-        if (source == AudioSource.Provider)
-            return _ctx.TtsProvider.OutputSampleRate;
-
-        return AudioCodecConverter.GetSampleRate(codec);
-    }
+    /// <summary>
+    /// The rates for one leg of the call. The two legs do not mirror each other, which is the trap:
+    /// only the DOWNLINK's source comes from the voice provider, because it is the one number nothing
+    /// else knows — a voice may emit a codec at a rate that is not that codec's nominal one.
+    ///
+    /// <para>The uplink's target used to read that same number, so the caller's microphone audio was
+    /// resampled to the voice's playback rate before being handed to a model that had been told to
+    /// expect the client's. It was invisible because the two coincide on both shipped paths: the
+    /// built-in passthrough derives its rate from the negotiated codec, and MiniMax defaults to 8000.
+    /// Raising a voice's sample rate for audio quality — an ordinary thing to do — would have pitched
+    /// and stretched the speech going INTO the model, with nothing logged to say so.</para>
+    ///
+    /// <para>Do not collapse both legs onto <c>GetSampleRate</c>. It compiles, warns about nothing, and
+    /// passes every test but the downlink one, while dropping the resample a voice at a non-nominal
+    /// rate needs.</para>
+    /// </summary>
+    private (int Source, int Target) ResolveAudioSampleRates(AudioSource source, RealtimeAiAudioCodec clientCodec, RealtimeAiAudioCodec providerCodec) =>
+        source == AudioSource.Client
+            ? (AudioCodecConverter.GetSampleRate(clientCodec), AudioCodecConverter.GetSampleRate(providerCodec))
+            : (_ctx.TtsProvider.OutputSampleRate, AudioCodecConverter.GetSampleRate(clientCodec));
 
     /// <summary>
     /// Decides whether recording should happen, decodes and writes to buffer if so.
