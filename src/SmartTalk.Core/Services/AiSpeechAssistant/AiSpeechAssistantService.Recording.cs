@@ -68,6 +68,18 @@ public partial class AiSpeechAssistantService
         Log.Information("Handling ReceivePhoneRecord record, RecordId: {RecordId}, CallSid: {CallSid}, RecordStatus: {RecordStatus}, HasRecordingUrl: {HasRecordingUrl}",
             recordId, command.CallSid, recordStatus, hasRecordingUrl);
 
+        // The retry returns its last result even when the predicate still matches, so a call that was
+        // recorded but never got a row arrives here as null — every forwarded call is one, since the
+        // forward triggers Twilio recording while the record deliberately is not created. Dereferencing
+        // it threw an unhandled NullReferenceException that the unit of work rethrew, so Twilio got a
+        // 500 and retried the webhook into the same throw.
+        if (record == null)
+        {
+            Log.Warning("Recording callback arrived with no phone order record, CallSid: {CallSid}, RecordingSid: {RecordingSid}", command.CallSid, command.RecordingSid);
+
+            return;
+        }
+
         record.Url = command.RecordingUrl;
 
         var audioFileRawBytes = await _httpClientFactory
