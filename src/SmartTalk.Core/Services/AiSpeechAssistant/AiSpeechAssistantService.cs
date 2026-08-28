@@ -214,14 +214,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
 
     public async Task<AiSpeechAssistantConnectCloseEvent> ConnectAiSpeechAssistantAsync(ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        if (!TryDecodeCallQuestion(command.EncodedQuestion, out var question))
-        {
-            Log.Warning("The outbound call question is not valid URL-safe Base64, assistantId: {AssistantId}", command.AssistantId);
-            await AiSpeechAssistantConnectService.TryCloseTwilioWebSocketAsync(command.TwilioWebSocket).ConfigureAwait(false);
-            return new AiSpeechAssistantConnectCloseEvent();
-        }
-
-        command.Question = question;
+        if (command.UseDirectAssistant)
+            return await ConnectDirectAiSpeechAssistantAsync(command, cancellationToken).ConfigureAwait(false);
 
         if (_aiSpeechAssistantSettings.EngineVersion == 2)
             return await _aiSpeechAssistantConnectService.ConnectAsync(command, cancellationToken).ConfigureAwait(false);
@@ -236,9 +230,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         
         InitAiSpeechAssistantStreamContext(command.Host, command.From);
 
-        await BuildingAiSpeechAssistantKnowledgeBaseAsync(
-            command.From, command.To, command.AssistantId, command.NumberId, agent.Id,
-            command.Instruction, command.Question, cancellationToken).ConfigureAwait(false);
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(command.From, command.To, command.AssistantId, command.NumberId, agent.Id, command.Instruction, cancellationToken).ConfigureAwait(false);
         
         _agentTransferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
         _agentTimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
@@ -280,33 +272,43 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         return new AiSpeechAssistantConnectCloseEvent();
     }
 
-    private static bool TryDecodeCallQuestion(string encodedQuestion, out string question)
+    private async Task<AiSpeechAssistantConnectCloseEvent> ConnectDirectAiSpeechAssistantAsync(
+        ConnectAiSpeechAssistantCommand command, CancellationToken cancellationToken)
     {
-        question = null;
+        if (command.AssistantId is not > 0)
+        {
+            Log.Warning("Direct AI speech assistant call requires a valid assistant id, From: {From}, To: {To}", command.From, command.To);
+            return new AiSpeechAssistantConnectCloseEvent();
+        }
 
-        if (string.IsNullOrWhiteSpace(encodedQuestion)) return true;
+        Log.Information("The direct call from {From} to {To} is connected with assistantId: {AssistantId}",
+            command.From, command.To, command.AssistantId);
+
+        InitAiSpeechAssistantStreamContext(command.Host, command.From);
+
+        await BuildingAiSpeechAssistantKnowledgeBaseAsync(
+            command.From, command.To, command.AssistantId, command.NumberId, null, command.Instruction,
+            cancellationToken, useDirectAssistant: true).ConfigureAwait(false);
+
+        _aiSpeechAssistantStreamContext.HumanContactPhone =
+            (await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantHumanContactByAssistantIdAsync(
+                _aiSpeechAssistantStreamContext.Assistant.Id, cancellationToken).ConfigureAwait(false))?.HumanPhone;
+
+        await ConnectOpenAiRealTimeSocketAsync(cancellationToken).ConfigureAwait(false);
+
+        var receiveFromTwilioTask = ReceiveFromTwilioAsync(command.TwilioWebSocket, command.OrderRecordType, cancellationToken);
+        var sendToTwilioTask = SendToTwilioAsync(command.TwilioWebSocket, cancellationToken);
 
         try
         {
-            var value = encodedQuestion.Replace('-', '+').Replace('_', '/');
-            value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
-            question = Encoding.UTF8.GetString(Convert.FromBase64String(value));
-            return true;
+            await Task.WhenAll(receiveFromTwilioTask, sendToTwilioTask);
         }
-        catch (FormatException)
+        catch (Exception ex)
         {
-            return false;
+            Log.Information("Error in one of the tasks: " + ex.Message);
         }
-    }
 
-    private static string ResolveCallQuestionSessionPrompt(string prompt, string instruction, string question)
-    {
-        var effectivePrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : prompt;
-
-        if (string.IsNullOrEmpty(effectivePrompt) || !effectivePrompt.Contains("#{question}", StringComparison.OrdinalIgnoreCase))
-            return effectivePrompt;
-
-        return effectivePrompt.Replace("#{question}", question ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        return new AiSpeechAssistantConnectCloseEvent();
     }
 
     private void InitAiSpeechAssistantStreamContext(string host, string from)
@@ -316,16 +318,22 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     }
 
     private async Task BuildingAiSpeechAssistantKnowledgeBaseAsync(
-        string from, string to, int? assistantId, int? numberId, int? agentId,
-        string instruction, string question, CancellationToken cancellationToken)
+        string from, string to, int? assistantId, int? numberId, int? agentId, string instruction,
+        CancellationToken cancellationToken, bool useDirectAssistant = false)
     {
-        var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
+        string forwardNumber = null;
+        int? forwardAssistantId = null;
+
+        if (!useDirectAssistant)
+        {
+            var inboundRoute = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantInboundRouteAsync(from, to, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Inbound route: {@inboundRoute}", inboundRoute);
+            Log.Information("Inbound route: {@inboundRoute}", inboundRoute);
 
-        var (forwardNumber, forwardAssistantId) = DecideDestinationByInboundRoute(inboundRoute);
+            (forwardNumber, forwardAssistantId) = DecideDestinationByInboundRoute(inboundRoute);
 
-        Log.Information("Forward number: {@forwardNumber} or Forward assistant id: {forwardAssistantId}", forwardNumber, forwardAssistantId);
+            Log.Information("Forward number: {@forwardNumber} or Forward assistant id: {forwardAssistantId}", forwardNumber, forwardAssistantId);
+        }
         
         if (!string.IsNullOrEmpty(forwardNumber))
         {
@@ -427,7 +435,8 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{delivery_info}", string.IsNullOrEmpty(deliveryInfo) ? " " : deliveryInfo);
         }
         
-        _aiSpeechAssistantStreamContext.LastPrompt = ResolveCallQuestionSessionPrompt(finalPrompt, instruction, question);
+        // 代客致电等场景: connect URL 带了 ?instruction= 则用它作本通对话指令 (覆盖 DB prompt); 无则照旧 (non-breaking)。
+        _aiSpeechAssistantStreamContext.LastPrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : finalPrompt;
 
         Log.Information($"The final prompt: {_aiSpeechAssistantStreamContext.LastPrompt}");
 

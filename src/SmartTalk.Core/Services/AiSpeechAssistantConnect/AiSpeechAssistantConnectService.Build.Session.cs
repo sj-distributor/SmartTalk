@@ -84,7 +84,7 @@ public partial class AiSpeechAssistantConnectService
 
     private string BuildSessionPrompt()
     {
-        var prompt = ResolveCallQuestionSessionPrompt(_ctx.Prompt, _ctx.Instruction, _ctx.Question);
+        var prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt;
 
         if (!string.IsNullOrWhiteSpace(_ctx.Instruction) &&
             !string.IsNullOrWhiteSpace(_ctx.CustomerItemsPromptValue))
@@ -151,12 +151,6 @@ public partial class AiSpeechAssistantConnectService
         }
 
         return tool;
-    }
-
-    private static string ResolveCallQuestionSessionPrompt(string prompt, string instruction, string question)
-    {
-        var effectivePrompt = !string.IsNullOrWhiteSpace(instruction) ? instruction : prompt;
-        return ResolveCallQuestionPrompt(effectivePrompt, question);
     }
 
     private RealtimeAiTtsConfig BuildTtsConfig(AiSpeechAssistantDto assistant)

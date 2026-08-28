@@ -105,11 +105,23 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         {
             _ctx = BuildContext(command);
 
-            var agent = await ResolveActiveAgentAsync(cancellationToken).ConfigureAwait(false);
+            if (command.UseDirectAssistant)
+            {
+                if (command.AssistantId is not > 0)
+                    throw new AiAssistantNotAvailableException("Direct assistant mode requires a valid assistant id");
 
-            EnsureServiceAvailable(agent);
+                _ctx.AgentTransferCallConfigs = [];
+                Log.Information("[AiAssistant] Direct assistant call, AssistantId: {AssistantId}, From: {From}, To: {To}",
+                    command.AssistantId, command.From, command.To);
+            }
+            else
+            {
+                var agent = await ResolveActiveAgentAsync(cancellationToken).ConfigureAwait(false);
 
-            await ForwardIfRequiredAsync(cancellationToken).ConfigureAwait(false);
+                EnsureServiceAvailable(agent);
+
+                await ForwardIfRequiredAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             var options = await BuildSessionConfigAsync(cancellationToken).ConfigureAwait(false);
 
