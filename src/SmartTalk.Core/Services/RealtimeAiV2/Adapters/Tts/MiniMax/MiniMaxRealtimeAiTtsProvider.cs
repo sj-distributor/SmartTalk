@@ -48,6 +48,13 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
     private CancellationTokenSource _receiveLoopCts;
     private Task _receiveLoopTask;
     private RealtimeAiTtsConfig _config;
+
+    /// <summary>
+    /// Set once StopAsync has run, read only under <c>_connectionLock</c>. A redial started by an
+    /// interrupt races the stop for that lock: whichever wins, this makes the loser a no-op or a
+    /// close rather than a socket that outlives its session.
+    /// </summary>
+    private bool _stopped;
     private int _generation;
     private int _loggedAudioSampleRate;
     private int _targetSampleRate = DefaultSampleRate;
@@ -70,6 +77,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
     public async Task InitializeAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
     {
         _config = config;
+        _stopped = false;
         _targetSampleRate = config.SampleRate ?? DefaultSampleRate;
         _assumedSourceSampleRate = GetIntConfig(config.ProviderSpecificConfig, "source_sample_rate", _targetSampleRate);
         ClearTextState(clearPending: true);
@@ -128,7 +136,10 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         {
             Log.Information("[RealtimeAi][MiniMaxTts] Interrupt received, restarting TTS session.");
             await CloseConnectionAsync(CancellationToken.None).ConfigureAwait(false);
-            await OpenConnectionAsync(_config ?? new RealtimeAiTtsConfig(), cancellationToken).ConfigureAwait(false);
+
+            if (_stopped) return;
+
+            ReopenInBackground();
         }
         finally
         {
@@ -144,6 +155,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            _stopped = true;
             await CloseConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -151,6 +163,38 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
             _connectionLock.Release();
         }
     }
+
+    /// <summary>
+    /// Redials the vendor without holding up the caller. Closing is what silences an interrupted turn;
+    /// the new task is preparation for the next one, and the engine awaits HandleInterruptAsync from
+    /// its provider event loop — dialling inline stalled every provider event for a full TCP+TLS+
+    /// handshake. Text that arrives before the socket is up is queued by QueueOrSendSegmentAsync and
+    /// flushed at the end of OpenConnectionAsync, which is the path that already existed for a
+    /// not-yet-ready socket.
+    ///
+    /// <para>Takes _connectionLock, so it serialises against Initialize/Interrupt/Stop exactly as the
+    /// inline redial did. A redial that fails is logged rather than thrown — it used to surface into
+    /// the event loop, which would cost the whole call — and the turn is then closed by the engine's
+    /// TTS-synthesis watchdog, since no audio will arrive for it.</para>
+    /// </summary>
+    private void ReopenInBackground() => _ = Task.Run(async () =>
+    {
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_stopped) return;
+
+            await OpenConnectionAsync(_config ?? new RealtimeAiTtsConfig(), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[RealtimeAi][MiniMaxTts] Redial after interrupt failed; this turn has no voice and will close on the synthesis watchdog.");
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    });
 
     private async Task OpenConnectionAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
     {

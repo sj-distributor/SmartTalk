@@ -115,6 +115,110 @@ public class MiniMaxRealtimeAiTtsProviderTests
         Sent(socket).ShouldContain("task_continue");
     }
 
+    /// <summary>
+    /// Hands out a fresh vendor socket per dial and can hold one dial open indefinitely, which is how
+    /// a test stands in for the seconds a real TCP+TLS+handshake to MiniMax can take.
+    /// </summary>
+    private sealed class GatedVendorDialer
+    {
+        private readonly List<FakeWebSocket> _sockets = [];
+        private int _dials;
+
+        /// <summary>1-based dial number to block on; dials before it complete immediately.</summary>
+        public int BlockFromDial { get; init; } = int.MaxValue;
+
+        public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IReadOnlyList<FakeWebSocket> Sockets { get { lock (_sockets) return _sockets.ToList(); } }
+
+        public async Task<System.Net.WebSockets.WebSocket> ConnectAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _dials) >= BlockFromDial)
+                await Gate.Task.ConfigureAwait(false);
+
+            var socket = VendorSocketAfterHandshake();
+            lock (_sockets) _sockets.Add(socket);
+
+            return socket;
+        }
+    }
+
+    private static MiniMaxRealtimeAiTtsProvider ProviderOver(GatedVendorDialer dialer) =>
+        new() { WebSocketConnectorOverride = dialer.ConnectAsync };
+
+    private static async Task WaitUntilAsync(Func<bool> condition, string description)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition()) return;
+            await Task.Delay(20);
+        }
+
+        throw new Xunit.Sdk.XunitException($"Timed out after 5s waiting for: {description}");
+    }
+
+    [Fact]
+    public async Task Interrupt_ShouldNotBlockOnTheReopenHandshake()
+    {
+        // Barge-in is awaited from the engine's provider event loop (RealtimeAiService.Event.cs:255),
+        // so anything slow here stalls EVERY provider event — transcripts, response starts, errors —
+        // for its whole duration. Closing is what silences the vendor; redialling is preparation for
+        // the next turn and has no reason to hold the loop.
+        var dialer = new GatedVendorDialer { BlockFromDial = 2 };
+        var provider = ProviderOver(dialer);
+
+        await provider.InitializeAsync(Config(), CancellationToken.None);
+
+        await Should.NotThrowAsync(() => provider.HandleInterruptAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2)));
+
+        dialer.Gate.SetResult();
+    }
+
+    [Fact]
+    public async Task TextArrivingWhileTheReopenIsStillDialling_ShouldReachTheVendorOnceItIsUp()
+    {
+        // The safety net for not waiting on the redial: the next turn's text must not be dropped in
+        // the window where there is no socket. QueueOrSendSegmentAsync already queues for a not-ready
+        // socket and OpenConnectionAsync flushes on the way out — this pins that the two meet.
+        var dialer = new GatedVendorDialer { BlockFromDial = 2 };
+        var provider = ProviderOver(dialer);
+
+        await provider.InitializeAsync(Config(), CancellationToken.None);
+        await provider.HandleInterruptAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+
+        await provider.HandleProviderTextDeltaAsync("Your order is ready.", CancellationToken.None);
+        await provider.HandleProviderTextDoneAsync(CancellationToken.None);
+
+        dialer.Gate.SetResult();
+
+        await WaitUntilAsync(
+            () => dialer.Sockets.Count == 2 && Sent(dialer.Sockets[1]).Contains("task_continue"),
+            "the text queued during the redial to reach the reopened vendor socket");
+    }
+
+    [Fact]
+    public async Task StopWhileTheReopenIsStillDialling_ShouldNotLeaveAVendorSocketOpen()
+    {
+        // The reopen outliving its session is the risk that comes with not awaiting it. Stopping must
+        // either pre-empt the redial or close what it opened — never leave a live socket behind.
+        var dialer = new GatedVendorDialer { BlockFromDial = 2 };
+        var provider = ProviderOver(dialer);
+
+        await provider.InitializeAsync(Config(), CancellationToken.None);
+        await provider.HandleInterruptAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+
+        var stop = provider.StopAsync(CancellationToken.None);
+        dialer.Gate.SetResult();
+
+        await stop.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await WaitUntilAsync(
+            () => dialer.Sockets.All(s => s.State != System.Net.WebSockets.WebSocketState.Open),
+            "every vendor socket to be closed after StopAsync");
+    }
+
     [Fact]
     public async Task Stop_ShouldCloseTheVendorSocket()
     {
