@@ -8,6 +8,7 @@ using SmartTalk.Messages.Dto.Attachments;
 using SmartTalk.Messages.Enums.Caching;
 using SmartTalk.Core.Constants;
 using SmartTalk.Core.Services.PhoneOrder;
+using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
 using Task = System.Threading.Tasks.Task;
@@ -33,9 +34,27 @@ public partial class AiSpeechAssistantService
         }, maxRetryCount: 5, delaySeconds: 5, cancellationToken);
     }
 
+    /// <summary>
+    /// The recording callback's log fields, resolved from a record that may not exist.
+    ///
+    /// <para>The record legitimately comes back null — a forwarded call triggers Twilio recording but
+    /// deliberately never gets a row (see <c>CanRecordCall</c>) — and the retry above returns that null
+    /// rather than throwing. This line is the only in-log evidence distinguishing "no record existed"
+    /// from "fetching the recording failed", so it has to survive the null; a plain dereference here
+    /// would move the throw one line earlier and delete the diagnostic entirely.</para>
+    ///
+    /// <para>Public and static so that null case is testable without constructing the service or
+    /// waiting out its thirty seconds of retries, following <c>CanRecordCall</c>. HasRecordingUrl comes
+    /// from the command, not the record: the record's own Url is assigned on the next line, so reading
+    /// it here would report false on every healthy call.</para>
+    /// </summary>
+    public static (int? RecordId, PhoneOrderRecordStatus? RecordStatus, bool HasRecordingUrl) ResolveRecordingCallbackLogFields(PhoneOrderRecord record, string recordingUrl) =>
+        (record?.Id, record?.Status, !string.IsNullOrEmpty(recordingUrl));
+
     public async Task ReceivePhoneRecordingStatusCallbackAsync(ReceivePhoneRecordingStatusCallbackCommand command, CancellationToken cancellationToken)
     {
-        Log.Information("Handling ReceivePhoneRecord command: {@Command}", command);
+        Log.Information("Handling ReceivePhoneRecord, CallSid: {CallSid}, RecordingSid: {RecordingSid}, RecordingStatus: {RecordingStatus}, RecordingTrack: {RecordingTrack}",
+            command.CallSid, command.RecordingSid, command.RecordingStatus, command.RecordingTrack);
 
         var (record, agent) = await RetryHelper.RetryOnResultAsync(
             ct => _phoneOrderDataProvider.GetRecordWithAgentAsync(command.CallSid, ct),
@@ -44,7 +63,10 @@ public partial class AiSpeechAssistantService
             delay: TimeSpan.FromSeconds(10),
             cancellationToken).ConfigureAwait(false);
 
-        Log.Information("Handling ReceivePhoneRecord phone order record: {@Record}", record);
+        var (recordId, recordStatus, hasRecordingUrl) = ResolveRecordingCallbackLogFields(record, command.RecordingUrl);
+
+        Log.Information("Handling ReceivePhoneRecord record, RecordId: {RecordId}, CallSid: {CallSid}, RecordStatus: {RecordStatus}, HasRecordingUrl: {HasRecordingUrl}",
+            recordId, command.CallSid, recordStatus, hasRecordingUrl);
 
         record.Url = command.RecordingUrl;
 

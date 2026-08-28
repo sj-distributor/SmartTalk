@@ -963,7 +963,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Deserialize complaint info failed. Arguments: {Arguments}", argumentsString);
+            Log.Warning(ex, "Deserialize complaint info failed, ArgumentChars: {ArgumentChars}", argumentsString?.Length ?? 0);
         }
 
         _aiSpeechAssistantStreamContext.ComplaintInfo = AiSpeechAssistantComplaintInfoHelper.Merge(_aiSpeechAssistantStreamContext.ComplaintInfo, incoming);
