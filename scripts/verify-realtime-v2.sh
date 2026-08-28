@@ -36,6 +36,9 @@ SOLUTION="SmartTalk.sln"
 UNIT_TESTS="src/SmartTalk.UnitTests/SmartTalk.UnitTests.csproj"
 GOLDEN_DIR="src/SmartTalk.UnitTests/Services/RealtimeAiV2/Characterization"
 
+# What L3 diffs the goldens against. Override for a branch that targets something other than main.
+BASE_REF="${BASE_REF:-origin/main}"
+
 # Minimum RealtimeAiV2 cases that must pass. Never lower this — the suite only grows.
 EXPECTED_V2_MIN="${EXPECTED_V2_MIN:-642}"
 
@@ -59,8 +62,14 @@ note()  { printf '  %s·%s %s\n' "$YELLOW" "$OFF" "$1"; }
 # Extracts "Failed: N, Passed: N" from the dotnet test summary line.
 counts_from() { sed -n 's/.*Failed:[[:space:]]*\([0-9]*\), Passed:[[:space:]]*\([0-9]*\).*/\1 \2/p' "$1" | tail -1; }
 
-# xunit prints "<fully.qualified.name> [FAIL]"; the marker is not localized.
-failed_names_from() { grep -o '[A-Za-z0-9_.]*\ \[FAIL\]' "$1" | sed 's/ \[FAIL\]//' | sort -u; }
+# xunit prints "<fully.qualified.name> [FAIL]"; the marker is not localized. Theory cases print their
+# arguments too — "Method(eventType: \"x\") [FAIL]" — and the closing paren is outside the name's
+# character class, so the raw grep matched an EMPTY name for every one of them: L2 still failed on the
+# mismatch, but reported a blank line instead of naming the test that regressed. Strip the argument
+# list first, greedily so an argument value containing its own paren does not truncate the strip.
+failed_names_from() {
+  sed 's/(.*)[[:space:]]*\[FAIL\]/ [FAIL]/' "$1" | grep -o '[A-Za-z0-9_.]*\ \[FAIL\]' | sed 's/ \[FAIL\]//' | sort -u
+}
 
 run_build() {
   step "L1a  build $SOLUTION"
@@ -119,7 +128,20 @@ run_l2() {
 
 run_l3() {
   step "L3   golden contract ($(basename "$GOLDEN_DIR")/ must be untouched)"
-  local changed; changed=$(git status --porcelain -- "$GOLDEN_DIR")
+
+  # Against the merge base, not the working tree. `git status` only sees UNCOMMITTED edits, so the
+  # check passed unconditionally the moment a golden edit was committed — which is the state a branch
+  # is actually reviewed in, and the state a clean CI checkout is always in. The non-breaking proof it
+  # was supposed to be held only for the seconds between editing a golden and committing it.
+  local base; base=$(git merge-base "$BASE_REF" HEAD 2>/dev/null)
+  local changed
+
+  if [[ -n "$base" ]]; then
+    changed=$(git diff --name-only "$base"...HEAD -- "$GOLDEN_DIR"; git status --porcelain -- "$GOLDEN_DIR")
+  else
+    note "no merge base against $BASE_REF — falling back to uncommitted changes only"
+    changed=$(git status --porcelain -- "$GOLDEN_DIR")
+  fi
 
   if [[ -z "$changed" ]]; then
     pass "no golden files modified"
