@@ -20,6 +20,13 @@ public class AiSpeechAssistantConnectContext
     public DeferredLogScope LogScope { get; set; }
 
     public string CallSid { get; set; }
+
+    /// <summary>
+    /// Tools that have already spent their one reply for unreadable arguments this call. Bounds the
+    /// recovery so a model re-emitting the same malformed payload cannot keep completing turns, which
+    /// would restart the idle countdown forever on a path that has no session ceiling.
+    /// </summary>
+    public HashSet<string> ArgumentRecoveryClaims { get; } = new();
     public string StreamSid { get; set; }
     public string Host { get; set; }
     public string From { get; set; }
