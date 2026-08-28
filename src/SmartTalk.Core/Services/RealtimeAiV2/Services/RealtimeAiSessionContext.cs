@@ -77,6 +77,21 @@ public class RealtimeAiSessionContext
     // captures it when armed and compares on fire, so a watchdog from a superseded turn no-ops.
     public long CurrentTurnGeneration;
 
+    /// <summary>
+    /// The generation a watchdog force-completed, or -1. Kept separate from the external-TTS handled
+    /// latch: a provider that recovers and sends response.done after the ceiling already closed the
+    /// turn must not complete it a second time, and Round drives when the idle follow-up fires.
+    /// </summary>
+    public long ForceCompletedTurnGeneration = -1;
+
+    /// <summary>
+    /// The generation that completed on its own, or -1. Only the watchdogs consult it, so a turn that
+    /// finished normally cannot then be force-completed a second time by its own ceiling. It
+    /// deliberately does not gate one normal completion against another: whether a redundant
+    /// response.done completes twice is separate, pinned behaviour.
+    /// </summary>
+    public long NormallyCompletedTurnGeneration = -1;
+
     // Accumulates the assistant's text output for the current turn so external-TTS mode can
     // surface the AI side of the transcript (no output_audio_transcript events arrive there).
     public StringBuilder CurrentResponseTextBuilder { get; } = new();

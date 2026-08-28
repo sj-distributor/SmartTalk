@@ -104,11 +104,21 @@ public partial class RealtimeAiService
             if (Interlocked.Read(ref _ctx.CurrentTurnGeneration) != generation) return;
             if (_ctx.CurrentResponseTurnCompletedHandled) return;   // already completed via the gate
 
+            // Audio mode has no handled latch, so this is what stops a ceiling from adding a second
+            // completion behind a turn that already finished on its own.
+            if (Interlocked.Read(ref _ctx.NormallyCompletedTurnGeneration) == generation) return;
+
+            // Two ceilings can be armed for one turn (response.created and its first text); only the
+            // first may close it.
+            if (Interlocked.Read(ref _ctx.ForceCompletedTurnGeneration) == generation) return;
+
             // Force BOTH gate legs: the provider may have stalled before response.done, and the TTS may
             // still be mid-synthesis. The handled latch (waitsForExternalTts is true here) keeps it exactly-once.
             _ctx.CurrentResponseProviderTurnCompleted = true;
             _ctx.CurrentResponseTtsSynthesisCompleted = true;
             shouldComplete = TryMarkCurrentResponseTurnCompletedLocked();
+
+            if (shouldComplete) Interlocked.Exchange(ref _ctx.ForceCompletedTurnGeneration, generation);
         }
         finally
         {

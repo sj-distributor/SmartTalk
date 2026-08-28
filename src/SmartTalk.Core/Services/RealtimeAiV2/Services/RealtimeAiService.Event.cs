@@ -343,7 +343,10 @@ public partial class RealtimeAiService
         // without ever sending response.done). Exactly-once is guaranteed by the same handled latch.
         // Gated on external-TTS mode: in audio mode the turn completes on provider-done without waiting,
         // so a hard-ceiling watchdog must never arm there (defensive — audio mode emits no text today).
-        if (UsesExternalTts && !_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
+        // Also armed here, not only on response.created: a provider that streams text without
+        // announcing a response first would otherwise run with no ceiling at all. Arming twice for
+        // one turn is harmless — the force path is idempotent per generation.
+        if (!_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
 
         _ctx.CurrentResponseHasTextOutput = true;
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
@@ -442,7 +445,18 @@ public partial class RealtimeAiService
         try
         {
             _ctx.CurrentResponseProviderTurnCompleted = true;
-            return TryMarkCurrentResponseTurnCompletedLocked();
+
+            // A watchdog already closed this turn. The provider recovering afterwards must not add a
+            // second completion: Round would jump by two, and SkipRounds drives when the idle
+            // follow-up and auto-hangup fire.
+            if (Interlocked.Read(ref _ctx.ForceCompletedTurnGeneration) == Interlocked.Read(ref _ctx.CurrentTurnGeneration))
+                return false;
+
+            var completing = TryMarkCurrentResponseTurnCompletedLocked();
+
+            if (completing) Interlocked.Exchange(ref _ctx.NormallyCompletedTurnGeneration, Interlocked.Read(ref _ctx.CurrentTurnGeneration));
+
+            return completing;
         }
         finally
         {
