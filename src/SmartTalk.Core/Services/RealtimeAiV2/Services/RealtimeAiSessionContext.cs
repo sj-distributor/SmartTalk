@@ -118,6 +118,18 @@ public class RealtimeAiSessionContext
     public ConcurrentQueue<(AiSpeechAssistantSpeaker Speaker, string Text)> Transcriptions { get; } = new();
 
     // Synchronization
+    /// <summary>
+    /// Tools already answered once about a failure, and how many such answers this session has sent.
+    ///
+    /// <para>A plain HashSet where every other cross-thread field on this context is volatile,
+    /// Interlocked or concurrent: these are touched only from <c>OnFunctionCallsReceivedAsync</c>, which
+    /// runs on the provider receive loop and is awaited by it, so the whole dispatch is serial with
+    /// respect to itself. If a function-call batch ever stops being awaited there, this needs revisiting
+    /// with the rest of the loop.</para>
+    /// </summary>
+    public HashSet<string> FunctionCallFailuresAnswered { get; } = new();
+    public int FunctionCallFailureRepliesSent { get; set; }
+
     public SemaphoreSlim WsSendLock { get; } = new(1, 1);
     public SemaphoreSlim ProviderResponseStateLock { get; } = new(1, 1);
     public SemaphoreSlim TurnCompletionStateLock { get; } = new(1, 1);

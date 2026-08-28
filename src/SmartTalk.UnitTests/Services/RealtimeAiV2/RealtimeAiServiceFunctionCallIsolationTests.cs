@@ -1,5 +1,6 @@
 using NSubstitute;
 using SmartTalk.Core.Services.RealtimeAiV2;
+using SmartTalk.Core.Services.RealtimeAiV2.Services;
 using Shouldly;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -29,6 +30,129 @@ public class RealtimeAiServiceFunctionCallIsolationTests : RealtimeAiServiceTest
             Type = RealtimeAiWssEventType.FunctionCallSuggested,
             Data = names.Select(Call).ToList()
         });
+
+    private RealtimeSessionOptions FailingHandlerOptions(List<string> ran = null) =>
+        CreateDefaultOptions(o => o.OnFunctionCallAsync = (data, _) =>
+        {
+            if (ran != null) lock (ran) ran.Add(data.FunctionName);
+            throw new InvalidOperationException("simulated POS timeout");
+        });
+
+    private static int RepliesIn(IEnumerable<string> sent) => sent.Count(m => m.StartsWith("fc_reply:"));
+
+    [Fact]
+    public async Task AReplySendFailure_ShouldNotSkipTheRemainingHandlers()
+    {
+        // The other half of this class's contract, and it was never closed. A failing HANDLER cannot
+        // take its siblings down — but a failing SEND could, because the send was outside every catch.
+        // On a real call the sibling skipped that way is hangup or transfer_call.
+        ProviderSuggests("repeat_order", "hangup");
+        FakeWssClient.ThrowOnSend = m => m == "fc_reply:ok:repeat_order";
+
+        var ran = new List<string>();
+        var options = CreateDefaultOptions(o => o.OnFunctionCallAsync = (data, _) =>
+        {
+            lock (ran) ran.Add(data.FunctionName);
+            return Task.FromResult(new RealtimeAiFunctionCallResult { Output = $"ok:{data.FunctionName}" });
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(options);
+        await FakeWssClient.SimulateMessageReceivedAsync("fc");
+        await Task.Delay(50);
+
+        FakeWs.EnqueueClose();
+        await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        ran.ShouldContain("hangup", "the hangup handler must still run when an earlier tool's reply could not be sent");
+    }
+
+    [Fact]
+    public async Task AFailingTool_ShouldTellTheModelItFailed()
+    {
+        // Without a reply the model is left with a tool call nobody answered, and it will happily tell
+        // the customer an outcome it never received — an order status, a price, a pickup time.
+        ProviderSuggests("check_order_status");
+
+        var sessionTask = await StartSessionInBackgroundAsync(FailingHandlerOptions());
+        await FakeWssClient.SimulateMessageReceivedAsync("fc");
+        await Task.Delay(50);
+
+        FakeWs.EnqueueClose();
+        await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var sent = FakeWssClient.SentMessages.ToList();
+
+        RepliesIn(sent).ShouldBe(1);
+        sent.ShouldContain("response_create_msg", "answering without asking the model to speak leaves the caller in the same silence");
+    }
+
+    [Fact]
+    public async Task TheSameToolFailingAgain_ShouldNotBeAnsweredTwice()
+    {
+        // THE bound. Answering every time keeps completing turns, and starting the idle timer stops it
+        // first — so the 60-second countdown restarts from zero on each one and never reaches term. The
+        // phone path has no session ceiling behind it, so that is a call that never ends.
+        ProviderSuggests("check_order_status");
+
+        var sessionTask = await StartSessionInBackgroundAsync(FailingHandlerOptions());
+
+        for (var turn = 0; turn < 3; turn++)
+        {
+            await FakeWssClient.SimulateMessageReceivedAsync("fc");
+            await Task.Delay(30);
+        }
+
+        FakeWs.EnqueueClose();
+        await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        RepliesIn(FakeWssClient.SentMessages).ShouldBe(1, "one recovery attempt, then today's behaviour and today's hangup");
+    }
+
+    [Fact]
+    public async Task ManyDifferentToolsFailing_ShouldStopAtTheSessionCeiling()
+    {
+        // Per-tool alone is not a bound: seventeen tools are reachable, so seventeen distinct failures
+        // would still be seventeen extra turns. The session ceiling is what makes the worst case small.
+        ProviderSuggests("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8");
+
+        var sessionTask = await StartSessionInBackgroundAsync(FailingHandlerOptions());
+        await FakeWssClient.SimulateMessageReceivedAsync("fc");
+        await Task.Delay(80);
+
+        FakeWs.EnqueueClose();
+        await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        RepliesIn(FakeWssClient.SentMessages).ShouldBe(RealtimeAiFunctionCallReplyDefaults.MaxFailureRepliesPerSession);
+    }
+
+    [Fact]
+    public async Task AFailingToolWithNoCallId_ShouldStaySilent()
+    {
+        // A reply needs an id to address. Sending one anyway is rejected by the provider, and on a
+        // socket that has already closed that rejection is classified critical and drops the call.
+        ProviderAdapter.ParseMessage(Arg.Any<string>()).Returns(new ParsedRealtimeAiProviderEvent
+        {
+            Type = RealtimeAiWssEventType.FunctionCallSuggested,
+            Data = new List<RealtimeAiWssFunctionCallData> { new() { FunctionName = "check_order_status" } }
+        });
+
+        var sessionTask = await StartSessionInBackgroundAsync(FailingHandlerOptions());
+        await FakeWssClient.SimulateMessageReceivedAsync("fc");
+        await Task.Delay(50);
+
+        FakeWs.EnqueueClose();
+        await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        RepliesIn(FakeWssClient.SentMessages).ShouldBe(0);
+    }
+
+    [Fact]
+    public void TheSessionCeiling_ShouldStaySmall()
+    {
+        // Pinned as the safety property it is. Its whole job is to keep the worst case — every tool
+        // failing on a call with no session ceiling — down to a handful of extra turns.
+        RealtimeAiFunctionCallReplyDefaults.MaxFailureRepliesPerSession.ShouldBe(3);
+    }
 
     [Fact]
     public async Task OneHandlerThrows_TheOtherRepliesStillReachTheProvider()

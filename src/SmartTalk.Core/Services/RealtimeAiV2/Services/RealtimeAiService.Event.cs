@@ -573,6 +573,8 @@ public partial class RealtimeAiService
                 Log.Error(ex, "[RealtimeAi] Function call failed, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}",
                     _ctx.SessionId, functionCall.FunctionName, (long)Stopwatch.GetElapsedTime(handlerStartedAt).TotalMilliseconds);
 
+                if (await TryAnswerFailedFunctionCallAsync(functionCall).ConfigureAwait(false)) repliesSent++;
+
                 continue;
             }
 
@@ -587,13 +589,61 @@ public partial class RealtimeAiService
 
             // Sent as each handler finishes rather than accumulated, so a later failure cannot
             // discard a reply that was already produced.
-            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, result.Output)).ConfigureAwait(false);
-
-            repliesSent++;
+            if (await TrySendFunctionCallReplyAsync(functionCall, result.Output).ConfigureAwait(false)) repliesSent++;
         }
 
         if (repliesSent > 0 || shouldTriggerResponse)
             await QueueOrTriggerProviderResponseAsync("function call").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sends one tool's reply, reporting failure instead of propagating it.
+    ///
+    /// <para>The send used to sit outside every catch, so a transport failure on one tool's reply
+    /// unwound the whole batch and its remaining handlers never ran — the mirror image of the defect
+    /// this loop's per-handler try was added to prevent, and on a real call the skipped sibling is
+    /// hangup or transfer_call. Note the post-loop response trigger still rethrows on its own; this
+    /// contains the send, not the whole method.</para>
+    /// </summary>
+    private async Task<bool> TrySendFunctionCallReplyAsync(RealtimeAiWssFunctionCallData functionCall, string output)
+    {
+        try
+        {
+            await SendToProviderAsync(_ctx.ProviderAdapter.BuildFunctionCallReplyMessage(functionCall, output)).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[RealtimeAi] Could not deliver a tool reply, SessionId: {SessionId}, FunctionName: {FunctionName}", _ctx.SessionId, functionCall.FunctionName);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Tells the model a tool failed, so it does not answer the customer from a call nobody replied to
+    /// — a dangling tool call is how an assistant ends up confidently stating an order status it never
+    /// received.
+    ///
+    /// <para>Bounded twice: once per tool, and at most a handful per session. Every answer completes a
+    /// turn, and starting the idle timer stops it first, so the 60-second countdown restarts from zero
+    /// each time; unbounded against a tool that keeps failing, the call never ends. Past the bound the
+    /// engine falls back to sending nothing, which is what it did before, and the hangup happens as it
+    /// does now.</para>
+    ///
+    /// <para>Silent without a call id: the reply has nothing to address, and a rejected message on a
+    /// socket that has already closed is classified critical and drops the call.</para>
+    /// </summary>
+    private async Task<bool> TryAnswerFailedFunctionCallAsync(RealtimeAiWssFunctionCallData functionCall)
+    {
+        if (string.IsNullOrEmpty(functionCall.CallId)) return false;
+
+        if (_ctx.FunctionCallFailureRepliesSent >= RealtimeAiFunctionCallReplyDefaults.MaxFailureRepliesPerSession) return false;
+
+        if (!_ctx.FunctionCallFailuresAnswered.Add(functionCall.FunctionName)) return false;
+
+        _ctx.FunctionCallFailureRepliesSent++;
+
+        return await TrySendFunctionCallReplyAsync(functionCall, RealtimeAiFunctionCallReplyDefaults.FailureReplyOutput).ConfigureAwait(false);
     }
 
     private async Task OnProviderErrorAsync(RealtimeAiErrorData errorData)
