@@ -29,6 +29,13 @@ namespace SmartTalk.Core.Services.AiKids;
 public interface IAiKidRealtimeServiceV2 : IScopedDependency
 {
     Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken);
+
+    Task<RealtimeSessionOptions> BuildSessionOptionsAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken);
+
+    Task<RealtimeSessionOptions> BuildSessionOptionsAsync(
+        AiKidRealtimeCommand command,
+        CancellationToken cancellationToken,
+        CancellationToken callbackCancellationToken);
 }
 
 public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
@@ -63,13 +70,31 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
     public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
     {
-        var sessionId = Guid.NewGuid().ToString();
+        var options = await BuildSessionOptionsAsync(command, cancellationToken).ConfigureAwait(false);
 
-        // Same correlation key the engine uses, pushed before the first log line so the prompt and
-        // knowledge resolution below join to the engine's lines for this session in Seq.
+        // Same correlation key the engine pushes, so this session's lines join in Seq. Opened around
+        // the connect rather than the build because BuildSessionOptionsAsync is also called on its
+        // own by other transports, which own their scope.
         using var callScope = LogContext.Push(new DeferredLogScope()
-            .Set(LogProperties.RealtimeSessionId, sessionId)
+            .Set(LogProperties.RealtimeSessionId, options.SessionId)
             .Set(LogProperties.AssistantId, command.AssistantId));
+
+        await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<RealtimeSessionOptions> BuildSessionOptionsAsync(
+        AiKidRealtimeCommand command,
+        CancellationToken cancellationToken)
+    {
+        return BuildSessionOptionsAsync(command, cancellationToken, cancellationToken);
+    }
+
+    public async Task<RealtimeSessionOptions> BuildSessionOptionsAsync(
+        AiKidRealtimeCommand command,
+        CancellationToken cancellationToken,
+        CancellationToken callbackCancellationToken)
+    {
+        var sessionId = Guid.NewGuid().ToString();
 
         var assistant = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)
@@ -141,7 +166,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             OnTranscriptionsCompletedAsync = async (sessionId, transcriptions) =>
             {
                 var kid = await _aiSpeechAssistantDataProvider
-                    .GetAiKidAsync(agentId: assistant.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    .GetAiKidAsync(
+                        agentId: assistant.AgentId,
+                        cancellationToken: callbackCancellationToken).ConfigureAwait(false);
 
                 if (kid == null) return;
 
@@ -159,7 +186,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             }
         };
 
-        await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
+        return options;
     }
 
     private RealtimeAiTtsConfig BuildTtsConfig(Domain.AISpeechAssistant.AiSpeechAssistant assistant, int sampleRate)
