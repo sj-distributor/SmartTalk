@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.WebSockets;
 using Newtonsoft.Json;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
 using SmartTalk.Core.Services.RealtimeAiV2.Negotiation;
 using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.RealtimeAi;
@@ -10,6 +11,30 @@ namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
+    /// <summary>
+    /// Whether the voice provider is driven by text, read from which capability sibling it implements
+    /// rather than from its vendor label.
+    ///
+    /// <para>This used to be <c>TtsProviderType != BuiltIn</c>, which made the engine the place a new
+    /// vendor had to be taught about — and got a provider that passes audio through driven in text
+    /// mode purely for not being the built-in one, which is a silently mute call. The two vendors that
+    /// exist map identically either way; the difference is that a third does not need this file.</para>
+    ///
+    /// <para>The question is whether the provider REQUIRES text, so a provider implementing both
+    /// siblings answers no: it can be handed audio, and which of the two it is actually driven by is
+    /// then <c>OutputMode</c>'s decision, resolved from the inference side. Declaring neither is a
+    /// fault rather than a default — such a provider can be handed nothing it can use — and throws the
+    /// same exception the negotiator throws for a pairing that cannot work.</para>
+    /// </summary>
+    private bool ResolveTtsRequiresTextInput()
+    {
+        if (_ctx.TtsProvider is IRealtimeAiAudioPassthrough) return false;
+
+        if (_ctx.TtsProvider is IRealtimeAiTextSynthesizer) return true;
+
+        throw new RealtimeAiOutputModeException($"TTS provider {_ctx.TtsProvider.GetType().Name} declares neither text synthesis nor audio passthrough, so it can be driven in no output mode.");
+    }
+
     private async Task ConnectToProviderAsync()
     {
         SubscribeProviderEvents();
@@ -18,17 +43,17 @@ public partial class RealtimeAiService
         var serviceUri = new Uri(_ctx.Options.ModelConfig.ServiceUrl);
         var headers = _ctx.ProviderAdapter.GetHeaders(_ctx.Options.Region);
 
+        var ttsRequiresTextInput = ResolveTtsRequiresTextInput();
+
         // Decide the output mode once from the inference provider's declared capabilities and whether
         // the TTS provider needs text. Throws on an incompatible pairing (fail-loud, never silent mute).
-        _ctx.OutputMode = OutputModeNegotiator.Resolve(
-            _ctx.ProviderAdapter.Capabilities,
-            ttsRequiresTextInput: _ctx.TtsProvider.TtsProviderType != RealtimeAiTtsProviderType.BuiltIn);
+        _ctx.OutputMode = OutputModeNegotiator.Resolve(_ctx.ProviderAdapter.Capabilities, ttsRequiresTextInput);
 
         var ttsConfig = _ctx.Options.TtsConfig ?? new RealtimeAiTtsConfig();
-        if (_ctx.TtsProvider.TtsProviderType == RealtimeAiTtsProviderType.BuiltIn)
-        {
-            ttsConfig.TargetCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
-        }
+
+        // Only a provider that passes audio through needs the codec negotiated: a synthesizer produces
+        // its own output format and declares it via OutputCodec.
+        if (!ttsRequiresTextInput) ttsConfig.TargetCodec = _ctx.ProviderAdapter.GetPreferredCodec(_ctx.ClientAdapter.NativeAudioCodec);
 
         var ttsInitStartedAt = Stopwatch.GetTimestamp();
 
