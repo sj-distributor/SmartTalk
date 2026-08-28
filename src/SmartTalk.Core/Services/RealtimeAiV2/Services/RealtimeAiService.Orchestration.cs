@@ -47,19 +47,34 @@ public partial class RealtimeAiService
 
     private async Task<(string Message, bool ClientIsClose)> ReadClientMessageAsync(byte[] buffer)
     {
+        var result = await _ctx.WebSocket.ReceiveAsync(buffer.AsMemory(), _ctx.SessionCts.Token).ConfigureAwait(false);
+
+        if (result.MessageType == WebSocketMessageType.Close) return (null, true);
+
+        // Whole-frame is the overwhelming majority: a Twilio media frame is around a kilobyte against
+        // a pooled buffer many times that, arriving fifty times a second for the length of the call.
+        // Decoding straight out of the pooled buffer drops a MemoryStream and its doubling regrowth
+        // per frame; the reassembly below is unchanged for the messages that actually need it.
+        if (result.EndOfMessage) return (Encoding.UTF8.GetString(buffer, 0, result.Count), false);
+
+        return await ReassembleClientMessageAsync(buffer, result).ConfigureAwait(false);
+    }
+
+    private async Task<(string Message, bool ClientIsClose)> ReassembleClientMessageAsync(byte[] buffer, ValueWebSocketReceiveResult firstFrame)
+    {
         using var ms = new MemoryStream();
 
-        ValueWebSocketReceiveResult result;
+        var result = firstFrame;
+        ms.Write(buffer, 0, result.Count);
 
-        do
+        while (!result.EndOfMessage)
         {
             result = await _ctx.WebSocket.ReceiveAsync(buffer.AsMemory(), _ctx.SessionCts.Token).ConfigureAwait(false);
 
             if (result.MessageType == WebSocketMessageType.Close) return (null, true);
 
             ms.Write(buffer, 0, result.Count);
-            
-        } while (!result.EndOfMessage);
+        }
 
         return (Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length), false);
     }
