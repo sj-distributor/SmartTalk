@@ -32,6 +32,7 @@ public partial class RealtimeAiService
 
         var parsedEvent = _ctx.ProviderAdapter.ParseMessage(rawMessage);
         TryTrackLastAssistantItemId(parsedEvent);
+        ClearAwaitingProviderResponse(parsedEvent.Type);
 
         try
         {
@@ -242,9 +243,31 @@ public partial class RealtimeAiService
             await MarkTtsSynthesisCompletedAndCompleteWhenReadyAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Closes the listening window on the first thing the provider produces of its own.
+    ///
+    /// <para>Read off the parsed event type rather than from a provider-specific start signal: the
+    /// Google adapter never emits ResponseStarted at all, so keying on that would leave a Google
+    /// session permanently awaiting after its first barge-in and report every ordinary caller pause as
+    /// provider silence. Transcriptions of the CALLER are deliberately absent from this list — they are
+    /// the provider echoing the caller back, not the provider answering.</para>
+    /// </summary>
+    private void ClearAwaitingProviderResponse(RealtimeAiWssEventType eventType)
+    {
+        if (eventType is RealtimeAiWssEventType.ResponseStarted
+            or RealtimeAiWssEventType.ResponseAudioDelta
+            or RealtimeAiWssEventType.ResponseAudioDone
+            or RealtimeAiWssEventType.ResponseTextDelta
+            or RealtimeAiWssEventType.ResponseTextDone
+            or RealtimeAiWssEventType.ResponseTurnCompleted
+            or RealtimeAiWssEventType.FunctionCallSuggested)
+            _ctx.IsAwaitingProviderResponse = false;
+    }
+
     private async Task OnAiDetectedUserSpeechAsync()
     {
         _ctx.IsAiSpeaking = false;
+        _ctx.IsAwaitingProviderResponse = true;
 
         if (_ctx.Options.IdleFollowUp != null)
             _inactivityTimerManager.StopTimer(_ctx.SessionId);

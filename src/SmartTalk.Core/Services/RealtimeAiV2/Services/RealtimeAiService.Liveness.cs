@@ -1,20 +1,15 @@
 using System.Diagnostics;
 using Serilog;
+using SmartTalk.Core.Services.RealtimeAiV2.Liveness;
 
 namespace SmartTalk.Core.Services.RealtimeAiV2.Services;
 
 public partial class RealtimeAiService
 {
-    /// <summary>
-    /// How long the provider may stay silent mid-response before the gap is worth recording. Not a
-    /// timeout — nothing acts on it. See <see cref="RunProviderLivenessObserverAsync"/>.
-    /// </summary>
-    private static readonly TimeSpan ProviderSilenceObservationThreshold = TimeSpan.FromSeconds(20);
-
-    private static readonly TimeSpan ProviderLivenessPollInterval = TimeSpan.FromSeconds(2);
-
-    /// <summary>Test-only seams so a test need not wait the real threshold. Null in production.</summary>
+    /// <summary>Test-only seams so a test need not wait the real thresholds. Null in production.</summary>
     internal TimeSpan? ProviderSilenceThresholdOverride { get; set; }
+
+    internal TimeSpan? ListeningSilenceThresholdOverride { get; set; }
 
     internal TimeSpan? ProviderLivenessPollIntervalOverride { get; set; }
 
@@ -47,9 +42,15 @@ public partial class RealtimeAiService
 
     private async Task RunProviderLivenessObserverAsync()
     {
-        var threshold = ProviderSilenceThresholdOverride ?? ProviderSilenceObservationThreshold;
-        var interval = ProviderLivenessPollIntervalOverride ?? ProviderLivenessPollInterval;
-        var reportedForCurrentGap = false;
+        var inResponseThreshold = ProviderSilenceThresholdOverride ?? RealtimeAiLivenessDefaults.InResponse;
+        var listeningThreshold = ListeningSilenceThresholdOverride ?? RealtimeAiLivenessDefaults.WhileListening;
+        var interval = ProviderLivenessPollIntervalOverride ?? RealtimeAiLivenessDefaults.PollInterval;
+
+        // Reported once per gap, not once per poll, and tracked per window: a wedged connection would
+        // otherwise emit a line every interval for the rest of the call, and one window's report must
+        // not suppress the other's.
+        var reportedInResponseGap = false;
+        var reportedListeningGap = false;
 
         while (IsProviderSessionActive)
         {
@@ -62,29 +63,33 @@ public partial class RealtimeAiService
                 return;
             }
 
-            if (!_ctx.IsProviderResponseInProgress)
-            {
-                reportedForCurrentGap = false;
-                continue;
-            }
-
             var silence = Stopwatch.GetElapsedTime(Interlocked.Read(ref _ctx.LastProviderMessageAt));
 
-            if (silence < threshold)
-            {
-                reportedForCurrentGap = false;
-                continue;
-            }
+            reportedInResponseGap = ObserveGap(
+                _ctx.IsProviderResponseInProgress, silence, inResponseThreshold, reportedInResponseGap,
+                "[RealtimeAi] Provider silent while a response was in flight, SessionId: {SessionId}, GapMs: {GapMs}, Round: {Round}");
 
-            // Once per gap, not once per poll: a genuinely wedged connection would otherwise emit a
-            // line every interval for the rest of the call.
-            if (reportedForCurrentGap) continue;
-
-            reportedForCurrentGap = true;
-
-            Log.Warning(
-                "[RealtimeAi] Provider silent while a response was in flight, SessionId: {SessionId}, GapMs: {GapMs}, Round: {Round}",
-                _ctx.SessionId, (long)silence.TotalMilliseconds, _ctx.Round);
+            // The listening window: the provider said the caller started speaking and has produced
+            // nothing of its own since. Its own template so the two are separable in Seq — they mean
+            // different faults and the operator response differs.
+            reportedListeningGap = ObserveGap(
+                _ctx.IsAwaitingProviderResponse, silence, listeningThreshold, reportedListeningGap,
+                "[RealtimeAi] No provider traffic while awaiting a response, SessionId: {SessionId}, GapMs: {GapMs}, Round: {Round}");
         }
+    }
+
+    /// <summary>
+    /// Records one window's gap if it is open and over threshold, and returns whether this gap has now
+    /// been reported. Records only — the caller's call is never worth a threshold nobody has measured.
+    /// </summary>
+    private bool ObserveGap(bool windowIsOpen, TimeSpan silence, TimeSpan threshold, bool alreadyReported, string template)
+    {
+        if (!windowIsOpen || silence < threshold) return false;
+
+        if (alreadyReported) return true;
+
+        Log.Warning(template, _ctx.SessionId, (long)silence.TotalMilliseconds, _ctx.Round);
+
+        return true;
     }
 }

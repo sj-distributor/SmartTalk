@@ -65,6 +65,14 @@ public class RealtimeAiSessionContext
     public int Round { get; set; }
     public volatile bool IsAiSpeaking;
     public volatile bool IsClientAudioToProviderSuspended;
+
+    /// <summary>
+    /// Set when the provider reports the caller started speaking, cleared by the first thing the
+    /// provider produces of its own. Between those two points the silence observer, the turn ceiling
+    /// and the idle timer are all off, which is the one window on the phone path where a half-open
+    /// socket goes completely unrecorded.
+    /// </summary>
+    public volatile bool IsAwaitingProviderResponse;
     public bool IsProviderResponseInProgress;
     public bool HasPendingProviderResponseTrigger;
     public bool CurrentResponseHasTextOutput;
