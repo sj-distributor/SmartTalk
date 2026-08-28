@@ -80,11 +80,11 @@ public class RealtimeAiServiceSessionOutcomeTests : RealtimeAiServiceTestBase
     {
         using var context = TestCorrelator.CreateContext();
 
-        // The ceiling races the harness: it is armed when the context is built, while the session is
-        // still coming up. 600ms was not enough headroom under a loaded full-suite run — the ceiling
-        // fired before the session was up and teardown took a different path. Sized for several times
-        // the observed startup cost rather than trimmed to keep the test fast.
-        var options = CreateDefaultOptions(o => o.MaxSessionDuration = TimeSpan.FromSeconds(2));
+        // Back down from the 2s this had been widened to. The headroom was treating a real defect as
+        // a slow test: the ceiling used to be inferred at teardown by comparing two different clocks,
+        // so it read as ClientAborted whenever the timer fired a tick before Stopwatch agreed. The
+        // cause is signalled now, which makes the ceiling's exact firing moment irrelevant here.
+        var options = CreateDefaultOptions(o => o.MaxSessionDuration = TimeSpan.FromMilliseconds(200));
         var sessionTask = await StartSessionInBackgroundAsync(options);
         await sessionTask.WaitAsync(TimeSpan.FromSeconds(5));
 

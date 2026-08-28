@@ -37,12 +37,45 @@ public partial class RealtimeAiService
         ApplyMaxSessionDurationIfRequired();
     }
 
+    /// <summary>
+    /// Records the cause before cancelling, rather than leaving teardown to infer it.
+    ///
+    /// <para>This used to be <c>SessionCts.CancelAfter(ceiling)</c>, with ResolveSessionOutcome
+    /// deciding afterwards by comparing <c>Stopwatch.GetElapsedTime(SessionStartedAt)</c> against the
+    /// ceiling. Those are two different clocks: the cancellation runs off the timer queue, which can
+    /// fire a tick before Stopwatch agrees the ceiling has elapsed, and the comparison then falls
+    /// through to ClientAborted. Around 4% of ceiling-terminated sessions were reported as the caller
+    /// hanging up — the exact misattribution the outcome property was introduced to remove, and the
+    /// cause of an intermittent red that had been widened twice as if it were a slow test
+    /// (RealtimeAiServiceDurationCeilingStressTests).</para>
+    ///
+    /// <para>The delay is cancelled by the session token, so a session that ends for any other reason
+    /// never runs the continuation and nothing is left scheduled. ResolveSessionOutcome's own
+    /// inference is left in place untouched, below the TerminationCause check, as a fallback.</para>
+    /// </summary>
     private void ApplyMaxSessionDurationIfRequired()
     {
         if (_ctx.Options.MaxSessionDuration is not { } maxSessionDuration || maxSessionDuration <= TimeSpan.Zero)
             return;
 
-        _ctx.SessionCts.CancelAfter(maxSessionDuration);
+        var sessionCts = _ctx.SessionCts;
+
+        _ = Task.Delay(maxSessionDuration, sessionCts.Token).ContinueWith(_ => CancelAtCeiling(sessionCts), TaskContinuationOptions.OnlyOnRanToCompletion);
+    }
+
+    private void CancelAtCeiling(CancellationTokenSource sessionCts)
+    {
+        _ctx.TerminationCause ??= RealtimeAiSessionOutcome.MaxDurationReached;
+
+        try
+        {
+            sessionCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Teardown disposed the source between the ceiling elapsing and this call. The session is
+            // already ending, which is what the cancel was for.
+        }
     }
 
     private void BuildRecordingIfRequired()
