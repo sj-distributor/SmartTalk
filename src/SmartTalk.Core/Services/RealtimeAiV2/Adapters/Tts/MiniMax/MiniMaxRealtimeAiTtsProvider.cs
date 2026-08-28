@@ -139,7 +139,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
 
             if (_stopped) return;
 
-            ReopenInBackground();
+            ReopenInBackground(cancellationToken);
         }
         finally
         {
@@ -176,15 +176,26 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
     /// inline redial did. A redial that fails is logged rather than thrown — it used to surface into
     /// the event loop, which would cost the whole call — and the turn is then closed by the engine's
     /// TTS-synthesis watchdog, since no audio will arrive for it.</para>
+    ///
+    /// <para>It dials on the session's token, not CancellationToken.None. StopAsync needs the same
+    /// lock, and teardown cancels the session before calling it (RealtimeAiService.Connect.cs:108
+    /// then :115) — so an uncancellable dial would hand the vendor's connect timeout straight to
+    /// teardown, holding the DI scope, the unit of work and the transcript flush open for the whole
+    /// of it. The handshake waits are separately bounded at ten seconds; the TCP/TLS connect is not,
+    /// which is what makes the token load-bearing rather than decorative.</para>
     /// </summary>
-    private void ReopenInBackground() => _ = Task.Run(async () =>
+    private void ReopenInBackground(CancellationToken sessionToken) => _ = Task.Run(async () =>
     {
         await _connectionLock.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_stopped) return;
 
-            await OpenConnectionAsync(_config ?? new RealtimeAiTtsConfig(), CancellationToken.None).ConfigureAwait(false);
+            await OpenConnectionAsync(_config ?? new RealtimeAiTtsConfig(), sessionToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The session ended while the redial was in flight. Expected, not a fault.
         }
         catch (Exception ex)
         {
@@ -194,7 +205,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         {
             _connectionLock.Release();
         }
-    });
+    }, CancellationToken.None);
 
     private async Task OpenConnectionAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
     {

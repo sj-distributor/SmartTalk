@@ -133,8 +133,11 @@ public class MiniMaxRealtimeAiTtsProviderTests
 
         public async Task<System.Net.WebSockets.WebSocket> ConnectAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
         {
+            // Honours the token, as a real dial does: ClientWebSocket.ConnectAsync aborts on cancellation.
+            // A dial handed CancellationToken.None therefore blocks here until the gate is released,
+            // which is exactly the state a hung vendor puts the provider in.
             if (Interlocked.Increment(ref _dials) >= BlockFromDial)
-                await Gate.Task.ConfigureAwait(false);
+                await Gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             var socket = VendorSocketAfterHandshake();
             lock (_sockets) _sockets.Add(socket);
@@ -196,6 +199,28 @@ public class MiniMaxRealtimeAiTtsProviderTests
         await WaitUntilAsync(
             () => dialer.Sockets.Count == 2 && Sent(dialer.Sockets[1]).Contains("task_continue"),
             "the text queued during the redial to reach the reopened vendor socket");
+    }
+
+    [Fact]
+    public async Task StopAfterTheSessionIsCancelled_ShouldNotWaitOnAHungRedial()
+    {
+        // The redial runs in the background holding the connection lock, and StopAsync needs that same
+        // lock. Teardown cancels the session token before it calls StopAsync
+        // (RealtimeAiService.Connect.cs:108 then :115), so the dial has to be cancellable or teardown
+        // inherits the vendor's connect timeout — holding the DI scope, the unit of work and the
+        // transcript flush open for as long as MiniMax takes to not answer.
+        var dialer = new GatedVendorDialer { BlockFromDial = 2 };
+        var provider = ProviderOver(dialer);
+        using var session = new CancellationTokenSource();
+
+        await provider.InitializeAsync(Config(), session.Token);
+        await provider.HandleInterruptAsync(session.Token).WaitAsync(TimeSpan.FromSeconds(2));
+
+        await session.CancelAsync();
+
+        await Should.NotThrowAsync(() => provider.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3)));
+
+        dialer.Gate.SetResult();
     }
 
     [Fact]
