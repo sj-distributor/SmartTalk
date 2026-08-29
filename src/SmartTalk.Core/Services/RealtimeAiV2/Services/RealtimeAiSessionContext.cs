@@ -5,6 +5,7 @@ using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Core.Services.RealtimeAiV2.Recording;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Tts;
 using SmartTalk.Core.Services.RealtimeAiV2.Wss;
+using SmartTalk.Messages.Dto.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -73,6 +74,18 @@ public class RealtimeAiSessionContext
     /// closing a turn that is still being served.
     /// </summary>
     public volatile bool IsRunningFunctionCallHandlers;
+
+    /// <summary>
+    /// The handler currently holding the receive loop, or null. Published so the liveness observer —
+    /// which runs on its own task and therefore still polls while the loop is blocked — can record a
+    /// handler that has not returned. The completion line only ever reports handlers that DID return,
+    /// so the one that wedges is precisely the one nothing measures.
+    ///
+    /// <para>Between two handlers in one batch this briefly still names the one that just returned.
+    /// That window is nanoseconds against a threshold of two minutes, so it cannot produce a false
+    /// observation.</para>
+    /// </summary>
+    public volatile RealtimeAiRunningFunctionCall CurrentFunctionCall;
 
     /// <summary>
     /// Set when the provider reports the caller started speaking, cleared by the first thing the

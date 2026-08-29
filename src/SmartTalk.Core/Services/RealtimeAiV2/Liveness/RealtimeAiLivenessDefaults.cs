@@ -20,5 +20,23 @@ public static class RealtimeAiLivenessDefaults
     /// </summary>
     public static readonly TimeSpan WhileListening = TimeSpan.FromSeconds(45);
 
+    /// <summary>
+    /// How long a tool handler may hold the provider receive loop before the run is worth recording.
+    ///
+    /// <para>A LOG threshold, not a control threshold — which is why it can be picked without
+    /// production data. Nothing acts on it: too high costs one missing line, too low costs one Warning
+    /// on a healthy call. Neither costs a call.</para>
+    ///
+    /// <para>Set above every budget the slow path believes it holds — the MiniMax synthesizer grants
+    /// itself 90 seconds on top of a 10-second idle timeout, with a text leg before it and a fallback
+    /// leg after — so a line means "this run is outside what anything thinks it is entitled to". It
+    /// matches the turn ceiling deliberately: the moment the ceiling stands down for a running tool is
+    /// the moment that tool becomes worth recording.</para>
+    ///
+    /// <para>It is NOT a p99 and must never be reused as the value of a bound. Nobody has a latency
+    /// distribution for the slow handler — producing one is what this exists for.</para>
+    /// </summary>
+    public static readonly TimeSpan FunctionCallStillRunning = TimeSpan.FromSeconds(120);
+
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 }

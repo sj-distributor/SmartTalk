@@ -40,7 +40,7 @@ GOLDEN_DIR="src/SmartTalk.UnitTests/Services/RealtimeAiV2/Characterization"
 BASE_REF="${BASE_REF:-origin/main}"
 
 # Minimum RealtimeAiV2 cases that must pass. Never lower this — the suite only grows.
-EXPECTED_V2_MIN="${EXPECTED_V2_MIN:-646}"
+EXPECTED_V2_MIN="${EXPECTED_V2_MIN:-650}"
 
 # Pre-existing failures outside RealtimeAiV2, quarantined rather than fixed:
 # they are not this effort's scope (CLAUDE.md Rule 3). L2 fails if the set of

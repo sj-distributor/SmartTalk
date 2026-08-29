@@ -11,6 +11,8 @@ public partial class RealtimeAiService
 
     internal TimeSpan? ListeningSilenceThresholdOverride { get; set; }
 
+    internal TimeSpan? FunctionCallStillRunningThresholdOverride { get; set; }
+
     internal TimeSpan? ProviderLivenessPollIntervalOverride { get; set; }
 
     /// <summary>
@@ -44,6 +46,7 @@ public partial class RealtimeAiService
     {
         var inResponseThreshold = ProviderSilenceThresholdOverride ?? RealtimeAiLivenessDefaults.InResponse;
         var listeningThreshold = ListeningSilenceThresholdOverride ?? RealtimeAiLivenessDefaults.WhileListening;
+        var functionCallThreshold = FunctionCallStillRunningThresholdOverride ?? RealtimeAiLivenessDefaults.FunctionCallStillRunning;
         var interval = ProviderLivenessPollIntervalOverride ?? RealtimeAiLivenessDefaults.PollInterval;
 
         // Reported once per gap, not once per poll, and tracked per window: a wedged connection would
@@ -51,6 +54,7 @@ public partial class RealtimeAiService
         // not suppress the other's.
         var reportedInResponseGap = false;
         var reportedListeningGap = false;
+        var reportedRunningFunctionCall = false;
 
         while (IsProviderSessionActive)
         {
@@ -60,7 +64,10 @@ public partial class RealtimeAiService
             }
             catch (OperationCanceledException)
             {
-                return;
+                // Break rather than return, so a handler still holding the loop when the caller hangs
+                // up gets its duration recorded. Returning here discarded exactly the number this
+                // observer exists to produce: the completion line only reports handlers that returned.
+                break;
             }
 
             var silence = Stopwatch.GetElapsedTime(Interlocked.Read(ref _ctx.LastProviderMessageAt));
@@ -75,7 +82,51 @@ public partial class RealtimeAiService
             reportedListeningGap = ObserveGap(
                 _ctx.IsAwaitingProviderResponse, silence, listeningThreshold, reportedListeningGap,
                 "[RealtimeAi] No provider traffic while awaiting a response, SessionId: {SessionId}, GapMs: {GapMs}, Round: {Round}");
+
+            reportedRunningFunctionCall = ObserveRunningFunctionCall(functionCallThreshold, reportedRunningFunctionCall);
         }
+
+        ReportFunctionCallStillRunningAtTeardown();
+    }
+
+    /// <summary>
+    /// Records a tool handler that is still holding the provider receive loop. Its own template rather
+    /// than the gap one: a slow tool filed under GapMs is indistinguishable from a provider that went
+    /// quiet, and the two mean different faults.
+    ///
+    /// <para>Record-only, like everything else here. The turn ceiling deliberately stands down while a
+    /// handler runs — bounding the WAIT without bounding the WORK would leave the caller's microphone
+    /// suspended by an abandoned handler while the turn completes and the idle timer schedules a
+    /// hangup, which is worse than the unbounded handler it replaces.</para>
+    /// </summary>
+    private bool ObserveRunningFunctionCall(TimeSpan threshold, bool alreadyReported)
+    {
+        if (_ctx.CurrentFunctionCall is not { } running) return false;
+
+        var elapsed = Stopwatch.GetElapsedTime(running.StartedAt);
+
+        if (elapsed < threshold) return false;
+
+        if (alreadyReported) return true;
+
+        Log.Warning(
+            "[RealtimeAi] Function call still holding the receive loop, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}, Round: {Round}",
+            _ctx.SessionId, running.FunctionName, (long)elapsed.TotalMilliseconds, _ctx.Round);
+
+        return true;
+    }
+
+    /// <summary>
+    /// The tail. A handler still running when the session ends never reaches the completion line, so
+    /// without this the one run worth measuring is the one that leaves no duration behind at all.
+    /// </summary>
+    private void ReportFunctionCallStillRunningAtTeardown()
+    {
+        if (_ctx.CurrentFunctionCall is not { } running) return;
+
+        Log.Warning(
+            "[RealtimeAi] Session ended with a function call still running, SessionId: {SessionId}, FunctionName: {FunctionName}, ElapsedFunctionCallMs: {ElapsedFunctionCallMs}, Round: {Round}",
+            _ctx.SessionId, running.FunctionName, (long)Stopwatch.GetElapsedTime(running.StartedAt).TotalMilliseconds, _ctx.Round);
     }
 
     /// <summary>

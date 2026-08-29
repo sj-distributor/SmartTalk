@@ -581,6 +581,8 @@ public partial class RealtimeAiService
 
             var handlerStartedAt = Stopwatch.GetTimestamp();
 
+            _ctx.CurrentFunctionCall = new RealtimeAiRunningFunctionCall(handlerStartedAt, functionCall.FunctionName);
+
             RealtimeAiFunctionCallResult result;
 
             try
@@ -617,6 +619,7 @@ public partial class RealtimeAiService
         finally
         {
             _ctx.IsRunningFunctionCallHandlers = false;
+            _ctx.CurrentFunctionCall = null;
         }
 
         if (repliesSent > 0 || shouldTriggerResponse)
