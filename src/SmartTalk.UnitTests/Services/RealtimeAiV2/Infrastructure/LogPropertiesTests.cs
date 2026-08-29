@@ -20,10 +20,23 @@ public class LogPropertiesTests
     [InlineData(nameof(LogProperties.StreamSid), "StreamSid")]
     [InlineData(nameof(LogProperties.AgentId), "AgentId")]
     [InlineData(nameof(LogProperties.AssistantId), "AssistantId")]
-    [InlineData(nameof(LogProperties.From), "From")]
-    [InlineData(nameof(LogProperties.To), "To")]
     public void PropertyName_ShouldKeepItsWireValue(string constantName, string expectedValue)
     {
         typeof(LogProperties).GetField(constantName)!.GetValue(null).ShouldBe(expectedValue);
+    }
+
+    [Fact]
+    public void NoAmbientPropertyShouldCarryCallerIdentity()
+    {
+        // The ambient scope rides every log event inside a call — all ~140 sites reachable from the
+        // engine, the consumer and both transport receive loops — so anything named here is stamped on
+        // the whole call rather than on the handful of lines that mean to report it. The caller's and
+        // the restaurant's numbers were briefly here; a correlation key is the only thing that belongs.
+        var callerIdentity = new[] { "From", "To", "PhoneNumber", "CustomerName" };
+
+        typeof(LogProperties).GetFields()
+            .Select(f => (string)f.GetValue(null))
+            .Intersect(callerIdentity)
+            .ShouldBeEmpty("caller identity must stay on the specific lines that name it, never on the ambient scope");
     }
 }

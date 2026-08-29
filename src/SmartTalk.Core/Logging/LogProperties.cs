@@ -24,10 +24,4 @@ public static class LogProperties
     public const string AgentId = "AgentId";
 
     public const string AssistantId = "AssistantId";
-
-    /// <summary>Caller number.</summary>
-    public const string From = "From";
-
-    /// <summary>Called number.</summary>
-    public const string To = "To";
 }
