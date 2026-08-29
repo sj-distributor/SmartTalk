@@ -67,6 +67,14 @@ public class RealtimeAiSessionContext
     public volatile bool IsClientAudioToProviderSuspended;
 
     /// <summary>
+    /// Set while the engine is inside its own function-call handlers. They run inline on the provider
+    /// receive loop, so wall time spent there is the engine working, not the provider going quiet — and
+    /// the loop cannot hold back a timer. The turn ceiling reads this and restarts its clock instead of
+    /// closing a turn that is still being served.
+    /// </summary>
+    public volatile bool IsRunningFunctionCallHandlers;
+
+    /// <summary>
     /// Set when the provider reports the caller started speaking, cleared by the first thing the
     /// provider produces of its own. Between those two points the silence observer, the turn ceiling
     /// and the idle timer are all off, which is the one window on the phone path where a half-open

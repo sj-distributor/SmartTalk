@@ -372,10 +372,16 @@ public partial class RealtimeAiService
         // without ever sending response.done). Exactly-once is guaranteed by the same handled latch.
         // Gated on external-TTS mode: in audio mode the turn completes on provider-done without waiting,
         // so a hard-ceiling watchdog must never arm there (defensive — audio mode emits no text today).
-        // Also armed here, not only on response.created: a provider that streams text without
-        // announcing a response first would otherwise run with no ceiling at all. Arming twice for
-        // one turn is harmless — the force path is idempotent per generation.
-        if (!_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
+        // Also armed here, not only on response.created: a text-mode provider that streams without
+        // announcing a response first would otherwise run with no ceiling at all.
+        //
+        // The external-TTS gate is load-bearing and was briefly dropped. The OpenAI adapter routes an
+        // audio part's transcript to ResponseTextDone, so un-gated this armed a second ceiling on every
+        // production audio turn — and it made a ceiling reachable on the Google path, whose adapter
+        // never emits ResponseStarted and therefore never advances the turn generation, so one forced
+        // completion would have stamped a generation that never changes again and silently swallowed
+        // every subsequent turn completion for the rest of the call.
+        if (UsesExternalTts && !_ctx.CurrentResponseHasTextOutput) ArmTurnHardCeilingWatchdog();
 
         _ctx.CurrentResponseHasTextOutput = true;
         _ctx.CurrentResponseTtsSynthesisCompleted = false;
@@ -558,6 +564,15 @@ public partial class RealtimeAiService
         var shouldTriggerResponse = false;
         var repliesSent = 0;
 
+        // Handlers run inline on the provider receive loop; the turn ceiling must not read that as the
+        // provider having gone quiet. repeat_order alone packages the whole call as a WAV, uploads it
+        // for a spoken readback and shells ffmpeg, uncancellable — one retried attempt outlives the
+        // ceiling on a call that is working perfectly.
+        _ctx.IsRunningFunctionCallHandlers = true;
+
+        try
+        {
+
         // Per handler, not per batch: this chain has seventeen tools doing POS lookups and HTTP
         // calls, and one of them failing must not discard its siblings' replies.
         foreach (var functionCall in functionCalls)
@@ -596,6 +611,12 @@ public partial class RealtimeAiService
             // Sent as each handler finishes rather than accumulated, so a later failure cannot
             // discard a reply that was already produced.
             if (await TrySendFunctionCallReplyAsync(functionCall, result.Output).ConfigureAwait(false)) repliesSent++;
+        }
+
+        }
+        finally
+        {
+            _ctx.IsRunningFunctionCallHandlers = false;
         }
 
         if (repliesSent > 0 || shouldTriggerResponse)
