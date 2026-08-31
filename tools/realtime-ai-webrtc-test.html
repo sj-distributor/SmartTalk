@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SmartTalk Realtime AI WebRTC POC</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #e2e8f0; }
+    main { max-width: 1050px; margin: 24px auto; padding: 0 16px; }
+    section { background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { color: #94a3b8; margin: 5px 0 12px; }
+    label { display: block; color: #94a3b8; font-size: 12px; margin-bottom: 5px; }
+    input, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #020617; color: #e2e8f0; }
+    button { background: #1d4ed8; border: 0; cursor: pointer; font-weight: 650; }
+    button.danger { background: #b91c1c; }
+    button.success { background: #15803d; }
+    button.warn { background: #b45309; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
+    .endpoint { grid-column: span 12; }
+    .button { grid-column: span 3; }
+    .status { margin-top: 12px; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+    .log { height: 440px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #020617; border-radius: 8px; padding: 10px; font: 12px/1.5 ui-monospace, monospace; }
+    .in { color: #93c5fd; }
+    .out { color: #86efac; }
+    .error { color: #fca5a5; }
+    audio { width: 100%; margin-top: 10px; }
+    @media (max-width: 760px) { .button { grid-column: span 6; } }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>SmartTalk Realtime AI WebRTC POC</h1>
+    <p>媒体由浏览器直接通过 WebRTC 传给 OpenAI；SmartTalk 只负责 SDP、Assistant 配置和 sideband 业务控制。</p>
+    <div class="grid">
+      <div class="endpoint">
+        <label for="endpoint">SDP Endpoint</label>
+        <input id="endpoint" value="https://smarttalk-asia-test.yamimeal.ca/api/RealtimeAiWebRtc/session/93/1" />
+      </div>
+      <div class="endpoint">
+        <label for="sessionId">Session ID</label>
+        <input id="sessionId" placeholder="Paste the Session ID returned by /api/AiSpeechAssistant/session/add" />
+      </div>
+      <div class="button"><button id="connect">Connect</button></div>
+      <div class="button"><button id="disconnect" class="danger" disabled>Disconnect</button></div>
+      <div class="button"><button id="startMic" class="success" disabled>Start Mic</button></div>
+      <div class="button"><button id="stopMic" class="warn" disabled>Stop Mic</button></div>
+      <div class="button"><button id="ping" disabled>Send Text Ping</button></div>
+      <div class="button"><button id="clear">Clear Log</button></div>
+    </div>
+    <div id="status" class="status">disconnected</div>
+    <audio id="remoteAudio" autoplay controls></audio>
+  </section>
+  <section>
+    <div id="log" class="log"></div>
+  </section>
+</main>
+<script>
+  const endpointEl = document.getElementById("endpoint");
+  const sessionIdEl = document.getElementById("sessionId");
+  const statusEl = document.getElementById("status");
+  const logEl = document.getElementById("log");
+  const audioEl = document.getElementById("remoteAudio");
+  const connectBtn = document.getElementById("connect");
+  const disconnectBtn = document.getElementById("disconnect");
+  const startMicBtn = document.getElementById("startMic");
+  const stopMicBtn = document.getElementById("stopMic");
+  const pingBtn = document.getElementById("ping");
+
+  const NORMAL_AUDIO_BITRATE = 48000;
+  const CONSTRAINED_AUDIO_BITRATE = 24000;
+  const DISCONNECTED_GRACE_MS = 8000;
+  const CONNECTION_TIMEOUT_MS = 15000;
+  const MAX_RECONNECT_ATTEMPTS = 3;
+  const TEMPORARY_SESSION_HEADER = "X-INTERVIEW-SESSION";
+  const RECORDING_SAMPLE_RATE = 24000;
+  const RECORDING_BATCH_BYTES = RECORDING_SAMPLE_RATE * 2;
+  const RECORDING_UPLOAD_TIMEOUT_MS = 10000;
+  const RECORDING_UPLOAD_ATTEMPTS = 4;
+
+  let pc = null;
+  let dc = null;
+  let audioSender = null;
+  let micStream = null;
+  let remoteStream = null;
+  let recordingState = null;
+  let callId = null;
+  let statsTimer = null;
+  let disconnecting = false;
+  let reconnecting = false;
+  let manualDisconnect = true;
+  let reconnectAttempts = 0;
+  let reconnectTimer = null;
+  let disconnectedTimer = null;
+  let connectionTimer = null;
+  let connectAbortController = null;
+  let previousInboundStats = null;
+  let poorNetworkSamples = 0;
+  let healthyNetworkSamples = 0;
+  let targetAudioBitrate = NORMAL_AUDIO_BITRATE;
+  let appliedAudioBitrate = null;
+  let connectionStatus = "disconnected";
+  let networkQuality = "unknown";
+
+  function log(message, type = "") {
+    const line = document.createElement("div");
+    line.className = type;
+    line.textContent = `[${new Date().toLocaleTimeString("en-GB", { hour12: false })}] ${message}`;
+    logEl.appendChild(line);
+    while (logEl.children.length > 1000) logEl.firstChild.remove();
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setStatus(value) {
+    connectionStatus = value;
+    statusEl.textContent = `${connectionStatus}${networkQuality === "unknown" ? "" : ` | network=${networkQuality}`}${callId ? ` | callId=${callId}` : ""}`;
+  }
+
+  function setNetworkQuality(value) {
+    if (networkQuality === value) return;
+    networkQuality = value;
+    setStatus(connectionStatus);
+  }
+
+  function setButtons(connected) {
+    connectBtn.disabled = connected || reconnecting || disconnecting;
+    disconnectBtn.disabled = !connected && !reconnecting;
+    startMicBtn.disabled = !connected || reconnecting || !!micStream;
+    stopMicBtn.disabled = !micStream;
+    pingBtn.disabled = !connected || reconnecting || dc?.readyState !== "open";
+  }
+
+  function temporarySessionHeaders(additionalHeaders = {}) {
+    const sessionId = sessionIdEl.value.trim();
+    return sessionId
+      ? { ...additionalHeaders, [TEMPORARY_SESSION_HEADER]: sessionId }
+      : additionalHeaders;
+  }
+
+  function controlUrl(suffix = "", id = callId) {
+    const endpoint = endpointEl.value.trim();
+    const marker = "/session/";
+    const index = endpoint.indexOf(marker);
+    if (index < 0 || !id) throw new Error("Endpoint format or callId is invalid");
+    return endpoint.slice(0, index + marker.length) + encodeURIComponent(id) + suffix;
+  }
+
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function postSessionOffer(endpoint, sdp) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+    connectAbortController = controller;
+    try {
+      return await fetch(endpoint, {
+        method: "POST",
+        headers: temporarySessionHeaders({ "Content-Type": "application/sdp" }),
+        body: sdp,
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+      if (connectAbortController === controller) connectAbortController = null;
+    }
+  }
+
+  function convertToPcm16(input, sourceSampleRate) {
+    const outputLength = sourceSampleRate === RECORDING_SAMPLE_RATE
+      ? input.length
+      : Math.max(1, Math.round(input.length * RECORDING_SAMPLE_RATE / sourceSampleRate));
+    const bytes = new Uint8Array(outputLength * 2);
+    const view = new DataView(bytes.buffer);
+    const ratio = sourceSampleRate / RECORDING_SAMPLE_RATE;
+
+    for (let index = 0; index < outputLength; index++) {
+      const position = Math.min(input.length - 1, index * ratio);
+      const left = Math.floor(position);
+      const right = Math.min(input.length - 1, left + 1);
+      const sample = input[left] + (input[right] - input[left]) * (position - left);
+      const clamped = Math.max(-1, Math.min(1, sample));
+      view.setInt16(index * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    }
+
+    return bytes;
+  }
+
+  function takePendingRecordingBytes(state) {
+    if (!state.pendingBytes) return null;
+
+    const payload = new Uint8Array(state.pendingBytes);
+    let offset = 0;
+    for (const chunk of state.pendingChunks) {
+      payload.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    state.pendingChunks = [];
+    state.pendingBytes = 0;
+    return payload;
+  }
+
+  function wait(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+  }
+
+  async function uploadRecordingChunk(state, sequence, payload, isFinal, keepalive) {
+    let lastError;
+    for (let attempt = 1; attempt <= RECORDING_UPLOAD_ATTEMPTS; attempt++) {
+      try {
+        const response = await fetchWithTimeout(controlUrl("/recording", state.callId), {
+          method: "POST",
+          headers: temporarySessionHeaders({
+            "Content-Type": "application/octet-stream",
+            "X-Recording-Sequence": String(sequence),
+            "X-Recording-Final": String(isFinal)
+          }),
+          body: payload,
+          keepalive
+        }, RECORDING_UPLOAD_TIMEOUT_MS);
+        if (!response.ok) {
+          const body = await response.text();
+          const error = new Error(`recording HTTP ${response.status}: ${body.slice(0, 300)}`);
+          error.retryable = response.status === 408 || response.status === 425 ||
+            response.status === 429 || response.status >= 500;
+          throw error;
+        }
+
+        state.uploadedBytes += payload.byteLength;
+        if (isFinal) state.finalized = true;
+        return;
+      } catch (error) {
+        lastError = error;
+        if (error.retryable === false) break;
+        if (attempt < RECORDING_UPLOAD_ATTEMPTS)
+          await wait(250 * 2 ** (attempt - 1));
+      }
+    }
+
+    throw lastError;
+  }
+
+  function queueRecordingUpload(state, keepalive = false, isFinal = false) {
+    const payload = takePendingRecordingBytes(state);
+    if (!payload && !isFinal) return;
+
+    const body = payload || new Uint8Array();
+    const sequence = state.nextSequence;
+    if (payload) state.nextSequence++;
+
+    state.uploadChain = state.uploadChain.then(async () => {
+      if (state.uploadFailed) return;
+      await uploadRecordingChunk(state, sequence, body, isFinal, keepalive);
+    }).catch(error => {
+      state.uploadFailed = true;
+      log(`RECORDING upload failed sequence=${sequence}: ${error.message}`, "error");
+    });
+  }
+
+  function appendRecordingBytes(state, bytes) {
+    if (recordingState !== state || !bytes.byteLength) return;
+    state.pendingChunks.push(bytes);
+    state.pendingBytes += bytes.byteLength;
+    if (state.pendingBytes >= RECORDING_BATCH_BYTES) queueRecordingUpload(state);
+  }
+
+  function attachRecordingStream(stream) {
+    const state = recordingState;
+    if (!state || !stream || state.sources.has(stream)) return;
+    if (!stream.getAudioTracks().some(track => track.readyState === "live")) return;
+
+    const source = state.context.createMediaStreamSource(stream);
+    source.connect(state.mixer);
+    state.sources.set(stream, source);
+  }
+
+  function detachRecordingStream(stream) {
+    const state = recordingState;
+    const source = state?.sources.get(stream);
+    if (!source) return;
+
+    source.disconnect();
+    state.sources.delete(stream);
+  }
+
+  async function startRecording(id) {
+    await stopRecording();
+
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error("Web Audio API is unavailable");
+
+      const context = new AudioContextClass({ sampleRate: RECORDING_SAMPLE_RATE });
+      const mixer = context.createGain();
+      const processor = context.createScriptProcessor(4096, 1, 1);
+      const silentOutput = context.createGain();
+      silentOutput.gain.value = 0;
+      mixer.connect(processor);
+      processor.connect(silentOutput);
+      silentOutput.connect(context.destination);
+
+      const state = {
+        callId: id,
+        context,
+        mixer,
+        processor,
+        silentOutput,
+        sources: new Map(),
+        pendingChunks: [],
+        pendingBytes: 0,
+        uploadedBytes: 0,
+        nextSequence: 0,
+        finalized: false,
+        uploadFailed: false,
+        uploadChain: Promise.resolve()
+      };
+      recordingState = state;
+      processor.onaudioprocess = event => {
+        if (recordingState !== state) return;
+        appendRecordingBytes(state, convertToPcm16(
+          event.inputBuffer.getChannelData(0),
+          context.sampleRate));
+      };
+
+      attachRecordingStream(remoteStream);
+      attachRecordingStream(micStream);
+      if (context.state === "suspended") await context.resume();
+      log(`RECORDING started sampleRate=${context.sampleRate}`, "out");
+    } catch (error) {
+      recordingState = null;
+      log(`RECORDING unavailable: ${error.message}`, "error");
+    }
+  }
+
+  async function stopRecording() {
+    const state = recordingState;
+    if (!state) return;
+    recordingState = null;
+
+    state.processor.onaudioprocess = null;
+    state.sources.forEach(source => source.disconnect());
+    state.sources.clear();
+    state.mixer.disconnect();
+    state.processor.disconnect();
+    state.silentOutput.disconnect();
+    queueRecordingUpload(state, false, true);
+    await state.uploadChain;
+    await state.context.close().catch(() => {});
+    log(`RECORDING stopped uploadedBytes=${state.uploadedBytes}${state.finalized ? " finalized" : " partial"}`,
+      state.uploadFailed ? "error" : "out");
+  }
+
+  function finalizeRecordingForUnload() {
+    const state = recordingState;
+    if (!state || state.finalized) return;
+
+    state.processor.onaudioprocess = null;
+    const payload = takePendingRecordingBytes(state) || new Uint8Array();
+    const sequence = state.nextSequence;
+    fetch(controlUrl("/recording", state.callId), {
+      method: "POST",
+      headers: temporarySessionHeaders({
+        "Content-Type": "application/octet-stream",
+        "X-Recording-Sequence": String(sequence),
+        "X-Recording-Final": "true"
+      }),
+      body: payload,
+      keepalive: true
+    }).catch(() => {});
+  }
+
+  function summarizeEvent(raw) {
+    try {
+      const event = JSON.parse(raw);
+      const type = event.type || "unknown";
+      if (type.includes("audio.delta")) {
+        const bytes = typeof event.delta === "string" ? Math.floor(event.delta.length * 3 / 4) : 0;
+        return `${type} bytes≈${bytes}`;
+      }
+      if (type === "response.done") {
+        const status = event.response?.status || "unknown";
+        const outputs = event.response?.output?.map(x => x.type).join(",") || "none";
+        return `${type} status=${status} output=${outputs}`;
+      }
+      if (type.includes("transcription") && (event.transcript || event.delta))
+        return `${type} text=${JSON.stringify(event.transcript || event.delta)}`;
+      if (type === "error")
+        return `${type} code=${event.error?.code || ""} message=${event.error?.message || ""}`;
+      return type;
+    } catch {
+      return `non-json message chars=${raw.length}`;
+    }
+  }
+
+  function bindDataChannel(channel) {
+    dc = channel;
+    dc.addEventListener("open", async () => {
+      log("DATA_CHANNEL open", "in");
+      pingBtn.disabled = false;
+      try {
+        const response = await fetchWithTimeout(controlUrl("/ready"), {
+          method: "POST",
+          headers: temporarySessionHeaders()
+        }, 8000);
+        if (!response.ok) throw new Error(`ready HTTP ${response.status}`);
+        log("CLIENT_READY acknowledged; server greeting may now start", "out");
+      } catch (error) {
+        log(`CLIENT_READY failed: ${error.message}`, "error");
+      }
+    });
+    dc.addEventListener("close", () => {
+      log("DATA_CHANNEL close", "in");
+      pingBtn.disabled = true;
+    });
+    dc.addEventListener("error", event => log(`DATA_CHANNEL error ${event.message || ""}`, "error"));
+    dc.addEventListener("message", event => log(`EVENT ${summarizeEvent(event.data)}`, "in"));
+  }
+
+  function waitForIceGathering(peer, timeoutMs = 5000) {
+    if (peer.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise(resolve => {
+      const timeout = setTimeout(done, timeoutMs);
+      function done() {
+        clearTimeout(timeout);
+        peer.removeEventListener("icegatheringstatechange", changed);
+        resolve();
+      }
+      function changed() {
+        if (peer.iceGatheringState === "complete") done();
+      }
+      peer.addEventListener("icegatheringstatechange", changed);
+    });
+  }
+
+  function preferOpus(transceiver) {
+    if (!transceiver.setCodecPreferences || typeof RTCRtpReceiver === "undefined" || !RTCRtpReceiver.getCapabilities) return;
+    try {
+      const codecs = RTCRtpReceiver.getCapabilities("audio")?.codecs;
+      if (!codecs?.length) return;
+      const opus = codecs.filter(codec => codec.mimeType.toLowerCase() === "audio/opus");
+      if (!opus.length) return;
+      transceiver.setCodecPreferences([
+        ...opus,
+        ...codecs.filter(codec => codec.mimeType.toLowerCase() !== "audio/opus")
+      ]);
+      log("AUDIO codec preference=Opus", "out");
+    } catch (error) {
+      log(`AUDIO codec preference unavailable: ${error.message}`, "error");
+    }
+  }
+
+  function tuneOpusSdp(sdp, maxAverageBitrate) {
+    const opusMatch = sdp.match(/^a=rtpmap:(\d+) opus\/48000\/2\r?$/mi);
+    if (!opusMatch) return sdp;
+
+    const payloadType = opusMatch[1];
+    const fmtpPattern = new RegExp(`^a=fmtp:${payloadType} (.*)$`, "mi");
+    const required = {
+      useinbandfec: "1",
+      usedtx: "1",
+      maxaveragebitrate: String(maxAverageBitrate)
+    };
+
+    if (fmtpPattern.test(sdp)) {
+      return sdp.replace(fmtpPattern, (_, rawParameters) => {
+        const parameters = new Map(rawParameters.split(";").map(value => {
+          const [key, ...rest] = value.trim().split("=");
+          return [key.toLowerCase(), rest.join("=")];
+        }).filter(([key]) => key));
+        Object.entries(required).forEach(([key, value]) => parameters.set(key, value));
+        return `a=fmtp:${payloadType} ${[...parameters].map(([key, value]) => value ? `${key}=${value}` : key).join(";")}`;
+      });
+    }
+
+    return sdp.replace(opusMatch[0], `${opusMatch[0]}\r\na=fmtp:${payloadType} useinbandfec=1;usedtx=1;maxaveragebitrate=${maxAverageBitrate}`);
+  }
+
+  function hasLiveMicrophone() {
+    return !!micStream?.getAudioTracks().some(track => track.readyState === "live");
+  }
+
+  async function applyAudioBitrate(maxBitrate, reason) {
+    if (!audioSender || appliedAudioBitrate === maxBitrate) return;
+    try {
+      const parameters = audioSender.getParameters();
+      if (!parameters.encodings?.length) parameters.encodings = [{}];
+      parameters.encodings.forEach(encoding => { encoding.maxBitrate = maxBitrate; });
+      await audioSender.setParameters(parameters);
+      appliedAudioBitrate = maxBitrate;
+      log(`AUDIO maxBitrate=${Math.round(maxBitrate / 1000)}kbps reason=${reason}`, "out");
+    } catch (error) {
+      log(`AUDIO bitrate adaptation unavailable: ${error.message}`, "error");
+    }
+  }
+
+  function clearPeerTimers() {
+    clearTimeout(disconnectedTimer);
+    clearTimeout(connectionTimer);
+    disconnectedTimer = null;
+    connectionTimer = null;
+  }
+
+  function cancelReconnect() {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function waitForDisconnectedRecovery(peer, source) {
+    if (disconnectedTimer || manualDisconnect || disconnecting || reconnecting) return;
+    setStatus("network interrupted; waiting for ICE recovery");
+    disconnectedTimer = setTimeout(() => {
+      disconnectedTimer = null;
+      if (pc !== peer) return;
+      const stillDisconnected = peer.connectionState === "disconnected"
+        || peer.iceConnectionState === "disconnected";
+      if (stillDisconnected) scheduleReconnect(`${source} remained disconnected`);
+    }, DISCONNECTED_GRACE_MS);
+  }
+
+  function scheduleReconnect(reason) {
+    if (manualDisconnect || disconnecting || reconnecting || reconnectTimer) return;
+    clearPeerTimers();
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      log(`RECONNECT exhausted after ${MAX_RECONNECT_ATTEMPTS} attempts`, "error");
+      manualDisconnect = true;
+      void disconnect();
+      return;
+    }
+
+    const delayMs = Math.min(1000 * 2 ** reconnectAttempts, 4000);
+    setStatus(`reconnecting in ${delayMs / 1000}s`);
+    setButtons(!!pc);
+    log(`RECONNECT scheduled reason=${reason} delayMs=${delayMs}`, "error");
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      void recoverConnection(reason);
+    }, delayMs);
+  }
+
+  async function recoverConnection(reason) {
+    if (manualDisconnect || disconnecting || reconnecting) return;
+    reconnecting = true;
+    const attempt = ++reconnectAttempts;
+    setStatus(`reconnecting ${attempt}/${MAX_RECONNECT_ATTEMPTS}`);
+    setButtons(!!pc);
+    log(`RECONNECT attempt=${attempt} reason=${reason}`, "out");
+
+    const preserveMic = hasLiveMicrophone();
+    await disconnect(true, preserveMic, true);
+    if (manualDisconnect) {
+      reconnecting = false;
+      setButtons(false);
+      return;
+    }
+
+    const connected = await connect(true);
+    reconnecting = false;
+    setButtons(connected);
+    if (!connected) scheduleReconnect("connection attempt failed");
+  }
+
+  async function connect(isReconnect = false) {
+    if (pc || disconnecting) return false;
+    const endpoint = endpointEl.value.trim();
+    if (!endpoint) return false;
+
+    if (!isReconnect) {
+      manualDisconnect = false;
+      reconnectAttempts = 0;
+      targetAudioBitrate = NORMAL_AUDIO_BITRATE;
+    }
+
+    connectBtn.disabled = true;
+    setStatus("connecting");
+    log(`CONNECT endpoint=${endpoint}`, "out");
+
+    try {
+      pc = new RTCPeerConnection();
+      const peer = pc;
+      const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+      preferOpus(audioTransceiver);
+      audioSender = audioTransceiver.sender;
+      appliedAudioBitrate = null;
+      const existingMicTrack = micStream?.getAudioTracks().find(track => track.readyState === "live");
+      if (existingMicTrack) await audioSender.replaceTrack(existingMicTrack);
+      bindDataChannel(pc.createDataChannel("oai-events"));
+
+      pc.addEventListener("track", event => {
+        if (pc !== peer) return;
+        remoteStream = event.streams[0] || new MediaStream([event.track]);
+        audioEl.srcObject = remoteStream;
+        attachRecordingStream(remoteStream);
+        audioEl.play().catch(error => log(`AUDIO autoplay blocked: ${error.message}`, "error"));
+        log(`REMOTE_TRACK kind=${event.track.kind} id=${event.track.id}`, "in");
+      });
+      pc.addEventListener("connectionstatechange", () => {
+        if (pc !== peer) return;
+        const state = peer.connectionState;
+        log(`PC connectionState=${state}`, state === "failed" ? "error" : "in");
+        if (state === "connected") {
+          clearPeerTimers();
+          cancelReconnect();
+          reconnectAttempts = 0;
+          setStatus("connected");
+          setButtons(true);
+        } else if (state === "disconnected") {
+          waitForDisconnectedRecovery(peer, "peer connection");
+        } else if (state === "failed" || state === "closed") {
+          scheduleReconnect(`peer connection ${state}`);
+        } else {
+          setStatus(state);
+        }
+      });
+      pc.addEventListener("iceconnectionstatechange", () => {
+        if (pc !== peer) return;
+        const state = peer.iceConnectionState;
+        log(`PC iceConnectionState=${state}`, state === "failed" ? "error" : "in");
+        if (state === "connected" || state === "completed") {
+          clearTimeout(disconnectedTimer);
+          disconnectedTimer = null;
+        } else if (state === "disconnected") {
+          waitForDisconnectedRecovery(peer, "ICE");
+        } else if (state === "failed") {
+          scheduleReconnect("ICE failed");
+        }
+      });
+
+      const offer = await pc.createOffer();
+      offer.sdp = tuneOpusSdp(offer.sdp, targetAudioBitrate);
+      await peer.setLocalDescription(offer);
+      await waitForIceGathering(peer);
+
+      const response = await postSessionOffer(endpoint, peer.localDescription.sdp);
+      const responseBody = await response.text();
+      if (!response.ok) throw new Error(`SDP HTTP ${response.status}: ${responseBody.slice(0, 500)}`);
+
+      let session;
+      try {
+        session = JSON.parse(responseBody);
+      } catch {
+        throw new Error(`Server returned invalid session JSON: ${responseBody.slice(0, 500)}`);
+      }
+
+      const payload = session.data || session.Data || session.result || session;
+      const answerSdp = payload.sdp || payload.Sdp;
+      callId = payload.callId || payload.CallId;
+      if (!answerSdp || !callId) {
+        const serverCode = session.code ?? session.Code ?? "unknown";
+        const serverMessage = session.error || session.Error || session.msg || session.Msg;
+        const fields = Object.keys(session).join(",") || "none";
+        throw new Error(serverMessage
+          ? `Server session error code=${serverCode}: ${serverMessage}`
+          : `Server response is missing sdp or callId; fields=${fields}`);
+      }
+
+      if (pc !== peer || (isReconnect && manualDisconnect)) throw new Error("Connection attempt was cancelled");
+      await peer.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      await startRecording(callId);
+      await applyAudioBitrate(targetAudioBitrate, isReconnect ? "reconnect" : "initial connection");
+      setStatus("connected");
+      setButtons(true);
+      startStats(peer);
+      connectionTimer = setTimeout(() => {
+        connectionTimer = null;
+        if (pc === peer && peer.connectionState !== "connected")
+          scheduleReconnect("connection establishment timeout");
+      }, CONNECTION_TIMEOUT_MS);
+      log(`CONNECTED callId=${callId} answerChars=${answerSdp.length}`, "in");
+      return true;
+    } catch (error) {
+      log(`CONNECT failed: ${error.stack || error.message}`, "error");
+      await disconnect(true, isReconnect && hasLiveMicrophone(), isReconnect);
+      return false;
+    }
+  }
+
+  async function startMic(isRecovery = false) {
+    if (!pc || !audioSender || micStream) return;
+    startMicBtn.disabled = true;
+    log(isRecovery ? "MIC recovery started" : "MIC permission request started", "out");
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false
+      });
+      const track = micStream.getAudioTracks()[0];
+      await audioSender.replaceTrack(track);
+      attachRecordingStream(micStream);
+      await applyAudioBitrate(targetAudioBitrate, isRecovery ? "microphone recovery" : "microphone started");
+      setButtons(true);
+      log(`MIC started id=${track.id} readyState=${track.readyState}`, "out");
+      track.addEventListener("ended", () => {
+        if (!micStream?.getTracks().includes(track)) return;
+        micStream = null;
+        setButtons(!!pc);
+        log("MIC track ended by browser/OS", "error");
+        if (!manualDisconnect && pc) setTimeout(() => void startMic(true), 1000);
+      }, { once: true });
+    } catch (error) {
+      micStream?.getTracks().forEach(track => track.stop());
+      micStream = null;
+      setButtons(!!pc);
+      log(`MIC failed: ${error.name}: ${error.message}`, "error");
+    }
+  }
+
+  async function stopMic() {
+    if (!micStream) return;
+    const stream = micStream;
+    micStream = null;
+    detachRecordingStream(stream);
+    try {
+      await audioSender?.replaceTrack(null);
+    } catch (error) {
+      log(`MIC detach failed: ${error.message}`, "error");
+    } finally {
+      stream.getTracks().forEach(track => track.stop());
+      setButtons(!!pc);
+      log("MIC stopped", "out");
+    }
+  }
+
+  function sendTextPing() {
+    if (dc?.readyState !== "open") return;
+    const item = {
+      type: "conversation.item.create",
+      item: { type: "message", role: "user", content: [{ type: "input_text", text: "Please say: WebRTC text ping received." }] }
+    };
+    dc.send(JSON.stringify(item));
+    dc.send(JSON.stringify({ type: "response.create" }));
+    log("TEXT_PING conversation.item.create + response.create", "out");
+  }
+
+  function startStats(peer) {
+    clearInterval(statsTimer);
+    previousInboundStats = null;
+    poorNetworkSamples = 0;
+    healthyNetworkSamples = 0;
+    setNetworkQuality("unknown");
+    statsTimer = setInterval(async () => {
+      if (pc !== peer) return;
+      try {
+        const stats = await peer.getStats();
+        const values = [];
+        let inbound = null;
+        let remoteInbound = null;
+        let rttMs = null;
+        let availableOutgoingKbps = null;
+        stats.forEach(report => {
+          if (report.type === "inbound-rtp" && report.kind === "audio") {
+            const avgJitterBufferMs = report.jitterBufferEmittedCount
+              ? Math.round(report.jitterBufferDelay / report.jitterBufferEmittedCount * 1000)
+              : 0;
+            inbound = {
+              packetsReceived: report.packetsReceived || 0,
+              packetsLost: report.packetsLost || 0,
+              jitterMs: Math.round((report.jitter || 0) * 1000),
+              avgJitterBufferMs,
+              concealedSamples: report.concealedSamples || 0
+            };
+            values.push(`IN packets=${inbound.packetsReceived} lost=${inbound.packetsLost} jitterMs=${inbound.jitterMs} avgJbMs=${avgJitterBufferMs} concealed=${inbound.concealedSamples}`);
+          }
+          if (report.type === "outbound-rtp" && report.kind === "audio")
+            values.push(`OUT packets=${report.packetsSent || 0} bytes=${report.bytesSent || 0}`);
+          if (report.type === "remote-inbound-rtp" && (report.kind === "audio" || report.mediaType === "audio")) {
+            remoteInbound = {
+              lossPercent: Math.max(0, report.fractionLost || 0) * 100,
+              jitterMs: Math.round((report.jitter || 0) * 1000),
+              rttMs: Math.round((report.roundTripTime || 0) * 1000)
+            };
+            values.push(`REMOTE_IN loss=${remoteInbound.lossPercent.toFixed(1)}% jitterMs=${remoteInbound.jitterMs} rttMs=${remoteInbound.rttMs}`);
+          }
+          if (report.type === "candidate-pair" && report.state === "succeeded" && report.nominated) {
+            rttMs = Math.round((report.currentRoundTripTime || 0) * 1000);
+            availableOutgoingKbps = Math.round((report.availableOutgoingBitrate || 0) / 1000);
+            values.push(`NET rttMs=${rttMs} availableOutKbps=${availableOutgoingKbps}`);
+          }
+        });
+
+        if (inbound && previousInboundStats) {
+          const receivedDelta = Math.max(0, inbound.packetsReceived - previousInboundStats.packetsReceived);
+          const lostDelta = Math.max(0, inbound.packetsLost - previousInboundStats.packetsLost);
+          const packetDelta = receivedDelta + lostDelta;
+          const lossPercent = packetDelta ? lostDelta / packetDelta * 100 : 0;
+          const concealedDelta = Math.max(0, inbound.concealedSamples - previousInboundStats.concealedSamples);
+          const constrained = (packetDelta >= 20 && lossPercent >= 8)
+            || inbound.jitterMs >= 80
+            || inbound.avgJitterBufferMs >= 120
+            || (remoteInbound && remoteInbound.lossPercent >= 8)
+            || (remoteInbound && remoteInbound.jitterMs >= 80)
+            || (remoteInbound && remoteInbound.rttMs >= 800)
+            || (rttMs !== null && rttMs >= 800)
+            || (availableOutgoingKbps !== null && availableOutgoingKbps > 0 && availableOutgoingKbps < 24);
+          values.push(`QUALITY loss=${lossPercent.toFixed(1)}% concealedDelta=${concealedDelta}`);
+
+          if (constrained) {
+            poorNetworkSamples++;
+            healthyNetworkSamples = 0;
+            if (poorNetworkSamples >= 3) {
+              setNetworkQuality("poor");
+              if (targetAudioBitrate !== CONSTRAINED_AUDIO_BITRATE) {
+                targetAudioBitrate = CONSTRAINED_AUDIO_BITRATE;
+                await applyAudioBitrate(targetAudioBitrate, "sustained weak network");
+              }
+            }
+          } else {
+            healthyNetworkSamples++;
+            poorNetworkSamples = 0;
+            if (healthyNetworkSamples >= 3) setNetworkQuality("good");
+            if (healthyNetworkSamples >= 6 && targetAudioBitrate !== NORMAL_AUDIO_BITRATE) {
+              targetAudioBitrate = NORMAL_AUDIO_BITRATE;
+              await applyAudioBitrate(targetAudioBitrate, "network recovered");
+            }
+          }
+        }
+        if (inbound) previousInboundStats = inbound;
+        if (values.length) log(`STATS ${values.join(" | ")}`);
+      } catch (error) {
+        log(`STATS failed: ${error.message}`, "error");
+      }
+    }, 5000);
+  }
+
+  async function disconnect(notifyServer = true, preserveMic = false, forReconnect = false) {
+    if (disconnecting) return;
+    disconnecting = true;
+    connectAbortController?.abort();
+    connectAbortController = null;
+    const previousCallId = callId;
+    try {
+      clearPeerTimers();
+      clearInterval(statsTimer);
+      statsTimer = null;
+      previousInboundStats = null;
+      if (preserveMic) {
+        try {
+          await audioSender?.replaceTrack(null);
+        } catch (error) {
+          log(`MIC detach failed: ${error.message}`, "error");
+        }
+      } else {
+        await stopMic();
+      }
+      await stopRecording();
+      if (notifyServer && previousCallId) {
+        try {
+          await fetchWithTimeout(controlUrl("", previousCallId), {
+            method: "DELETE",
+            headers: temporarySessionHeaders(),
+            keepalive: true
+          }, 3000);
+        } catch (error) {
+          log(`SERVER disconnect failed: ${error.message}`, "error");
+        }
+      }
+      if (preserveMic && manualDisconnect && micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+      }
+      dc?.close();
+      pc?.close();
+      audioEl.srcObject = null;
+      remoteStream = null;
+    } finally {
+      dc = null;
+      pc = null;
+      audioSender = null;
+      callId = null;
+      disconnecting = false;
+      appliedAudioBitrate = null;
+      setNetworkQuality("unknown");
+      setStatus(forReconnect && !manualDisconnect ? "reconnecting" : "disconnected");
+      setButtons(false);
+      log(forReconnect && !manualDisconnect ? "PEER connection released for reconnect" : "DISCONNECTED", "out");
+    }
+  }
+
+  connectBtn.addEventListener("click", () => void connect());
+  disconnectBtn.addEventListener("click", () => {
+    manualDisconnect = true;
+    cancelReconnect();
+    void disconnect();
+  });
+  startMicBtn.addEventListener("click", () => void startMic());
+  stopMicBtn.addEventListener("click", stopMic);
+  pingBtn.addEventListener("click", sendTextPing);
+  document.getElementById("clear").addEventListener("click", () => { logEl.textContent = ""; });
+  document.addEventListener("visibilitychange", () => log(`PAGE visibility=${document.visibilityState}`));
+  window.addEventListener("beforeunload", () => {
+    finalizeRecordingForUnload();
+  });
+
+  setButtons(false);
+  log("Ready. Deploy the WebRTC endpoint, then click Connect.");
+</script>
+</body>
+</html>
