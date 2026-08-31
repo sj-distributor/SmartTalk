@@ -649,6 +649,7 @@ public partial class AiSpeechAssistantService
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantSessionAsync(session, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _sessionCredentialService.StoreAsync(session, cancellationToken).ConfigureAwait(false);
 
         return new AddAiSpeechAssistantSessionResponse { Data = sessionId };
     }
