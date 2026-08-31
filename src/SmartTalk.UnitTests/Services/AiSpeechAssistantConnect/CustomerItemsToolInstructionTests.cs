@@ -53,6 +53,16 @@ public class CustomerItemsToolInstructionTests
         second.ShouldBe(first);
     }
 
+    [Fact]
+    public void BuildCustomerItemsCacheSoldToIdCandidates_IncludesOriginalAndNormalizedIds()
+    {
+        var ids = AiSpeechAssistantConnectService.BuildCustomerItemsCacheSoldToIdCandidates(
+            "000101/000102",
+            "101");
+
+        ids.ShouldBe(["000101", "101"]);
+    }
+
     private static AiSpeechAssistantFunctionCall CustomerItemsTool() => new()
     {
         Name = OpenAiToolConstants.QueryCustomerItemsByStoreName,

@@ -49,8 +49,9 @@ public partial class AiSpeechAssistantConnectService
                 "Reply in the guest's language: I found more than one store linked to that name. Please ask the customer for the complete or more specific store name before checking product information.");
         }
 
+        var cacheSoldToIds = BuildCustomerItemsCacheSoldToIdCandidates(_ctx.Assistant?.Name, match.SoldToId);
         var caches = await _salesDataProvider
-            .GetCustomerItemsCacheBySoldToIdsAsync([match.SoldToId], cancellationToken)
+            .GetCustomerItemsCacheBySoldToIdsAsync(cacheSoldToIds, cancellationToken)
             .ConfigureAwait(false);
 
         var itemLines = caches
@@ -116,6 +117,23 @@ public partial class AiSpeechAssistantConnectService
     {
         Output = output
     };
+
+    internal static List<string> BuildCustomerItemsCacheSoldToIdCandidates(string assistantName, string matchedSoldToId)
+    {
+        var normalizedMatchedId = NormalizeCustomerId(matchedSoldToId);
+        if (string.IsNullOrWhiteSpace(normalizedMatchedId)) return [];
+
+        var candidateIds = (assistantName ?? string.Empty)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => string.Equals(NormalizeCustomerId(x), normalizedMatchedId, StringComparison.OrdinalIgnoreCase))
+            .Append(matchedSoldToId)
+            .Append(normalizedMatchedId)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return candidateIds;
+    }
 
     private static QueryCustomerItemsByStoreNameArguments ParseQueryCustomerItemsArguments(string argumentsJson)
     {
