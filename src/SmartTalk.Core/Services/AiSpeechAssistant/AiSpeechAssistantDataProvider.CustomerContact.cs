@@ -50,4 +50,15 @@ public partial class AiSpeechAssistantDataProvider
         if (forceSave)
             await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task DeleteCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        if (mappings == null || mappings.Count == 0)
+            return;
+
+        await _repository.DeleteAllAsync(mappings, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
 }
