@@ -28,6 +28,12 @@ public interface IAgentDataProvider : IScopedDependency
     
     Task UpdateAgentsAsync(List<Agent> agents, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task ReplaceAgentTransferCallConfigsAsync(int agentId, List<AgentTransferCallConfig> configs, CancellationToken cancellationToken = default);
+
+    Task<List<AgentTransferCallConfig>> GetAgentTransferCallConfigsAsync(List<int> agentIds = null, CancellationToken cancellationToken = default);
+
+    Task DeleteAgentTransferCallConfigsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken = default);
+
     Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent;
 
     Task<List<Agent>> GetAgentsWithAssistantsAsync(List<int> agentIds = null, string keyword = null, bool? isDefault = null, CancellationToken cancellationToken = default);
@@ -122,6 +128,36 @@ public class AgentDataProvider : IAgentDataProvider
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task ReplaceAgentTransferCallConfigsAsync(int agentId, List<AgentTransferCallConfig> configs, CancellationToken cancellationToken = default)
+    {
+        var existingConfigs = await _repository.Query<AgentTransferCallConfig>()
+            .Where(x => x.AgentId == agentId)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await _repository.DeleteAllAsync(existingConfigs, cancellationToken).ConfigureAwait(false);
+
+        if (configs is { Count: > 0 })
+            await _repository.InsertAllAsync(configs, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<AgentTransferCallConfig>> GetAgentTransferCallConfigsAsync(List<int> agentIds = null, CancellationToken cancellationToken = default)
+    {
+        var query = _repository.Query<AgentTransferCallConfig>();
+
+        if (agentIds is { Count: > 0 })
+            query = query.Where(x => agentIds.Contains(x.AgentId));
+
+        return await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAgentTransferCallConfigsByAgentIdsAsync(List<int> agentIds, CancellationToken cancellationToken = default)
+    {
+        var configs = await _repository.Query<AgentTransferCallConfig>().Where(x => agentIds.Contains(x.AgentId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        await _repository.DeleteAllAsync(configs, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<List<AgentPreviewDto>> GetAgentsByAgentTypeAsync<T>(
         AgentType agentType, List<int> agentIds = null, int? serviceProviderId = null, CancellationToken cancellationToken = default) where T : class, IEntity<int>, IAgent
     {
@@ -214,12 +250,11 @@ public class AgentDataProvider : IAgentDataProvider
             from posAgent in _repository.Query<PosAgent>()
             join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
             where posAgent.StoreId == storeId
-                  && agent.SourceSystem == AgentSourceSystem.AiResource
                   && agent.Type == AgentType.Sales
                   && agent.Name == agentName
             orderby agent.CreatedDate descending
             select agent;
-
+        
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     
@@ -239,4 +274,5 @@ public class AgentDataProvider : IAgentDataProvider
 
         return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
-} 
+
+}

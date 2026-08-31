@@ -659,24 +659,33 @@ public class AutoTestSalesPhoneOrderProcessJobService : IAutoTestSalesPhoneOrder
     {
         List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems = [];
 
-        var askInfoResponse = await _salesClient
-            .GetAskInfoDetailListByCustomerAsync(
-                new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = soldToIds }, cancellationToken)
-            .ConfigureAwait(false);
-        var orderHistoryResponse = await _salesClient
-            .GetOrderHistoryByCustomerAsync(
-                new GetOrderHistoryByCustomerRequestDto { CustomerNumber = soldToIds.FirstOrDefault() },
-                cancellationToken).ConfigureAwait(false);
+        var customerIds = soldToIds?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
 
-        if (askInfoResponse?.Data != null && askInfoResponse.Data.Any())
-            historyItems.AddRange(askInfoResponse.Data.Where(x => !string.IsNullOrWhiteSpace(x.Material))
-                .Select(x => (x.Material, x.MaterialDesc, (DateTime?)null)));
+        foreach (var batch in customerIds.Chunk(10))
+        {
+            var batchCustomerIds = batch.ToList();
+            var materialOverviewResponse = await _salesClient
+                .GetCustomerMaterialOverviewAsync(
+                    new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = batchCustomerIds },
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-        if (orderHistoryResponse?.Data != null && orderHistoryResponse.Data.Any())
-            historyItems.AddRange(
-                orderHistoryResponse?.Data.Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
-                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)) ??
-                new List<(string, string, DateTime?)>());
+            if (materialOverviewResponse?.Code != 200)
+            {
+                Log.Warning("GetCustomerMaterialOverviewAsync returned non-success response. ResultCode: {ResultCode}, ResultMsg: {ResultMsg}", materialOverviewResponse?.Code, materialOverviewResponse?.Message);
+                continue;
+            }
+
+            if (materialOverviewResponse?.Data != null && materialOverviewResponse.Data.Any())
+                historyItems.AddRange(materialOverviewResponse.Data
+                    .SelectMany(x => x.Items ?? [])
+                    .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
+                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)));
+        }
 
         return historyItems;
     }

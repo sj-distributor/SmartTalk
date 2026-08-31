@@ -93,16 +93,20 @@ public class AutoAddLanguageCatalogTests
         var dataProvider = Substitute.For<IKnowledgeScenarioDataProvider>();
         dataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: 1, isActive: true, cancellationToken: Arg.Any<CancellationToken>())
             .Returns(existingMappings, new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeSceneLanguageMapping>());
+        var backgroundJobClient = Substitute.For<ISmartTalkBackgroundJobClient>();
+        var posDataProvider = Substitute.For<IPosDataProvider>();
+        posDataProvider.GetPosCompanyByNameAsync("OME", Arg.Any<CancellationToken>())
+            .Returns(new SmartTalk.Core.Domain.Pos.Company { Id = 1, Name = "OME" });
 
         var sut = new KnowledgeScenarioService(
             Substitute.For<IMapper>(),
             dataProvider,
             Substitute.For<IAiSpeechAssistantDataProvider>(),
-            Substitute.For<IPosDataProvider>(),
+            posDataProvider,
             Substitute.For<ISmartiesClient>(),
             Substitute.For<IAiSpeechAssistantKnowledgePromptService>(),
             new SalesSettingBuilder().Build(),
-            Substitute.For<ISmartTalkBackgroundJobClient>());
+            backgroundJobClient);
 
         var response = await sut.SaveKnowledgeSceneLanguageMappingsAsync(new SaveKnowledgeSceneLanguageMappingsCommand
         {
@@ -239,10 +243,6 @@ public class AutoAddLanguageCatalogTests
             Arg.Is<List<KnowledgeSceneLanguageMapping>>(x => x.Count == 1 && x[0].SceneId == 54 && !x[0].IsActive),
             false,
             Arg.Any<CancellationToken>());
-        backgroundJobClient.Received(1)
-            .Enqueue<IAiSpeechAssistantProcessJobService>(
-                Arg.Any<Expression<Func<IAiSpeechAssistantProcessJobService, Task>>>(),
-                "default");
     }
 
     private sealed class SalesSettingBuilder

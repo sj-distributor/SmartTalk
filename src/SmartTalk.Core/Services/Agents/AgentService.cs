@@ -1,5 +1,6 @@
 using System.Reflection;
 using AutoMapper;
+using FluentValidation;
 using Newtonsoft.Json;
 using Serilog;
 using SmartTalk.Core.Domain;
@@ -110,6 +111,8 @@ public class AgentService : IAgentService
 
     public async Task<AddAgentResponse> AddAgentAsync(AddAgentCommand command, CancellationToken cancellationToken)
     {
+        ValidateAgentTransferCallConfigs(command.IsTransferHuman, command.AgentTransferCallConfigs);
+
         var agent = new Agent
         {
             ServiceProviderId = command.ServiceProviderId,
@@ -124,7 +127,6 @@ public class AgentService : IAgentService
             Voice = command.Voice,
             WaitInterval = command.WaitInterval,
             IsTransferHuman = command.IsTransferHuman,
-            TransferCallNumber = command.TransferCallNumber,
             ServiceHours = command.ServiceHours
         };
         
@@ -142,14 +144,20 @@ public class AgentService : IAgentService
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
+            agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
+
         var agentDto = _mapper.Map<AgentDto>(agent);
         agentDto.PhoneNoiseReductionEnabled = command.PhoneNoiseReductionEnabled ?? true;
+        agentDto.AgentTransferCallConfigs = transferCallConfigs;
 
         return new AddAgentResponse { Data = agentDto };
     }
 
     public async Task<UpdateAgentResponse> UpdateAgentAsync(UpdateAgentCommand command, CancellationToken cancellationToken)
     {
+        ValidateAgentTransferCallConfigs(command.IsTransferHuman, command.AgentTransferCallConfigs);
+
         var agent = await _agentDataProvider.GetAgentByIdAsync(command.AgentId, cancellationToken).ConfigureAwait(false);
         
         await ChangeNumberIfRequiredAsync(agent.Id, agent.Channel, command.Channel, cancellationToken).ConfigureAwait(false);
@@ -157,10 +165,19 @@ public class AgentService : IAgentService
         _mapper.Map(command, agent);
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+        var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
+            agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
+
         await HandleAiSpeechAssistantsAsync(agent, command.PhoneNoiseReductionEnabled, cancellationToken).ConfigureAwait(false);
-        
-        return new UpdateAgentResponse { Data = _mapper.Map<AgentDto>(agent) };
+
+        var agentDto = MapAgentDto(agent, transferCallConfigs);
+        if (command.PhoneNoiseReductionEnabled.HasValue)
+            agentDto.PhoneNoiseReductionEnabled = command.PhoneNoiseReductionEnabled.Value;
+
+        return new UpdateAgentResponse
+        {
+            Data = agentDto
+        };
     }
 
     public async Task<DeleteAgentResponse> DeleteAgentAsync(DeleteAgentCommand command, CancellationToken cancellationToken)
@@ -170,6 +187,9 @@ public class AgentService : IAgentService
         if (agent == null) throw new Exception($"Agent with id {command.AgentId} not found.");
         
         await _agentDataProvider.DeleteAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await _agentDataProvider.DeleteAgentTransferCallConfigsByAgentIdsAsync(
+            [agent.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await _posDataProvider.DeletePosAgentsByAgentIdsAsync([agent.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
         
@@ -211,7 +231,7 @@ public class AgentService : IAgentService
 
         if (agent == null) throw new Exception($"Agent with id {request.AgentId} not found.");
         
-        return new GetAgentByIdResponse { Data = _mapper.Map<AgentDto>(agent) };
+        return new GetAgentByIdResponse { Data = await MapAgentDtoAsync(agent, cancellationToken).ConfigureAwait(false) };
     }
 
     public async Task<GetAgentsWithAssistantsResponse> GetAgentsWithAssistantsAsync(GetAgentsWithAssistantsRequest request, CancellationToken cancellationToken)
@@ -220,7 +240,11 @@ public class AgentService : IAgentService
         
         var agents = await _agentDataProvider.GetAgentsWithAssistantsAsync(agentIds: storeAgents.Select(x => x.AgentId).ToList(), cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        return new GetAgentsWithAssistantsResponse { Data = _mapper.Map<List<AgentDto>>(agents) };
+        var result = _mapper.Map<List<AgentDto>>(agents);
+
+        await EnrichAgentsAsync(result, cancellationToken).ConfigureAwait(false);
+
+        return new GetAgentsWithAssistantsResponse { Data = result };
     }
 
     private async Task<List<AgentPreviewDto>> GetAllAgentsAsync(List<AgentType> agentTypes, List<int> agentIds, int? serviceProviderId, CancellationToken cancellationToken)
@@ -286,6 +310,8 @@ public class AgentService : IAgentService
         await EnrichAssistantsNoiseReductionAsync(agents.SelectMany(x => x.Assistants ?? []).ToList(), cancellationToken).ConfigureAwait(false);
 
         EnrichAgentsNoiseReduction(agents);
+
+        await EnrichAgentTransferCallConfigsAsync(agents, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task EnrichAssistantsNoiseReductionAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
@@ -320,6 +346,74 @@ public class AgentService : IAgentService
             agent.PhoneNoiseReductionEnabled = phoneAssistants.Count == 0 ||
                                                 phoneAssistants.Any(x => x.PhoneNoiseReductionEnabled);
         }
+    }
+
+    private async Task<AgentDto> MapAgentDtoAsync(Agent agent, CancellationToken cancellationToken)
+    {
+        var result = _mapper.Map<AgentDto>(agent);
+
+        await EnrichAgentTransferCallConfigsAsync([result], cancellationToken).ConfigureAwait(false);
+
+        return result;
+    }
+
+    private AgentDto MapAgentDto(Agent agent, List<AgentTransferCallConfigDto> transferCallConfigs)
+    {
+        var result = _mapper.Map<AgentDto>(agent);
+        result.AgentTransferCallConfigs = transferCallConfigs;
+
+        return result;
+    }
+
+    internal static void ValidateAgentTransferCallConfigs(
+        bool isTransferHuman, List<AgentTransferCallConfigDto> transferCallConfigs)
+    {
+        if (transferCallConfigs is not { Count: > 0 })
+        {
+            if (isTransferHuman)
+                throw new ValidationException("AgentTransferCallConfigs is required when IsTransferHuman is true.");
+
+            return;
+        }
+
+        if (transferCallConfigs.Any(x => x == null || string.IsNullOrWhiteSpace(x.TransferCallNumber)))
+            throw new ValidationException("TransferCallNumber is required for every AgentTransferCallConfig.");
+
+        if (transferCallConfigs.Any(x => x == null || string.IsNullOrWhiteSpace(x.ServiceHours)))
+            throw new ValidationException("ServiceHours is required for every AgentTransferCallConfig.");
+
+        if (isTransferHuman && transferCallConfigs.All(x => x.Priority != AgentTransferCallPriority.Default))
+            throw new ValidationException("AgentTransferCallConfigs must contain a default config when IsTransferHuman is true.");
+    }
+
+    private async Task EnrichAgentTransferCallConfigsAsync(List<AgentDto> agents, CancellationToken cancellationToken)
+    {
+        if (agents == null || agents.Count == 0) return;
+
+        var configs = await _agentDataProvider.GetAgentTransferCallConfigsAsync(agents.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        var lookup = configs.GroupBy(x => x.AgentId).ToDictionary(x => x.Key, x => _mapper.Map<List<AgentTransferCallConfigDto>>(x.ToList()));
+
+        foreach (var agent in agents)
+        {
+            agent.AgentTransferCallConfigs = lookup.TryGetValue(agent.Id, out var agentConfigs) ? agentConfigs : [];
+        }
+    }
+
+    private async Task<List<AgentTransferCallConfigDto>> ReplaceAgentTransferCallConfigsAsync(
+        int agentId, List<AgentTransferCallConfigDto> configs, CancellationToken cancellationToken)
+    {
+        var entities = (configs ?? [])
+            .Select(x => new AgentTransferCallConfig
+            {
+                AgentId = agentId,
+                TransferCallNumber = x.TransferCallNumber,
+                ServiceHours = x.ServiceHours,
+                Priority = x.Priority
+            }).ToList();
+
+        await _agentDataProvider.ReplaceAgentTransferCallConfigsAsync(agentId, entities, cancellationToken).ConfigureAwait(false);
+
+        return _mapper.Map<List<AgentTransferCallConfigDto>>(entities);
     }
 
     private async Task ChangeNumberIfRequiredAsync(int agentId, AiSpeechAssistantChannel? originalChannel, AiSpeechAssistantChannel newChannel, CancellationToken cancellationToken)

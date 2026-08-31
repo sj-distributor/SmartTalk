@@ -199,21 +199,13 @@ public partial class PhoneOrderService
         }
 
         var recordContent = await _httpClientFactory.GetAsync<byte[]>(recordingUrl, cancellationToken).ConfigureAwait(false);
-        var transcription = await _speechToTextService.SpeechToTextAsync(
-            recordContent,
-            fileType: TranscriptionFileType.Wav,
-            responseFormat: TranscriptionResponseFormat.Text,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        var detection = await _translationClient.DetectLanguageAsync(transcription, cancellationToken).ConfigureAwait(false);
-        var recordName = $"{Guid.NewGuid():N}.wav";
 
         var record = new PhoneOrderRecord
         {
             SessionId = Guid.NewGuid().ToString("N"),
             AgentId = command.AgentId,
             AssistantId = command.AssistantId,
-            Language = SelectLanguageEnum(detection.Language),
+            Language = TranscriptionLanguage.Chinese,
             CreatedDate = command.CallTime == default ? DateTimeOffset.UtcNow : command.CallTime,
             Status = PhoneOrderRecordStatus.Recieved,
             OrderRecordType = command.OrderRecordType,
@@ -229,9 +221,11 @@ public partial class PhoneOrderService
             return;
         }
 
-        record.TranscriptionJobId = await _speechMaticsService.CreateSpeechMaticsJobAsync(recordContent, recordName, detection.Language, SpeechMaticsJobScenario.AixvolinkReleased, cancellationToken).ConfigureAwait(false);
+        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Transcription, cancellationToken).ConfigureAwait(false);
 
-        await AddPhoneOrderRecordAsync(record, PhoneOrderRecordStatus.Diarization, cancellationToken).ConfigureAwait(false);
+        _backgroundJobClient.Enqueue<IPhoneOrderProcessJobService>(
+            x => x.HandleAixvolinkRecordDirectAsync(record.Id, cancellationToken),
+            HangfireConstants.InternalHostingAixvolinkPhoneOrder);
     }
 
     private async Task<bool> CheckOrderExistAsync(int agentId, DateTimeOffset createdDate, CancellationToken cancellationToken)
@@ -1182,7 +1176,7 @@ public partial class PhoneOrderService
             CancelledOrderCountPerPeriod = cancelledOrderCountPerPeriod
         };
         
-        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
+        var callInRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderRecord>();
         var callOutRecords = records?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
 
         var callInFailedCount = records?.Count(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Scenario is DialogueScenarios.TransferVoicemail or DialogueScenarios.InvalidCall) ?? 0;
@@ -1229,6 +1223,7 @@ public partial class PhoneOrderService
         var missByHuman = callInRecords.Count(x => (x.IsTransfer == true || x.Scenario == DialogueScenarios.TransferToHuman) && x.IsHumanAnswered != true);
 
         var totalDurationPerPeriod = GroupDurationByRequestType(callInRecords, start, end, dataType);
+        var scenarioCallCounts = BuildScenarioCallCounts(callInRecords);
 
         return new CallInDataDto
         {
@@ -1241,7 +1236,8 @@ public partial class PhoneOrderService
             CallInMissedByHumanCount = missByHuman,
             CallinTransferToHumanRate = transferRate,
             TotalCallInDurationSeconds = totalDuration,
-            TotalCallInDurationPerPeriod = totalDurationPerPeriod
+            TotalCallInDurationPerPeriod = totalDurationPerPeriod,
+            ScenarioCallCounts = scenarioCallCounts
         };
     }
 
@@ -1305,6 +1301,23 @@ public partial class PhoneOrderService
                 g => g.Key.ToString("yyyy-MM-dd"),
                 g => g.Sum(x => x.Duration ?? 0));
     }
+
+    private static List<ScenarioCallCountDto> BuildScenarioCallCounts(List<PhoneOrderRecord> records)
+    {
+        var scenarioCounts = records
+            .Where(x => x.Scenario.HasValue)
+            .GroupBy(x => x.Scenario!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return Enum.GetValues<DialogueScenarios>()
+            .Where(x => x != DialogueScenarios.ToDoTask)
+            .Select(scenario => new ScenarioCallCountDto
+            {
+                Scenario = scenario,
+                Count = scenarioCounts.GetValueOrDefault(scenario)
+            })
+            .ToList();
+    }
     
     private static Dictionary<string, int> GroupCountByRequestType(List<PosOrder> orders, Func<PosOrder, DateTimeOffset> dateSelector, DateTimeOffset? startDate, DateTimeOffset? endDate, PhoneOrderDataDashDataType dataType)
     {
@@ -1352,7 +1365,7 @@ public partial class PhoneOrderService
         var prevRecords = await _phoneOrderDataProvider.GetPhoneOrderRecordsAsync(
             agentIds: command.AgentIds, null, utcStart: prevStartDate, utcEnd: prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);
         
-        var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound).ToList() ?? new List<PhoneOrderRecord>();
+        var prevCallInRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.InBound && x.Status == PhoneOrderRecordStatus.Sent).ToList() ?? new List<PhoneOrderRecord>();
         var prevCallOutRecords = prevRecords?.Where(x => x.OrderRecordType == PhoneOrderRecordType.OutBount).ToList() ?? new List<PhoneOrderRecord>();
 
         var prevPosOrders = await _posDataProvider.GetPosOrdersByStoreIdsAsync(command.StoreIds, null, true, prevStartDate, prevEndDate, cancellationToken: cancellationToken).ConfigureAwait(false);

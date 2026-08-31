@@ -165,7 +165,7 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<Domain.AISpeechAssistant.AiSpeechAssistant>> GetAiSpeechAssistantsByStoreIdAsync(int storeId, CancellationToken cancellationToken = default);
 
     Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetCrmAutoSyncAssistantByStoreAndNameAsync(int storeId, string assistantName, CancellationToken cancellationToken = default);
-    
+
     Task<bool> HasCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default);
     
     Task<List<CrmAutoSyncAssistantLocationDto>> GetCrmAutoSyncAssistantsInCompanyAsync(int companyId, CancellationToken cancellationToken = default);
@@ -463,11 +463,24 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
 
     public async Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken)
     {
-        return await _repository.Query<AiSpeechAssistantKnowledge>()
+        var knowledges = await _repository.Query<AiSpeechAssistantKnowledge>()
             .Where(x => x.AssistantId == assistantId)
-            .OrderByDescending(x => x.Version)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return knowledges
+            .OrderByDescending(x => ParseKnowledgeVersion(x.Version))
             .ThenByDescending(x => x.CreatedDate)
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            .FirstOrDefault();
+    }
+
+    private static (int Major, int Minor) ParseKnowledgeVersion(string version)
+    {
+        var versionParts = version?.Split('.');
+        return versionParts?.Length == 2
+               && int.TryParse(versionParts[0], out var major)
+               && int.TryParse(versionParts[1], out var minor)
+            ? (major, minor)
+            : (-1, -1);
     }
 
     public async Task<Domain.AISpeechAssistant.AiSpeechAssistant> GetAiSpeechAssistantByIdAsync(int assistantId, CancellationToken cancellationToken)
@@ -948,11 +961,10 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
             join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             join assistant in _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>() on agentAssistant.AssistantId equals assistant.Id
             where posAgent.StoreId == storeId
-                  && agent.SourceSystem == AgentSourceSystem.AiResource
                   && assistant.Name == assistantName
             orderby assistant.CreatedDate descending
             select assistant;
-
+        
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
     

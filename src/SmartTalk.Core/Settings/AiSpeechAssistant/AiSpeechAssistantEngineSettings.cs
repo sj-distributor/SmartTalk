@@ -8,11 +8,16 @@ public class AiSpeechAssistantSettings : IConfigurationSetting
     {
         EngineVersion = configuration.GetValue<int>("AiSpeechAssistant:EngineVersion");
         HifoodCapabilityCompanyIds = ParseCompanyIds(configuration);
+        SessionCredentialLifetimeMinutes = configuration.GetValue<int>(
+            "AiSpeechAssistant:SessionCredentialLifetimeMinutes",
+            24 * 60);
     }
 
     public int EngineVersion { get; set; }
 
     public List<int> HifoodCapabilityCompanyIds { get; set; } = [];
+
+    public int SessionCredentialLifetimeMinutes { get; set; }
 
     public bool CanConfigureHifoodCapabilities(int companyId)
     {

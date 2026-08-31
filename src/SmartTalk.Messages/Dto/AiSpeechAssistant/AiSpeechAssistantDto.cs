@@ -48,6 +48,8 @@ public class AiSpeechAssistantDto
     public bool IsAllowOrderPush { get; set; }
     
     public bool IsAutoGenerateOrder { get; set; }
+    
+    public bool IsComplaintAnalysisEnabled { get; set; }
 
     public bool PhoneNoiseReductionEnabled { get; set; }
 

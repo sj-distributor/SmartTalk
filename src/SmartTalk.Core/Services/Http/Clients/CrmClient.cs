@@ -174,10 +174,40 @@ public class CrmClient : ICrmClient
         while (true)
         {
             var pagedUrl = $"{url}?page={page}";
-            var response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, headers: headers).ConfigureAwait(false);
 
-            if (response?.Data == null || response.Data.Count == 0)
-                break;
+            CrmSalesAutoSyncPagedResponseDto? response = null;
+            const int maxRetry = 3;
+
+            for (var retry = 1; retry <= maxRetry; retry++)
+            {
+                try
+                {
+                    response = await _httpClient.GetAsync<CrmSalesAutoSyncPagedResponseDto>(pagedUrl, cancellationToken: cancellationToken, timeout: SyncRequestTimeout, headers: headers).ConfigureAwait(false);
+
+                    if (response?.Data is { Count: > 0 })
+                        break;
+
+                    response = null;
+                    if (retry < maxRetry)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                        continue;
+                    }
+
+                    break;
+                }
+                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested && retry < maxRetry)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                }
+                catch (HttpRequestException) when (retry < maxRetry)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                }
+            }
+
+            if (response == null)
+                throw new InvalidOperationException($"Failed to load CRM sales auto sync customers. Url={pagedUrl}");
 
             result.AddRange(response.Data);
 
@@ -189,7 +219,7 @@ public class CrmClient : ICrmClient
 
         return (result, result.Count > 0 ? null : 0);
     }
-
+    
     public async Task<List<CrmSalesAutoSyncCustomerDto>> GetChangedSalesAutoSyncCustomersAsync(CancellationToken cancellationToken = default)
     {
         Log.Information("GetChangedSalesAutoSyncCustomersAsync");

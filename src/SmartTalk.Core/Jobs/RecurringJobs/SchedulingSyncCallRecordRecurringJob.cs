@@ -1,4 +1,5 @@
 using Mediator.Net;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Commands.AutoTest;
 
 namespace SmartTalk.Core.Jobs.RecurringJobs;
@@ -20,4 +21,6 @@ public class SchedulingSyncCallRecordRecurringJob : IRecurringJob
     public string JobId => nameof(SchedulingSyncCallRecordRecurringJob);
 
     public string CronExpression => "0 0 * * *";
+
+    public TimeZoneInfo TimeZone => PstTimeZone.Get();
 }
