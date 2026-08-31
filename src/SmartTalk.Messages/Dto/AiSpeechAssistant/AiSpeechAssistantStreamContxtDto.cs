@@ -24,6 +24,8 @@ public class AiSpeechAssistantStreamContextDto
     public AiSpeechAssistantUserInfoDto UserInfo { get; set; }
     
     public AiSpeechAssistantOrderDto OrderItems { get; set; }
+
+    public AiSpeechAssistantComplaintInfoDto ComplaintInfo { get; set; } = new();
     
     public AiSpeechAssistantUserInfoDto LastUserInfo { get; set; }
 
@@ -93,4 +95,28 @@ public class AiSpeechAssistantOrderItemDto
     
     [JsonProperty("specification")]
     public string Specification { get; set; }
+}
+
+public class AiSpeechAssistantComplaintInfoDto
+{
+    [JsonProperty("invoice_numbers")]
+    public List<string> InvoiceNumbers { get; set; } = [];
+
+    [JsonProperty("products")]
+    public List<string> Products { get; set; } = [];
+
+    [JsonProperty("problem_description")]
+    public string ProblemDescription { get; set; }
+
+    [JsonProperty("affected_quantity")]
+    public string AffectedQuantity { get; set; }
+
+    [JsonProperty("delivery_date")]
+    public string DeliveryDate { get; set; }
+
+    [JsonProperty("delivery_date_text")]
+    public string DeliveryDateText { get; set; }
+
+    [JsonProperty("is_confirmed")]
+    public bool? IsConfirmed { get; set; }
 }

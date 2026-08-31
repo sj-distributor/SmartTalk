@@ -19,13 +19,12 @@ public partial class AiResourceSyncService
         if (company == null)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
 
-        var (allCustomers, _) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        allCustomers ??= [];
+        var isFullSync = !await _aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(cancellationToken).ConfigureAwait(false);
+        var syncCustomers = await LoadCrmCustomerContactPhoneMapCustomersAsync(isFullSync, cancellationToken).ConfigureAwait(false);
+        syncCustomers ??= [];
 
-        var customerGroups = CrmSalesAutoSyncGrouping.BuildCustomerGroups(allCustomers);
-        var existingStores = await _posDataProvider
-            .GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        var customerGroups = AiResourceSyncGrouping.BuildCustomerGroups(syncCustomers);
+        var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var storeMap = existingStores
             .Select(x => new { Store = x, StoreName = GetStoreName(x.Names) })
@@ -34,6 +33,16 @@ public partial class AiResourceSyncService
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store, StringComparer.OrdinalIgnoreCase);
 
         await SyncCustomerContactPhoneMapsAsync(company.Id, customerGroups, storeMap, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<List<CrmSalesAutoSyncCustomerDto>> LoadCrmCustomerContactPhoneMapCustomersAsync(bool isFullSync, CancellationToken cancellationToken)
+    {
+        if (!isFullSync) return await _crmClient.GetChangedSalesAutoSyncCustomersAsync(cancellationToken).ConfigureAwait(false);
+
+        var (allCustomers, _) = await _crmClient.GetSalesAutoSyncCustomersAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        allCustomers ??= [];
+
+        return allCustomers;
     }
     
     private async Task SyncCustomerContactPhoneMapsAsync(int companyId, IReadOnlyList<CrmSalesAutoSyncCustomerGroup> customerGroups, 
@@ -75,7 +84,7 @@ public partial class AiResourceSyncService
             if (!storeMap.TryGetValue(customerGroup.SalesKey, out var store))
                 continue;
 
-            var assistantName = CrmSalesAutoSyncGrouping.BuildAssistantName(customerGroup.CustomerIds, customerGroup.Language);
+            var assistantName = AiResourceSyncGrouping.BuildAssistantName(customerGroup.CustomerIds);
             var assistant = await _aiSpeechAssistantDataProvider
                 .GetCrmAutoSyncAssistantByStoreAndNameAsync(store.Id, assistantName, cancellationToken)
                 .ConfigureAwait(false);
@@ -94,7 +103,7 @@ public partial class AiResourceSyncService
     {
         return from customer in customerGroup.Customers
             from contact in customer.Contacts ?? []
-            let normalizedPhone = CrmSalesAutoSyncGrouping.NormalizePhoneNumber(contact?.Phone)
+            let normalizedPhone = AiResourceSyncGrouping.NormalizePhoneNumber(contact?.Phone)
             where !string.IsNullOrWhiteSpace(normalizedPhone) && !string.IsNullOrWhiteSpace(customer.CustomerId)
             select new CrmCustomerContactPhoneMap
             {
@@ -108,7 +117,6 @@ public partial class AiResourceSyncService
                 ContactLanguage = contact?.Language?.Trim(),
                 ContactPhoneRaw = contact?.Phone?.Trim(),
                 ContactPhoneNormalized = normalizedPhone,
-                IsActive = true,
                 CreatedDate = now,
                 LastModifiedDate = now
             };
@@ -136,17 +144,6 @@ public partial class AiResourceSyncService
             existing.ContactIdentity = desired.ContactIdentity;
             existing.ContactLanguage = desired.ContactLanguage;
             existing.ContactPhoneRaw = desired.ContactPhoneRaw;
-            existing.IsActive = true;
-            existing.LastModifiedDate = now;
-            toUpdate.Add(existing);
-        }
-
-        foreach (var (key, existing) in existingByKey)
-        {
-            if (desiredByKey.ContainsKey(key) || !existing.IsActive)
-                continue;
-
-            existing.IsActive = false;
             existing.LastModifiedDate = now;
             toUpdate.Add(existing);
         }

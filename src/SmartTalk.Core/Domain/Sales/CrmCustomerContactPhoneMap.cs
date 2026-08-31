@@ -41,9 +41,6 @@ public class CrmCustomerContactPhoneMap : IEntity, IHasCreatedFields, IHasModifi
     [Column("contact_phone_normalized"), StringLength(32)]
     public string ContactPhoneNormalized { get; set; }
 
-    [Column("is_active")]
-    public bool IsActive { get; set; } = true;
-
     [Column("created_by")]
     public int? CreatedBy { get; set; }
 

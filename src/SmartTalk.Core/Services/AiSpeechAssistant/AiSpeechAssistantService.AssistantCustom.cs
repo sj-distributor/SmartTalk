@@ -649,6 +649,7 @@ public partial class AiSpeechAssistantService
         };
         
         await _aiSpeechAssistantDataProvider.AddAiSpeechAssistantSessionAsync(session, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await _sessionCredentialService.StoreAsync(session, cancellationToken).ConfigureAwait(false);
 
         return new AddAiSpeechAssistantSessionResponse { Data = sessionId };
     }
@@ -821,7 +822,9 @@ public partial class AiSpeechAssistantService
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
             IsDefault = isDefault,
-            ModelLanguage = command.AgentType == AgentType.Agent ? string.IsNullOrWhiteSpace(command.ModelLanguage) ? "English" : command.ModelLanguage : null,
+            ModelLanguage = command.AgentType is AgentType.Agent or AgentType.Sales
+                ? string.IsNullOrWhiteSpace(command.ModelLanguage) ? "en" : command.ModelLanguage
+                : null,
             WaitInterval = agent.WaitInterval,
             IsTransferHuman = agent.IsTransferHuman,
             IsAutoGenerateOrder = false
@@ -1069,9 +1072,7 @@ public partial class AiSpeechAssistantService
 
     private async Task RefreshKnowledgeScenePromptAsync(AiSpeechAssistantKnowledge knowledge, CancellationToken cancellationToken)
     {
-        var scenePrompt = await _aiSpeechAssistantKnowledgePromptService
-            .GenerateScenePromptAsync(knowledge.Id, cancellationToken)
-            .ConfigureAwait(false);
+        var scenePrompt = await _aiSpeechAssistantKnowledgePromptService.GenerateScenePromptAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
 
         if (string.Equals(knowledge.ScenePrompt ?? string.Empty, scenePrompt, StringComparison.Ordinal))
             return;
@@ -1463,7 +1464,7 @@ public partial class AiSpeechAssistantService
                 await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantFunctionCallAsync([turnDetection], cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
-            if (assistant.IsTransferHuman)
+            if (assistant.IsTransferHuman && !string.IsNullOrWhiteSpace(transferCallNumber))
             {
                 if (humanConcat == null)
                 {

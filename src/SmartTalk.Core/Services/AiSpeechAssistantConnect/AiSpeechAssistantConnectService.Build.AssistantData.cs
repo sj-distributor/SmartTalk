@@ -3,6 +3,7 @@ using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.RealtimeAi;
+using SmartTalk.Core.Services.AiSpeechAssistant;
 
 namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
@@ -12,17 +13,15 @@ public partial class AiSpeechAssistantConnectService
     {
         var assistantId = _ctx.Assistant.Id;
 
-        _ctx.HumanContactPhone = (await _aiSpeechAssistantDataProvider
-            .GetAiSpeechAssistantHumanContactByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false))?.HumanPhone;
-
         _ctx.Timer = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantTimerByAssistantIdAsync(assistantId, cancellationToken).ConfigureAwait(false);
 
         _ctx.FunctionCalls = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantFunctionCallByAssistantIdsAsync([assistantId], _ctx.Assistant.ModelProvider, true, cancellationToken).ConfigureAwait(false);
-
+        
         ResolveCandidateCustomerIds();
         EnsureCustomerItemsTool();
+        AppendComplaintPromptInstructionIfRequired();
     }
 
     private void EnsureCustomerItemsTool()
@@ -77,5 +76,12 @@ public partial class AiSpeechAssistantConnectService
     private void ResolveCandidateCustomerIds()
     {
         _ctx.CandidateCustomerIds = SplitAssistantCustomerIds(_ctx.Assistant?.Name);
+    }
+
+    private void AppendComplaintPromptInstructionIfRequired()
+    {
+        _ctx.Prompt = AiSpeechAssistantComplaintInfoHelper.AppendPromptInstructionIfEnabled(
+            _ctx.Prompt,
+            _ctx.FunctionCalls.Select(x => x.Name));
     }
 }

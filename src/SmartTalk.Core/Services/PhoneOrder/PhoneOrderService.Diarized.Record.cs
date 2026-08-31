@@ -11,6 +11,12 @@ namespace SmartTalk.Core.Services.PhoneOrder;
 public partial interface IPhoneOrderService
 {
     Task ProcessPhoneOrderDiarizedTranscriptionAsync(List<PhoneOrderDiarizedSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken);
+
+    Task ProcessPhoneOrderDiarizedTranscriptionAsync(
+        List<PhoneOrderDiarizedSpeakInfoDto> phoneOrderInfo,
+        PhoneOrderRecord record,
+        bool optimizeConversations,
+        CancellationToken cancellationToken);
 }
 
 public partial class PhoneOrderService
@@ -145,6 +151,19 @@ public partial class PhoneOrderService
 
     public async Task ProcessPhoneOrderDiarizedTranscriptionAsync(List<PhoneOrderDiarizedSpeakInfoDto> phoneOrderInfo, PhoneOrderRecord record, CancellationToken cancellationToken)
     {
+        await ProcessPhoneOrderDiarizedTranscriptionAsync(
+            phoneOrderInfo,
+            record,
+            optimizeConversations: true,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ProcessPhoneOrderDiarizedTranscriptionAsync(
+        List<PhoneOrderDiarizedSpeakInfoDto> phoneOrderInfo,
+        PhoneOrderRecord record,
+        bool optimizeConversations,
+        CancellationToken cancellationToken)
+    {
         try
         {
             var transcript = string.Join("\n", phoneOrderInfo.Where(x => !string.IsNullOrWhiteSpace(x.Text)).Select(x => $"{x.Speaker}: {x.Text}"));
@@ -156,7 +175,7 @@ public partial class PhoneOrderService
             var originalReport = await _phoneOrderDataProvider.GetOriginalPhoneOrderRecordReportAsync(record.Id, cancellationToken).ConfigureAwait(false);
             var reportText = originalReport?.Report ?? record.TranscriptionText ?? string.Empty;
 
-            var optimizedConversations = conversations.Count == 0
+            var optimizedConversations = conversations.Count == 0 || !optimizeConversations
                 ? conversations
                 : await OptimizePhoneOrderDiarizedConversationsAsync(
                     phoneOrderInfo,
