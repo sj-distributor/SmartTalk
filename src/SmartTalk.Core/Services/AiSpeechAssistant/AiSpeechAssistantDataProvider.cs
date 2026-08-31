@@ -59,6 +59,8 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     
     Task UpdateAiSpeechAssistantsAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, bool forceSave = true, CancellationToken cancellationToken = default);
 
+    Task<int> UpdateAiSpeechAssistantOrderPushByStoreIdAsync(int storeId, bool isAllowOrderPush, CancellationToken cancellationToken = default);
+
     Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantActiveKnowledgesAsync(List<int> assistantIds, CancellationToken cancellationToken);
     
     Task<AiSpeechAssistantKnowledge> GetAiSpeechAssistantKnowledgeOrderByVersionAsync(int assistantId, CancellationToken cancellationToken);
@@ -404,6 +406,22 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         await _repository.UpdateAllAsync(assistants, cancellationToken).ConfigureAwait(false);
 
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<int> UpdateAiSpeechAssistantOrderPushByStoreIdAsync(int storeId, bool isAllowOrderPush, CancellationToken cancellationToken = default)
+    {
+        var assistantIdsQuery =
+            from store in _repository.QueryNoTracking<CompanyStore>().Where(x => x.Id == storeId)
+            join posAgent in _repository.QueryNoTracking<PosAgent>() on store.Id equals posAgent.StoreId
+            join agentAssistant in _repository.QueryNoTracking<AgentAssistant>() on posAgent.AgentId equals agentAssistant.AgentId
+            select agentAssistant.AssistantId;
+
+        return await _repository.Query<Domain.AISpeechAssistant.AiSpeechAssistant>()
+            .Where(x => assistantIdsQuery.Contains(x.Id))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(x => x.IsAllowOrderPush, isAllowOrderPush),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantActiveKnowledgesAsync(List<int> assistantIds, CancellationToken cancellationToken)

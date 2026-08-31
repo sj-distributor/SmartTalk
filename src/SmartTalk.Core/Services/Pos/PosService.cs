@@ -601,13 +601,10 @@ public partial class PosService : IPosService
 
     private async Task CheckAiSpeechAssistantOrderPushSwitchAsync(int storeId, bool isManualReview, CancellationToken cancellationToken)
     {
-        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var updatedCount = await _aiSpeechAssistantDataProvider
+            .UpdateAiSpeechAssistantOrderPushByStoreIdAsync(storeId, !isManualReview, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get assistants: {@Assistants} by store id: {StoreId}", assistants, storeId);
-        
-        assistants.ForEach(x => x.IsAllowOrderPush = !isManualReview);
-        
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("Updated assistant order push switch by store id: {StoreId}, IsAllowOrderPush={IsAllowOrderPush}, UpdatedCount={UpdatedCount}", storeId, !isManualReview, updatedCount);
     }
 
     private async Task InitialAgentAsync(int storeId, CancellationToken cancellationToken)

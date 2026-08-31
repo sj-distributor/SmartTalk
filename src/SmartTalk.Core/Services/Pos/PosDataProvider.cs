@@ -163,8 +163,8 @@ public partial class PosDataProvider : IPosDataProvider
 
     public async Task<CompanyStoreDto> GetPosCompanyStoreDetailAsync(int? id = null, CancellationToken cancellationToken = default)
     {
-        var query = from company in _repository.Query<Company>()
-            join store in _repository.Query<CompanyStore>() on company.Id equals store.CompanyId
+        var query = from company in _repository.QueryNoTracking<Company>()
+            join store in _repository.QueryNoTracking<CompanyStore>() on company.Id equals store.CompanyId
             select new CompanyStoreDto
             {
                 Id = store.Id,
