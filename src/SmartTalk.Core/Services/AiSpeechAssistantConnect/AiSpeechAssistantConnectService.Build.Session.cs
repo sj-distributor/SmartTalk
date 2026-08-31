@@ -1,9 +1,6 @@
-using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters.Providers.OpenAi;
-using SmartTalk.Core.Services.AiSpeechAssistant;
-using SmartTalk.Messages.Dto.AiSpeechAssistant;
-using SmartTalk.Messages.Dto.RealtimeAi;
+using SmartTalk.Messages.Constants;
 using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 
