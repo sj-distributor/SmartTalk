@@ -281,6 +281,9 @@ public partial class AiSpeechAssistantService
                 .ConfigureAwait(false);
         }
 
+        if (prevKnowledge == null)
+            await EnableDefaultKnowledgeCapabilitiesIfRequiredAsync(assistant, latestKnowledge, cancellationToken).ConfigureAwait(false);
+
         if (command.Premise != null)
         {
             if (!string.IsNullOrEmpty(command.Premise))
@@ -532,7 +535,7 @@ public partial class AiSpeechAssistantService
             throw new Exception("Do not have the store permission to operate");
         
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
-        
+
         await UpdateAssistantNumberIfRequiredAsync(assistant.AnsweringNumberId, command.AnsweringNumberId, cancellationToken).ConfigureAwait(false);
         
         _mapper.Map(command, assistant);
@@ -541,10 +544,14 @@ public partial class AiSpeechAssistantService
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync([assistant], cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await UpdateAiSpeechAssistantConfigsAsync(assistant, command.TransferCallNumber, cancellationToken).ConfigureAwait(false);
+
+        var assistantDto = _mapper.Map<AiSpeechAssistantDto>(assistant);
+        assistantDto.PhoneNoiseReductionEnabled = await GetPhoneNoiseReductionEnabledAsync(
+            assistant.Id, assistant.ModelProvider, cancellationToken).ConfigureAwait(false);
         
         return new UpdateAiSpeechAssistantResponse
         {
-            Data = _mapper.Map<AiSpeechAssistantDto>(assistant)
+            Data = assistantDto
         };
     }
 
@@ -565,7 +572,7 @@ public partial class AiSpeechAssistantService
 
         if (storeUser == null)
             throw new Exception("Do not have the store permission to operate");
-        
+
         var assistants = await _aiSpeechAssistantDataProvider.DeleteAiSpeechAssistantByIdsAsync(command.AssistantIds, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (assistants.Count == 0) throw new Exception("Delete assistants failed.");
@@ -582,7 +589,7 @@ public partial class AiSpeechAssistantService
             Data = _mapper.Map<List<AiSpeechAssistantDto>>(assistants)
         };
     }
-
+    
     public async Task<UpdateAiSpeechAssistantNumberResponse> UpdateAiSpeechAssistantNumberAsync(UpdateAiSpeechAssistantNumberCommand command, CancellationToken cancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantAsync(command.AssistantId, cancellationToken).ConfigureAwait(false);
@@ -778,7 +785,8 @@ public partial class AiSpeechAssistantService
     {
         var assistant = await InitialAssistantRelatedInfoAsync(command, cancellationToken).ConfigureAwait(false);
         
-        await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
+        var knowledge = await InitialAssistantKnowledgeAsync(command, assistant, cancellationToken).ConfigureAwait(false);
+        await EnableDefaultKnowledgeCapabilitiesIfRequiredAsync(assistant, knowledge, cancellationToken).ConfigureAwait(false);
 
         return assistant;
     }
@@ -805,6 +813,7 @@ public partial class AiSpeechAssistantService
             AgentType.Assistant => await InitialAssistantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.Restaurant => await InitialRestaurantInternalAsync(command, cancellationToken).ConfigureAwait(false),
             AgentType.PosCompanyStore => await InitialPosCompanyStoreInternalAsync(command, cancellationToken).ConfigureAwait(false),
+            AgentType.Sales => await InitialAiAgentInternalAsync(command, cancellationToken).ConfigureAwait(false),
             _ => throw new NotSupportedException(nameof(command.AgentType))
         };
         
@@ -815,13 +824,15 @@ public partial class AiSpeechAssistantService
             Name = command.AssistantName,
             AnsweringNumberId = number?.Id,
             AnsweringNumber = number?.Number,
-            CreatedBy = _currentUser.Id.Value,
+            CreatedBy = command.CreatedBy ?? _currentUser.Id.Value,
             ModelUrl = command.AgentType == AgentType.AiKid ? AiSpeechAssistantStore.AiKidDefaultUrl : AiSpeechAssistantStore.DefaultUrl,
             ModelProvider = RealtimeAiProvider.OpenAi,
             Channel = command.Channels == null ? null : string.Join(",", command.Channels.Select(x => (int)x)),
             IsDisplay = command.IsDisplay,
             IsDefault = isDefault,
-            ModelLanguage = command.AgentType == AgentType.Agent ? string.IsNullOrWhiteSpace(command.ModelLanguage) ? "English" : command.ModelLanguage : null,
+            ModelLanguage = command.AgentType is AgentType.Agent or AgentType.Sales
+                ? string.IsNullOrWhiteSpace(command.ModelLanguage) ? "en" : command.ModelLanguage
+                : null,
             WaitInterval = agent.WaitInterval,
             IsTransferHuman = agent.IsTransferHuman,
             IsAutoGenerateOrder = false
@@ -840,8 +851,46 @@ public partial class AiSpeechAssistantService
         await UpdateAgentIfRequiredAsync(assistant, agent, cancellationToken).ConfigureAwait(false);
 
         await UpdateAiSpeechAssistantConfigsAsync(assistant, agent.TransferCallNumber, cancellationToken).ConfigureAwait(false);
+
+        if (assistant.HasPhoneChannel())
+        {
+            var phoneNoiseReductionEnabled = await ResolveAgentPhoneNoiseReductionEnabledAsync(
+                    agent.Id, assistant.Id, cancellationToken)
+                .ConfigureAwait(false);
+            await _aiSpeechAssistantDataProvider.SetPhoneNoiseReductionAsync(assistant, phoneNoiseReductionEnabled, cancellationToken)
+                .ConfigureAwait(false);
+        }
         
         return assistant;
+    }
+
+    private async Task<bool> ResolveAgentPhoneNoiseReductionEnabledAsync(
+        int agentId,
+        int currentAssistantId,
+        CancellationToken cancellationToken)
+    {
+        var existingAssistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByAgentIdAsync(agentId, cancellationToken)
+            .ConfigureAwait(false);
+        var phoneAssistants = (existingAssistants ?? [])
+            .Where(x => x.Id != currentAssistantId &&
+                        x.ModelProvider == RealtimeAiProvider.OpenAi &&
+                        x.HasPhoneChannel())
+            .OrderByDescending(x => x.CreatedDate)
+            .ThenByDescending(x => x.Id)
+            .ToList();
+
+        if (phoneAssistants.Count == 0) return true;
+
+        var functionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+            phoneAssistants.Select(x => x.Id).ToList(),
+            [AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName],
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+            RealtimeAiProvider.OpenAi,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (functionCalls.Count == 0) return false;
+
+        return functionCalls.Any(x => x.IsActive);
     }
 
     private async Task<Agent> AddAgentAsync(int? relateId, int? serviceProviderId, AgentType type, AgentSourceSystem sourceSystem, bool isDisplay, bool isSurface, CancellationToken cancellationToken)
@@ -945,8 +994,10 @@ public partial class AiSpeechAssistantService
         return (agent, number, true);
     }
     
-    private async Task InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
+    private async Task<AiSpeechAssistantKnowledge> InitialAssistantKnowledgeAsync(AddAiSpeechAssistantCommand command, Domain.AISpeechAssistant.AiSpeechAssistant assistant, CancellationToken cancellationToken)
     {
+        Log.Information("InitialAssistantKnowledgeAsync. DetailCount={DetailCount}", command.Details?.Count ?? 0);
+
         var knowledge = new AiSpeechAssistantKnowledge
         {
             Version = "1.0",
@@ -955,7 +1006,7 @@ public partial class AiSpeechAssistantService
             ModelLanguage = command.ModelLanguage,
             AssistantId = assistant.Id,
             Greetings = command.Greetings,
-            CreatedBy = _currentUser.Id.Value,
+            CreatedBy = command.CreatedBy ?? _currentUser.Id.Value,
             Prompt = string.Empty
         };
 
@@ -963,7 +1014,7 @@ public partial class AiSpeechAssistantService
 
         var promptSegments = new List<string>();
 
-        if (command.Details is { Count: > 0 })
+        if (command.SourceSystem != AgentSourceSystem.AiResource && command.Details is { Count: > 0 })
         {
             var details = command.Details.Select(x => new AiSpeechAssistantKnowledgeDetail
             {
@@ -980,6 +1031,13 @@ public partial class AiSpeechAssistantService
             var detailPrompt = await GenerateKnowledgePromptAsync(details, cancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(detailPrompt))
                 promptSegments.Add(detailPrompt);
+        }
+        else if (command.SourceSystem == AgentSourceSystem.AiResource && command.Details is { Count: > 0 })
+        {
+            Log.Warning(
+                "InitialAssistantKnowledgeAsync ignored details for AiResource assistant. AssistantId={AssistantId}, DetailCount={DetailCount}",
+                assistant.Id,
+                command.Details.Count);
         }
 
         if (!string.IsNullOrWhiteSpace(knowledge.Json))
@@ -1006,6 +1064,8 @@ public partial class AiSpeechAssistantService
 
         if (!string.IsNullOrWhiteSpace(knowledge.Prompt))
             await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantKnowledgesAsync([knowledge], cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return knowledge;
     }
     
     private async Task<AiSpeechAssistantKnowledge> UpdatePreviousKnowledgeIfRequiredAsync(int assistantId, bool isActive, CancellationToken cancellationToken)
@@ -1050,6 +1110,7 @@ public partial class AiSpeechAssistantService
             {
                 KnowledgeId = targetKnowledgeId,
                 SceneId = x.SceneId,
+                SourceType = x.SourceType,
                 CreatedAt = DateTimeOffset.UtcNow
             })
             .ToList();
@@ -1059,9 +1120,7 @@ public partial class AiSpeechAssistantService
 
     private async Task RefreshKnowledgeScenePromptAsync(AiSpeechAssistantKnowledge knowledge, CancellationToken cancellationToken)
     {
-        var scenePrompt = await _aiSpeechAssistantKnowledgePromptService
-            .GenerateScenePromptAsync(knowledge.Id, cancellationToken)
-            .ConfigureAwait(false);
+        var scenePrompt = await _aiSpeechAssistantKnowledgePromptService.GenerateScenePromptAsync(knowledge.Id, cancellationToken).ConfigureAwait(false);
 
         if (string.Equals(knowledge.ScenePrompt ?? string.Empty, scenePrompt, StringComparison.Ordinal))
             return;
@@ -2236,6 +2295,7 @@ public partial class AiSpeechAssistantService
                 {
                     KnowledgeId = oldToNewKnowledgeIdMap[r.KnowledgeId],
                     SceneId = r.SceneId,
+                    SourceType = r.SourceType,
                     CreatedAt = DateTimeOffset.UtcNow
                 }).ToList();
 
