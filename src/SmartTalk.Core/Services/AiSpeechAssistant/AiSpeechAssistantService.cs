@@ -39,6 +39,7 @@ using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Services.Twilio;
+using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Core.Settings.WorkWeChat;
 using SmartTalk.Core.Settings.ZhiPuAi;
 using Task = System.Threading.Tasks.Task;
@@ -98,6 +99,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ITwilioService _twilioService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly AiSpeechAssistantSettings _aiSpeechAssistantSettings;
     private readonly IAiSpeechAssistantKnowledgePromptService _aiSpeechAssistantKnowledgePromptService;
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
 
@@ -140,6 +142,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ITwilioService twilioService,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        AiSpeechAssistantSettings aiSpeechAssistantSettings,
         IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
         IKnowledgeScenarioDataProvider knowledgeScenarioDataProvider,
         WebSocket openaiWebSocket = null)
@@ -174,6 +177,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _twilioService = twilioService;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _aiSpeechAssistantSettings = aiSpeechAssistantSettings;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
 

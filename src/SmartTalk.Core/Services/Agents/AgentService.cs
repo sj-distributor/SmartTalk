@@ -147,7 +147,11 @@ public class AgentService : IAgentService
         var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
             agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
 
-        return new AddAgentResponse { Data = MapAgentDto(agent, transferCallConfigs) };
+        var agentDto = _mapper.Map<AgentDto>(agent);
+        agentDto.PhoneNoiseReductionEnabled = command.PhoneNoiseReductionEnabled ?? true;
+        agentDto.AgentTransferCallConfigs = transferCallConfigs;
+
+        return new AddAgentResponse { Data = agentDto };
     }
 
     public async Task<UpdateAgentResponse> UpdateAgentAsync(UpdateAgentCommand command, CancellationToken cancellationToken)
@@ -161,15 +165,18 @@ public class AgentService : IAgentService
         _mapper.Map(command, agent);
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        await HandleAiSpeechAssistantsAsync(agent, cancellationToken).ConfigureAwait(false);
-
         var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
             agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
 
+        await HandleAiSpeechAssistantsAsync(agent, command.PhoneNoiseReductionEnabled, cancellationToken).ConfigureAwait(false);
+
+        var agentDto = MapAgentDto(agent, transferCallConfigs);
+        if (command.PhoneNoiseReductionEnabled.HasValue)
+            agentDto.PhoneNoiseReductionEnabled = command.PhoneNoiseReductionEnabled.Value;
+
         return new UpdateAgentResponse
         {
-            Data = MapAgentDto(agent, transferCallConfigs)
+            Data = agentDto
         };
     }
 
@@ -235,7 +242,7 @@ public class AgentService : IAgentService
         
         var result = _mapper.Map<List<AgentDto>>(agents);
 
-        await EnrichAgentTransferCallConfigsAsync(result, cancellationToken).ConfigureAwait(false);
+        await EnrichAgentsAsync(result, cancellationToken).ConfigureAwait(false);
 
         return new GetAgentsWithAssistantsResponse { Data = result };
     }
@@ -300,7 +307,45 @@ public class AgentService : IAgentService
             agent.Assistants = _mapper.Map<List<AiSpeechAssistantDto>>(assistants);
         }
 
+        await EnrichAssistantsNoiseReductionAsync(agents.SelectMany(x => x.Assistants ?? []).ToList(), cancellationToken).ConfigureAwait(false);
+
+        EnrichAgentsNoiseReduction(agents);
+
         await EnrichAgentTransferCallConfigsAsync(agents, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnrichAssistantsNoiseReductionAsync(List<AiSpeechAssistantDto> assistants, CancellationToken cancellationToken)
+    {
+        if (assistants == null || assistants.Count == 0) return;
+
+        var assistantIds = assistants.Select(x => x.Id).ToList();
+
+        var noiseReductionFunctionCalls = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantFunctionCallsAsync(
+            assistantIds,
+            [AiSpeechAssistantFunctionCallHelper.InputAudioNoiseReductionName],
+            AiSpeechAssistantSessionConfigType.InputAudioNoiseReduction,
+            isActive: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        foreach (var assistant in assistants)
+        {
+            assistant.PhoneNoiseReductionEnabled = noiseReductionFunctionCalls.Any(x =>
+                x.AssistantId == assistant.Id &&
+                x.ModelProvider == assistant.ModelProvider);
+        }
+    }
+
+    private static void EnrichAgentsNoiseReduction(List<AgentDto> agents)
+    {
+        foreach (var agent in agents)
+        {
+            var phoneAssistants = (agent.Assistants ?? [])
+                .Where(x => x.ModelProvider == RealtimeAiProvider.OpenAi && x.Channels.Contains(AiSpeechAssistantChannel.PhoneChat))
+                .ToList();
+
+            agent.PhoneNoiseReductionEnabled = phoneAssistants.Count == 0 ||
+                                                phoneAssistants.Any(x => x.PhoneNoiseReductionEnabled);
+        }
     }
 
     private async Task<AgentDto> MapAgentDtoAsync(Agent agent, CancellationToken cancellationToken)
@@ -442,7 +487,7 @@ public class AgentService : IAgentService
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantInboundRouteAsync(routes, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task HandleAiSpeechAssistantsAsync(Agent agent, CancellationToken cancellationToken)
+    private async Task HandleAiSpeechAssistantsAsync(Agent agent, bool? phoneNoiseReductionEnabled, CancellationToken cancellationToken)
     {
         var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByAgentIdAsync(agent.Id, cancellationToken).ConfigureAwait(false);
         
@@ -460,8 +505,29 @@ public class AgentService : IAgentService
         await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
         
         await HandleAiSpeechAssistantHumanContactAsync(assistants, agent.TransferCallNumber, cancellationToken).ConfigureAwait(false);
+
+        await HandlePhoneNoiseReductionIfRequiredAsync(assistants, phoneNoiseReductionEnabled, cancellationToken).ConfigureAwait(false);
         
         await HandleAiSpeechAssistantConfigsAsync(agent, assistants, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task HandlePhoneNoiseReductionIfRequiredAsync(
+        List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants,
+        bool? phoneNoiseReductionEnabled,
+        CancellationToken cancellationToken)
+    {
+        if (!phoneNoiseReductionEnabled.HasValue) return;
+
+        var phoneAssistants = assistants
+            .Where(x => x.ModelProvider == RealtimeAiProvider.OpenAi && x.HasPhoneChannel())
+            .ToList();
+
+        foreach (var assistant in phoneAssistants)
+        {
+            await _aiSpeechAssistantDataProvider
+                .SetPhoneNoiseReductionAsync(assistant, phoneNoiseReductionEnabled.Value, cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
     
     private async Task HandleAiSpeechAssistantHumanContactAsync(List<Domain.AISpeechAssistant.AiSpeechAssistant> assistants, string number, CancellationToken cancellationToken)
