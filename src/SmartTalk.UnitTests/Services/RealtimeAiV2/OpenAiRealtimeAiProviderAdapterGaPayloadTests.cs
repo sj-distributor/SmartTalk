@@ -194,4 +194,18 @@ public class OpenAiRealtimeAiProviderAdapterGaPayloadTests
 
         json["session"]!["instructions"]!.Value<string>().ShouldBe("你是收銀員");
     }
+
+    [Fact]
+    public void BuildSessionInstructionsUpdateMessage_IncludesRealtimeSessionTypeAndInstructions()
+    {
+        var adapter = NewAdapter();
+
+        var json = JObject.Parse(adapter.BuildSessionInstructionsUpdateMessage("Updated customer item knowledge."));
+        var session = (JObject)json["session"]!;
+
+        json["type"]!.Value<string>().ShouldBe("session.update");
+        session["type"]!.Value<string>().ShouldBe("realtime");
+        session["instructions"]!.Value<string>().ShouldBe("Updated customer item knowledge.");
+        session.Properties().Select(x => x.Name).ShouldBe(new[] { "type", "instructions" });
+    }
 }

@@ -75,6 +75,20 @@ public partial class RealtimeAiService
         await QueueOrTriggerProviderResponseAsync("text input").ConfigureAwait(false);
     }
 
+    private async Task UpdateSessionInstructionsAsync(string instructions)
+    {
+        var message = _ctx.ProviderAdapter.BuildSessionInstructionsUpdateMessage(instructions);
+        if (message == null)
+        {
+            Log.Warning("[RealtimeAi] Provider does not support session instruction updates, SessionId: {SessionId}, Provider: {Provider}",
+                _ctx.SessionId, _ctx.Options.ModelConfig.Provider);
+            return;
+        }
+
+        _ctx.Options.ModelConfig.Prompt = instructions;
+        await SendToProviderAsync(message).ConfigureAwait(false);
+    }
+
     private async Task QueueOrTriggerProviderResponseAsync(string source)
     {
         if (!IsProviderSessionActive) return;
