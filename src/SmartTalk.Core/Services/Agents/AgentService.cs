@@ -313,6 +313,7 @@ public class AgentService : IAgentService
         }
 
         await EnrichAssistantsNoiseReductionAsync(agents.SelectMany(x => x.Assistants ?? []).ToList(), cancellationToken).ConfigureAwait(false);
+
         EnrichAgentsNoiseReduction(agents);
 
         await EnrichAgentTransferCallConfigsAsync(agents, cancellationToken).ConfigureAwait(false);
@@ -395,9 +396,7 @@ public class AgentService : IAgentService
         if (agents == null || agents.Count == 0) return;
 
         var configs = await _agentDataProvider.GetAgentTransferCallConfigsAsync(agents.Select(x => x.Id).ToList(), cancellationToken).ConfigureAwait(false);
-        var lookup = (configs ?? [])
-            .GroupBy(x => x.AgentId)
-            .ToDictionary(x => x.Key, x => _mapper.Map<List<AgentTransferCallConfigDto>>(x.ToList()));
+        var lookup = configs.GroupBy(x => x.AgentId).ToDictionary(x => x.Key, x => _mapper.Map<List<AgentTransferCallConfigDto>>(x.ToList()));
 
         foreach (var agent in agents)
         {
