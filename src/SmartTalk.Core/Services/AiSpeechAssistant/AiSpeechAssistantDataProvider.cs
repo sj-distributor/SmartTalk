@@ -177,9 +177,20 @@ public partial interface IAiSpeechAssistantDataProvider : IScopedDependency
     Task<List<AiSpeechAssistantKnowledgeDetail>> GetAiSpeechAssistantKnowledgeDetailsByKnowledgeIdsAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledge>> GetAiSpeechAssistantKnowledgeAsync(List<int> knowledgeIds, CancellationToken cancellationToken = default);
+
+    Task<List<CrmCustomerContactPhoneMap>> GetCrmCustomerContactPhoneMapsByCompanyIdAsync(int companyId, CancellationToken cancellationToken = default);
+
+    Task<CrmCustomerContactPhoneMap> GetCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(int agentId, string normalizedPhoneNumber, CancellationToken cancellationToken = default);
+
+    Task AddCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task UpdateCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task DeleteCrmCustomerContactPhoneMapsAsync(List<CrmCustomerContactPhoneMap> mappings, bool forceSave = true, CancellationToken cancellationToken = default);
     
     Task<List<AiSpeechAssistantKnowledgeDetail>> UpdateAiSpeechAssistantKnowledgeDetailsAsync(List<AiSpeechAssistantKnowledgeDetail> details, bool forceSave = true, CancellationToken cancellationToken = default);
-
+    
+    Task<bool> HasCrmCustomerContactPhoneMapsAsync(int companyId, CancellationToken cancellationToken = default);
 }
 
 public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvider
@@ -1048,5 +1059,15 @@ public partial class AiSpeechAssistantDataProvider : IAiSpeechAssistantDataProvi
         if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return details;
+    }
+    
+    public async Task<bool> HasCrmCustomerContactPhoneMapsAsync(int companyId, CancellationToken cancellationToken = default)
+    {
+        if (companyId <= 0)
+            return false;
+
+        return await _repository.Query<CrmCustomerContactPhoneMap>()
+            .AnyAsync(x => x.CompanyId == companyId, cancellationToken)
+            .ConfigureAwait(false);
     }
 }

@@ -103,6 +103,7 @@ public class InternalHangfireRegistrar : HangfireRegistrarBase
         var customerItemsConcurrency = Math.Max(1, configuration.GetValue<int>("CustomerItemsRefreshConcurrency", 5));
         
         manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreSyncCrmSalesAutoCreate, new SemaphoreOptions(maxCount: 1));
+        manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreRefreshCrmCustomerContactPhoneMap, new SemaphoreOptions(maxCount: 1));
         manager.AddOrUpdateSemaphore(HangfireConstants.SemaphoreHiFoodCacheCustomerItems, new SemaphoreOptions(maxCount: customerItemsConcurrency));
     }
 

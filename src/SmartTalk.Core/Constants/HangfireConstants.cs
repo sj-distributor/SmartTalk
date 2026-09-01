@@ -27,4 +27,6 @@ public static class HangfireConstants
     public const string SemaphoreHiFoodCacheCustomerItems = "semaphore-hi-food-cache-customer-items";
 
     public const string SemaphoreSyncCrmSalesAutoCreate = "semaphore-sync-crm-sales-auto-create";
+
+    public const string SemaphoreRefreshCrmCustomerContactPhoneMap = "semaphore-refresh-crm-customer-contact-phone-map";
 }
