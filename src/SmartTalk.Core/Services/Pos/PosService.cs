@@ -390,8 +390,10 @@ public partial class PosService : IPosService
         }
         else
         {
-            var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+            Log.Information("GetCurrentUserStores current user: Id={UserId}", _currentUser.Id);
 
+            var storeUsers = await _posDataProvider.GetPosStoreUsersByUserIdAsync(_currentUser.Id.Value, cancellationToken).ConfigureAwait(false);
+            
             if (storeUsers.Count == 0)
                 return new GetCurrentUserStoresResponse { Data = [] };
 
