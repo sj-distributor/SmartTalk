@@ -829,7 +829,7 @@ public class AiResourceSyncServiceTests
             });
         aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
             .Returns([]);
-        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>())
+        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(1, Arg.Any<CancellationToken>())
             .Returns(false);
 
         List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap> capturedMappings = null;
@@ -856,7 +856,7 @@ public class AiResourceSyncServiceTests
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4152182467" && x.ContactName == "NICOLE");
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4155357933" && x.ContactName == "JINGXIAN");
         Assert.Contains(capturedMappings, x => x.ContactPhoneNormalized == "4154076788" && x.ContactName == "STEVEN");
-        await aiSpeechAssistantDataProvider.Received(1).HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>());
+        await aiSpeechAssistantDataProvider.Received(1).HasCrmCustomerContactPhoneMapsAsync(1, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -905,7 +905,7 @@ public class AiResourceSyncServiceTests
             });
         aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
             .Returns([]);
-        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>())
+        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(1, Arg.Any<CancellationToken>())
             .Returns(true);
 
         var sut = CreateSut(
@@ -920,7 +920,7 @@ public class AiResourceSyncServiceTests
     }
 
     [Fact]
-    public async Task RefreshCrmCustomerContactPhoneMapsAsync_NotDeactivateMissingMappingsIncrementalSync()
+    public async Task RefreshCrmCustomerContactPhoneMapsAsync_DeletesOnlyStaleMappingsForChangedCustomers()
     {
         var customer = new CrmSalesAutoSyncCustomerDto
         {
@@ -968,6 +968,19 @@ public class AiResourceSyncServiceTests
             CreatedDate = DateTimeOffset.UtcNow.AddDays(-1),
             LastModifiedDate = DateTimeOffset.UtcNow.AddDays(-1)
         };
+        var unaffectedMapping = new SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap
+        {
+            Id = 89,
+            CompanyId = 1,
+            AgentId = 202,
+            AssistantId = 9802,
+            CustomerId = "UNCHANGED",
+            CustomerName = "UNCHANGED CUSTOMER",
+            ContactName = "KEEP",
+            ContactPhoneNormalized = "4151111111",
+            CreatedDate = DateTimeOffset.UtcNow.AddDays(-1),
+            LastModifiedDate = DateTimeOffset.UtcNow.AddDays(-1)
+        };
 
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
         aiSpeechAssistantDataProvider.GetCrmAutoSyncAssistantByStoreAndNameAsync(10, "118895", Arg.Any<CancellationToken>())
@@ -978,8 +991,8 @@ public class AiResourceSyncServiceTests
                 Name = "118895"
             });
         aiSpeechAssistantDataProvider.GetCrmCustomerContactPhoneMapsByCompanyIdAsync(1, Arg.Any<CancellationToken>())
-            .Returns([existingMapping]);
-        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(Arg.Any<CancellationToken>())
+            .Returns([existingMapping, unaffectedMapping]);
+        aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(1, Arg.Any<CancellationToken>())
             .Returns(true);
 
         var sut = CreateSut(
@@ -989,9 +1002,10 @@ public class AiResourceSyncServiceTests
 
         await sut.RefreshCrmCustomerContactPhoneMapsAsync(CancellationToken.None);
 
-        await aiSpeechAssistantDataProvider.DidNotReceive().UpdateCrmCustomerContactPhoneMapsAsync(
-            Arg.Is<List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap>>(x => x.Any(m => m.Id == 88)),
-            Arg.Any<bool>(),
+        await aiSpeechAssistantDataProvider.Received(1).DeleteCrmCustomerContactPhoneMapsAsync(
+            Arg.Is<List<SmartTalk.Core.Domain.Sales.CrmCustomerContactPhoneMap>>(x =>
+                x.Count == 1 && x[0].Id == 88),
+            true,
             Arg.Any<CancellationToken>());
     }
     [Fact]

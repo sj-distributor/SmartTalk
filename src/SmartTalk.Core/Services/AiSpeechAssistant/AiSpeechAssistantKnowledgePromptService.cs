@@ -292,12 +292,6 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
 
         Log.Information("[KnowledgeDetailSync] Start. CompanyId={CompanyId}", companyId);
         var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(companyId: companyId, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (mappings.Count == 0)
-        {
-            Log.Information("[KnowledgeDetailSync] Skip. No active mapping. CompanyId={CompanyId}", companyId);
-            return;
-        }
-
         var mappingByLanguage = mappings
             .GroupBy(x => x.Language)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.CreatedAt).First().SceneId);
@@ -342,16 +336,29 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
             if (!TryResolveKnowledgeLanguage(knowledge.ModelLanguage, out var language))
                 continue;
 
-            if (!mappingByLanguage.TryGetValue(language.Value, out var sceneId))
-                continue;
+            relationMap.TryGetValue(knowledge.Id, out var relations);
+            relations ??= [];
 
-            if (!sceneItemsLookup.TryGetValue(sceneId, out var items) || items.Count == 0)
-                continue;
+            if (!mappingByLanguage.TryGetValue(language.Value, out var sceneId) ||
+                !sceneItemsLookup.TryGetValue(sceneId, out var items) ||
+                items.Count == 0)
+            {
+                var removedRelations = relations
+                    .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync)
+                    .ToList();
+                if (removedRelations.Count > 0)
+                {
+                    relationsToDelete.AddRange(removedRelations);
+                    affectedKnowledgeIds.Add(knowledge.Id);
+                }
 
-            if (!relationMap.TryGetValue(knowledge.Id, out var relations) || relations.All(x => x.SceneId != sceneId))
+                continue;
+            }
+
+            if (relations.All(x => x.SceneId != sceneId))
             {
                 relationsToAdd.Add(new AiSpeechAssistantKnowledgeSceneRelation
-                {
+            {
                     KnowledgeId = knowledge.Id,
                     SceneId = sceneId,
                     SourceType = AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync,
@@ -360,9 +367,9 @@ public class AiSpeechAssistantKnowledgePromptService : IAiSpeechAssistantKnowled
                 affectedKnowledgeIds.Add(knowledge.Id);
             }
 
-            var obsoleteCrmRelations = relations?
+            var obsoleteCrmRelations = relations
                 .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync && x.SceneId != sceneId)
-                .ToList() ?? [];
+                .ToList();
 
             if (obsoleteCrmRelations.Count > 0)
             {

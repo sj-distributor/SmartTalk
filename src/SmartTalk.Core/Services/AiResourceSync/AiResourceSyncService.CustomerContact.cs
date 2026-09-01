@@ -19,9 +19,13 @@ public partial class AiResourceSyncService
         if (company == null)
             throw new Exception($"Sales company [{_salesSetting.CompanyName}] not found.");
 
-        var isFullSync = !await _aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(cancellationToken).ConfigureAwait(false);
+        var isFullSync = !await _aiSpeechAssistantDataProvider.HasCrmCustomerContactPhoneMapsAsync(company.Id, cancellationToken).ConfigureAwait(false);
         var syncCustomers = await LoadCrmCustomerContactPhoneMapCustomersAsync(isFullSync, cancellationToken).ConfigureAwait(false);
         syncCustomers ??= [];
+        var affectedCustomerIds = syncCustomers
+            .Select(x => x.CustomerId?.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var customerGroups = AiResourceSyncGrouping.BuildCustomerGroups(syncCustomers);
         var existingStores = await _posDataProvider.GetPosCompanyStoresAsync(companyIds: [company.Id], cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -32,7 +36,8 @@ public partial class AiResourceSyncService
             .GroupBy(x => x.StoreName)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.Store.CreatedDate).First().Store, StringComparer.OrdinalIgnoreCase);
 
-        await SyncCustomerContactPhoneMapsAsync(company.Id, customerGroups, storeMap, cancellationToken).ConfigureAwait(false);
+        await SyncCustomerContactPhoneMapsAsync(
+            company.Id, customerGroups, storeMap, affectedCustomerIds, isFullSync, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<List<CrmSalesAutoSyncCustomerDto>> LoadCrmCustomerContactPhoneMapCustomersAsync(bool isFullSync, CancellationToken cancellationToken)
@@ -46,7 +51,8 @@ public partial class AiResourceSyncService
     }
     
     private async Task SyncCustomerContactPhoneMapsAsync(int companyId, IReadOnlyList<CrmSalesAutoSyncCustomerGroup> customerGroups, 
-        IReadOnlyDictionary<string, CompanyStore> storeMap, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, CompanyStore> storeMap, IReadOnlySet<string> affectedCustomerIds,
+        bool isFullSync, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
         var desiredMappings = await BuildDesiredCustomerContactPhoneMapsAsync(
@@ -60,7 +66,8 @@ public partial class AiResourceSyncService
             .GetCrmCustomerContactPhoneMapsByCompanyIdAsync(companyId, cancellationToken)
             .ConfigureAwait(false) ?? [];
 
-        var (toAdd, toUpdate) = BuildCustomerContactPhoneMapChanges(desiredByKey, existingMappings, now);
+        var (toAdd, toUpdate, toDelete) = BuildCustomerContactPhoneMapChanges(
+            desiredByKey, existingMappings, affectedCustomerIds, isFullSync, now);
 
         if (toAdd.Count > 0)
             await _aiSpeechAssistantDataProvider.AddCrmCustomerContactPhoneMapsAsync(toAdd, true, cancellationToken).ConfigureAwait(false);
@@ -68,9 +75,12 @@ public partial class AiResourceSyncService
         if (toUpdate.Count > 0)
             await _aiSpeechAssistantDataProvider.UpdateCrmCustomerContactPhoneMapsAsync(toUpdate.DistinctBy(x => x.Id).ToList(), true, cancellationToken).ConfigureAwait(false);
 
+        if (toDelete.Count > 0)
+            await _aiSpeechAssistantDataProvider.DeleteCrmCustomerContactPhoneMapsAsync(toDelete, true, cancellationToken).ConfigureAwait(false);
+
         Log.Information(
-            "CRM contact phone map synced. CompanyId={CompanyId}, DesiredCount={DesiredCount}, Added={AddedCount}, Updated={UpdatedCount}",
-            companyId, desiredByKey.Count, toAdd.Count, toUpdate.Select(x => x.Id).Distinct().Count());
+            "CRM contact phone map synced. CompanyId={CompanyId}, IsFullSync={IsFullSync}, DesiredCount={DesiredCount}, Added={AddedCount}, Updated={UpdatedCount}, Deleted={DeletedCount}",
+            companyId, isFullSync, desiredByKey.Count, toAdd.Count, toUpdate.Select(x => x.Id).Distinct().Count(), toDelete.Count);
     }
 
     private async Task<List<CrmCustomerContactPhoneMap>> BuildDesiredCustomerContactPhoneMapsAsync(
@@ -122,14 +132,20 @@ public partial class AiResourceSyncService
             };
     }
 
-    private static (List<CrmCustomerContactPhoneMap> ToAdd, List<CrmCustomerContactPhoneMap> ToUpdate) BuildCustomerContactPhoneMapChanges(
+    private static (List<CrmCustomerContactPhoneMap> ToAdd, List<CrmCustomerContactPhoneMap> ToUpdate, List<CrmCustomerContactPhoneMap> ToDelete) BuildCustomerContactPhoneMapChanges(
         IReadOnlyDictionary<string, CrmCustomerContactPhoneMap> desiredByKey,
         IReadOnlyList<CrmCustomerContactPhoneMap> existingMappings,
+        IReadOnlySet<string> affectedCustomerIds,
+        bool isFullSync,
         DateTimeOffset now)
     {
         var existingByKey = existingMappings.ToDictionary(BuildCustomerContactPhoneMapKey, StringComparer.OrdinalIgnoreCase);
         var toAdd = new List<CrmCustomerContactPhoneMap>();
         var toUpdate = new List<CrmCustomerContactPhoneMap>();
+        var toDelete = existingMappings
+            .Where(existing => (isFullSync || affectedCustomerIds.Contains(existing.CustomerId)) &&
+                               !desiredByKey.ContainsKey(BuildCustomerContactPhoneMapKey(existing)))
+            .ToList();
 
         foreach (var (key, desired) in desiredByKey)
         {
@@ -148,7 +164,7 @@ public partial class AiResourceSyncService
             toUpdate.Add(existing);
         }
 
-        return (toAdd, toUpdate);
+        return (toAdd, toUpdate, toDelete);
     }
 
     private static string BuildCustomerContactPhoneMapKey(CrmCustomerContactPhoneMap mapping)
