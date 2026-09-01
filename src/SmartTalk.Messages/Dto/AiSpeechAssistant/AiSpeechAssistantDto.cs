@@ -51,8 +51,6 @@ public class AiSpeechAssistantDto
     
     public bool PhoneNoiseReductionEnabled { get; set; }
     
-    public bool? IsComplaintAnalysisEnabled { get; set; }
-
     public DateTimeOffset CreatedDate { get; set; }
     
     public int CreatedBy { get; set; }

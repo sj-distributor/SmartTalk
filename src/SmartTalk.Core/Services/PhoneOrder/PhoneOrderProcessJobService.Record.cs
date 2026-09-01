@@ -431,7 +431,9 @@ public partial class PhoneOrderProcessJobService
             sourceReportLanguage = SelectReportLanguageEnum(detection.Language);
         }
 
-        if (await ShouldRunComplaintAnalysisAsync(aiSpeechAssistant, agent, cancellationToken).ConfigureAwait(false))
+        var shouldRunComplaintAnalysis = await ShouldRunComplaintAnalysisAsync(agent, cancellationToken).ConfigureAwait(false);
+
+        if (shouldRunComplaintAnalysis)
         {
             try
             {
