@@ -144,8 +144,12 @@ public class AgentService : IAgentService
         
         await _posDataProvider.AddPosAgentsAsync([posAgent], cancellationToken: cancellationToken).ConfigureAwait(false);
         
+        var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
+            agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
+
         var agentDto = _mapper.Map<AgentDto>(agent);
         agentDto.PhoneNoiseReductionEnabled = command.PhoneNoiseReductionEnabled ?? true;
+        agentDto.AgentTransferCallConfigs = transferCallConfigs;
 
         return new AddAgentResponse { Data = agentDto };
     }
@@ -162,14 +166,18 @@ public class AgentService : IAgentService
         
         await _agentDataProvider.UpdateAgentsAsync([agent], cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        await HandleAiSpeechAssistantsAsync(agent, command.PhoneNoiseReductionEnabled, cancellationToken).ConfigureAwait(false);
-
         var transferCallConfigs = await ReplaceAgentTransferCallConfigsAsync(
             agent.Id, command.AgentTransferCallConfigs, cancellationToken).ConfigureAwait(false);
 
+        await HandleAiSpeechAssistantsAsync(agent, command.PhoneNoiseReductionEnabled, cancellationToken).ConfigureAwait(false);
+
+        var agentDto = MapAgentDto(agent, transferCallConfigs);
+        if (command.PhoneNoiseReductionEnabled.HasValue)
+            agentDto.PhoneNoiseReductionEnabled = command.PhoneNoiseReductionEnabled.Value;
+
         return new UpdateAgentResponse
         {
-            Data = MapAgentDto(agent, transferCallConfigs)
+            Data = agentDto
         };
     }
 
@@ -239,7 +247,7 @@ public class AgentService : IAgentService
         
         var result = _mapper.Map<List<AgentDto>>(agents);
 
-        await EnrichAgentTransferCallConfigsAsync(result, cancellationToken).ConfigureAwait(false);
+        await EnrichAgentsAsync(result, cancellationToken).ConfigureAwait(false);
 
         return new GetAgentsWithAssistantsResponse { Data = result };
     }
@@ -306,6 +314,7 @@ public class AgentService : IAgentService
 
         await EnrichAssistantsNoiseReductionAsync(agents.SelectMany(x => x.Assistants ?? []).ToList(), cancellationToken).ConfigureAwait(false);
         EnrichAgentsNoiseReduction(agents);
+
         await EnrichAgentTransferCallConfigsAsync(agents, cancellationToken).ConfigureAwait(false);
     }
 
