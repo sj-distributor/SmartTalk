@@ -49,6 +49,14 @@ public class AiResourceSyncService : IAiResourceSyncService
     private const int MaxWarningEntriesToPersist = 100;
     private const int MaxDetailEntriesPerCategoryToPersist = 50;
     private const int MaxConcurrentCrmCustomerLookups = 8;
+    private static readonly AutoAddLanguage[] RequiredAutomaticSyncLanguages =
+    [
+        AutoAddLanguage.Chinese,
+        AutoAddLanguage.English,
+        AutoAddLanguage.Spanish,
+        AutoAddLanguage.Korean,
+        AutoAddLanguage.Japanese
+    ];
 
     public sealed record StoreLockResult(CompanyStore Store, bool IsCreated);
     public sealed record AgentLockResult(Agent Agent, bool IsCreated);
@@ -106,7 +114,7 @@ public class AiResourceSyncService : IAiResourceSyncService
             var preflightStats = new AiResourceSyncExecutionStatsDto();
             if (!TryValidateAutomaticSyncLanguageMappings(mappings, preflightStats))
             {
-                Log.Warning("CRM sync skipped because automatic sync scene mappings are incomplete. CompanyId={CompanyId}", company.Id);
+                Log.Warning("CRM sync skipped because required automatic sync scene mappings are incomplete. CompanyId={CompanyId}", company.Id);
 
                 return new AiResourceSyncExecutionResult
                 {
@@ -1572,11 +1580,11 @@ public class AiResourceSyncService : IAiResourceSyncService
             return names;
         }
     }
-    
+
     private static bool TryValidateAutomaticSyncLanguageMappings(
         List<KnowledgeSceneLanguageMapping> mappings, AiResourceSyncExecutionStatsDto stats)
     {
-        var missingLanguages = Enum.GetValues<AutoAddLanguage>()
+        var missingLanguages = RequiredAutomaticSyncLanguages
             .Where(language => mappings.All(x => x.Language != language))
             .ToList();
 
@@ -1585,7 +1593,8 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         var missingLanguageNames = string.Join(", ", missingLanguages);
         stats.Warnings.Add(
-            $"Automatic CRM sync skipped because these languages have no active scene mapping: {missingLanguageNames}.");
+            $"Automatic CRM sync skipped because these required languages have no active scene mapping: {missingLanguageNames}.");
         return false;
     }
+
 }

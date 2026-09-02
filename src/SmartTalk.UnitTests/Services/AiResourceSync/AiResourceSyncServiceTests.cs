@@ -92,7 +92,7 @@ public class AiResourceSyncServiceTests
     }
 
     [Fact]
-    public async Task ExecuteSyncCrmSalesAutoCreateAsync_CreatesAssistantWithKnowledgeDetailsFromSceneItems()
+    public async Task SyncInternalAsync_AutomaticSyncWithPartialLanguageMappings_CreatesAssistantForAvailableLanguage()
     {
         var crmClient = Substitute.For<ICrmClient>();
         crmClient.GetSalesAutoSyncCustomersAsync(
@@ -232,7 +232,11 @@ public class AiResourceSyncServiceTests
         knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(1, null, null, true, Arg.Any<CancellationToken>())
             .Returns(new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeSceneLanguageMapping>
             {
-                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.English, CreatedAt = DateTimeOffset.UtcNow }
+                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.Chinese, CreatedAt = DateTimeOffset.UtcNow },
+                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.English, CreatedAt = DateTimeOffset.UtcNow },
+                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.Spanish, CreatedAt = DateTimeOffset.UtcNow },
+                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.Korean, CreatedAt = DateTimeOffset.UtcNow },
+                new() { CompanyId = 1, SceneId = 500, Language = AutoAddLanguage.Japanese, CreatedAt = DateTimeOffset.UtcNow }
             });
         knowledgeScenarioDataProvider.GetKnowledgeScenesByIdsAsync(Arg.Any<List<int>>(), Arg.Any<CancellationToken>())
             .Returns(new List<SmartTalk.Core.Domain.KnowledgeScenario.KnowledgeScene>
@@ -277,7 +281,7 @@ public class AiResourceSyncServiceTests
         
         var result = await sut.SyncInternalAsync(new AiResourceSyncCommand
         {
-            IsManual = true,
+            IsManual = false,
             ServiceProviderId = 123,
             InitiatedByUserId = 888
         }, CancellationToken.None);
