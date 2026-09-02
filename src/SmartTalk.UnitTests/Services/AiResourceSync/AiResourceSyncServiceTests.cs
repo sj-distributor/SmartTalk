@@ -320,7 +320,7 @@ public class AiResourceSyncServiceTests
     }
 
     [Fact]
-    public async Task SyncInternalAsync_WhenOmeHasNoKnowledgeSceneMapping_ShouldThrowAndStop()
+    public async Task SyncInternalAsync_WhenRequiredLanguageMappingIsMissing_ShouldSkipAndStop()
     {
         var crmClient = Substitute.For<ICrmClient>();
         crmClient.GetSalesAutoSyncCustomersAsync(
@@ -400,14 +400,15 @@ public class AiResourceSyncServiceTests
             salesDataProvider: salesDataProvider,
             redisSafeRunner: redisSafeRunner);
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => sut.SyncInternalAsync(new AiResourceSyncCommand
+        var result = await sut.SyncInternalAsync(new AiResourceSyncCommand
         {
             IsManual = true,
             ServiceProviderId = 123,
             InitiatedByUserId = 888
-        }, CancellationToken.None));
+        }, CancellationToken.None);
 
-        Assert.Contains("has no active knowledge scene mapping", ex.Message);
+        Assert.Equal(0, result.TotalCount);
+        Assert.Contains("required languages", result.Stats.Warnings.Single());
         await mediator.DidNotReceive().SendAsync<AddAgentCommand, AddAgentResponse>(
             Arg.Any<AddAgentCommand>(),
             Arg.Any<CancellationToken>());

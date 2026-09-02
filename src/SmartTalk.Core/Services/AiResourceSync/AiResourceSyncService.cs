@@ -107,24 +107,24 @@ public class AiResourceSyncService : IAiResourceSyncService
     public async Task<AiResourceSyncExecutionResult> SyncInternalAsync(AiResourceSyncCommand command, CancellationToken cancellationToken)
     {
         var company = await GetSalesCompanyAsync(cancellationToken).ConfigureAwait(false);
-        if (!command.IsManual)
-        {
-            var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(
-                companyId: company.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            var preflightStats = new AiResourceSyncExecutionStatsDto();
-            if (!TryValidateAutomaticSyncLanguageMappings(mappings, preflightStats))
-            {
-                Log.Warning("CRM sync skipped because required automatic sync scene mappings are incomplete. CompanyId={CompanyId}", company.Id);
 
-                return new AiResourceSyncExecutionResult
-                {
-                    TotalCount = 0,
-                    ShardCount = 0,
-                    Shards = [],
-                    Stats = preflightStats,
-                    IsInitialRelease = false
-                };
-            }
+        var mappings = await _knowledgeScenarioDataProvider.GetKnowledgeSceneLanguageMappingsAsync(
+            companyId: company.Id, isActive: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var preflightStats = new AiResourceSyncExecutionStatsDto();
+        if (!TryValidateSyncLanguageMappings(mappings, preflightStats))
+        {
+            Log.Warning(
+                "CRM sync skipped because required scene mappings are incomplete. CompanyId={CompanyId}",
+                company.Id);
+
+            return new AiResourceSyncExecutionResult
+            {
+                TotalCount = 0,
+                ShardCount = 0,
+                Shards = [],
+                Stats = preflightStats,
+                IsInitialRelease = false
+            };
         }
 
         var inputContext = await LoadSyncInputContextAsync(command, company, cancellationToken).ConfigureAwait(false);
@@ -1581,7 +1581,7 @@ public class AiResourceSyncService : IAiResourceSyncService
         }
     }
 
-    private static bool TryValidateAutomaticSyncLanguageMappings(
+    private static bool TryValidateSyncLanguageMappings(
         List<KnowledgeSceneLanguageMapping> mappings, AiResourceSyncExecutionStatsDto stats)
     {
         var missingLanguages = RequiredAutomaticSyncLanguages
@@ -1593,7 +1593,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         var missingLanguageNames = string.Join(", ", missingLanguages);
         stats.Warnings.Add(
-            $"Automatic CRM sync skipped because these required languages have no active scene mapping: {missingLanguageNames}.");
+            $"CRM sync skipped because these required languages have no active scene mapping: {missingLanguageNames}.");
         return false;
     }
 
