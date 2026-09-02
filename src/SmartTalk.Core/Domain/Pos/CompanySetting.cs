@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SmartTalk.Core.Domain.Pos;
 
 [Table("company_setting")]
-public class CompanySetting : IEntity, IHasCreatedFields, IHasModifiedFields
+public class CompanySetting : IEntity, IHasCreatedFields
 {
     [Key]
     [Column("id")]
@@ -20,14 +20,8 @@ public class CompanySetting : IEntity, IHasCreatedFields, IHasModifiedFields
     [Column("setting_value"), StringLength(255)]
     public string SettingValue { get; set; }
 
-    [Column("created_by")]
-    public int? CreatedBy { get; set; }
-
     [Column("created_date")]
     public DateTimeOffset CreatedDate { get; set; }
-
-    [Column("last_modified_by")]
-    public int? LastModifiedBy { get; set; }
 
     [Column("last_modified_date")]
     public DateTimeOffset? LastModifiedDate { get; set; }
