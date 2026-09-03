@@ -1,5 +1,6 @@
 using Mediator.Net.Contracts;
 using SmartTalk.Messages.Dto.Agent;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Requests.Pos;
 using SmartTalk.Messages.Responses;
@@ -29,6 +30,16 @@ public class AddAgentCommand : HasServiceProviderId, ICommand
     public List<AgentTransferCallConfigDto> AgentTransferCallConfigs { get; set; }
 
     public AiSpeechAssistantChannel Channel { get; set; } = AiSpeechAssistantChannel.PhoneChat;
+
+    public bool? PhoneNoiseReductionEnabled { get; set; }
+
+    public AgentType AgentType { get; set; } = AgentType.Agent;
+
+    public AgentSourceSystem SourceSystem { get; set; } = AgentSourceSystem.Self;
+
+    public bool IsDisplay { get; set; } = true;
+
+    public bool IsSurface { get; set; } = true;
 }
 
 public class AddAgentResponse : SmartTalkResponse<AgentDto>

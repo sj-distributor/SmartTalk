@@ -22,6 +22,66 @@ namespace SmartTalk.IntegrationTests.Services.AiSpeechAssistant;
 public partial class AiSpeechAssistantConnectFixture
 {
     [Fact]
+    public async Task ShouldGenerateNumericKnowledgeVersionAfterVersionTen()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        var assistantId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = $"VersionAssistant-{caseId}",
+                AnsweringNumber = $"+1557{caseId[..6]}",
+                ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy",
+                IsDefault = true,
+                IsDisplay = true,
+                ModelLanguage = "English"
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+            assistantId = assistant.Id;
+
+            foreach (var version in new[] { "9.9", "10.0" })
+            {
+                await repository.InsertAsync(new AiSpeechAssistantKnowledge
+                {
+                    AssistantId = assistantId,
+                    Json = "{}",
+                    Prompt = version,
+                    IsActive = version == "10.0",
+                    Version = version,
+                    CreatedBy = 1,
+                    ModelLanguage = "English"
+                });
+            }
+
+            await unitOfWork.SaveChangesAsync();
+        });
+
+        AddAiSpeechAssistantKnowledgeResponse response = null;
+        await Run<IMediator>(async mediator =>
+        {
+            response = await mediator.SendAsync<AddAiSpeechAssistantKnowledgeCommand, AddAiSpeechAssistantKnowledgeResponse>(
+                new AddAiSpeechAssistantKnowledgeCommand
+                {
+                    AssistantId = assistantId,
+                    Json = "{}",
+                    Language = "English"
+                });
+        }, builder =>
+        {
+            var eventHandlingService = Substitute.For<IEventHandlingService>();
+            eventHandlingService.HandlingEventAsync(Arg.Any<AiSpeechAssistantKnowledgeAddedEvent>(), Arg.Any<CancellationToken>())
+                .Returns(Task.CompletedTask);
+            builder.RegisterInstance(eventHandlingService).As<IEventHandlingService>();
+        });
+
+        response.Data.Version.ShouldBe("10.1");
+    }
+
+    [Fact]
     public async Task ShouldAddKnowledgeWithTextAndFileDetails_AndGeneratePrompt()
     {
         var caseId = Guid.NewGuid().ToString("N")[..8];

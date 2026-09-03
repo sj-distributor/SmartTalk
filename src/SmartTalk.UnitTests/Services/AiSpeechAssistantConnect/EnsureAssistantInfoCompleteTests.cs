@@ -30,7 +30,7 @@ public class EnsureAssistantInfoCompleteTests
     [Fact]
     public void EnsureAssistantInfoComplete_BothNonNull_ReturnsWithoutThrowing()
     {
-        var assistant = new AiSpeechAssistant { Id = 42 };
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant { Id = 42 };
         var knowledge = new AiSpeechAssistantKnowledge { AssistantId = 42, Prompt = "p" };
 
         Should.NotThrow(() =>
@@ -49,7 +49,7 @@ public class EnsureAssistantInfoCompleteTests
     [Fact]
     public void EnsureAssistantInfoComplete_NullKnowledge_ThrowsNotAvailable_WithAssistantId()
     {
-        var assistant = new AiSpeechAssistant { Id = 99 };
+        var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant { Id = 99 };
 
         var ex = Should.Throw<AiAssistantNotAvailableException>(() =>
             AiSpeechAssistantConnectService.EnsureAssistantInfoComplete(assistant, null));
