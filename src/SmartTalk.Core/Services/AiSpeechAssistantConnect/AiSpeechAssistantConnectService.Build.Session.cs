@@ -14,6 +14,8 @@ namespace SmartTalk.Core.Services.AiSpeechAssistantConnect;
 
 public partial class AiSpeechAssistantConnectService
 {
+    private const string CallQuestionPromptHeader = "For this call, ask the merchant the following customer questions in order:";
+
     private RealtimeSessionOptions BuildSessionOptions()
     {
         var assistant = _ctx.Assistant;
@@ -31,7 +33,7 @@ public partial class AiSpeechAssistantConnectService
                 Voice = assistant.ModelVoice ?? "alloy",
                 ModelName = assistant.ModelName,
                 ModelLanguage = assistant.ModelLanguage,
-                Prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt,   // 代客致电: 有 instruction 则用作本通指令 (non-breaking)
+                Prompt = BuildSessionPrompt(),
                 Tools = _ctx.FunctionCalls
                     .Where(x => x.Type == AiSpeechAssistantSessionConfigType.Tool && !string.IsNullOrWhiteSpace(x.Content))
                     .Select(x => JsonConvert.DeserializeObject<object>(x.Content))
@@ -74,6 +76,24 @@ public partial class AiSpeechAssistantConnectService
             AssistantId = assistant.Id,
             ModelVoice = assistant.ModelVoice
         });
+    }
+
+    private string BuildSessionPrompt()
+    {
+        var prompt = !string.IsNullOrWhiteSpace(_ctx.Instruction) ? _ctx.Instruction : _ctx.Prompt;
+
+        return AppendCallQuestion(prompt, _ctx.Question);
+    }
+
+    internal static string AppendCallQuestion(string prompt, string question)
+    {
+        if (string.IsNullOrWhiteSpace(question)) return prompt;
+
+        var questionSection = $"{CallQuestionPromptHeader}\n{question.Trim()}";
+
+        return string.IsNullOrWhiteSpace(prompt)
+            ? questionSection
+            : prompt.TrimEnd() + "\n\n" + questionSection;
     }
 
     /// <summary>

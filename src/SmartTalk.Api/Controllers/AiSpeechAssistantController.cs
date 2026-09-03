@@ -1,3 +1,4 @@
+using System.Text;
 using Serilog;
 using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
@@ -57,13 +58,17 @@ public class AiSpeechAssistantController : ControllerBase
     [HttpGet("outbound/connect")]
     [HttpGet("outbound/connect/{from}/{to}/{id:int}")]
     [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/question/{encodedQuestion}")]
+    [HttpGet("outbound/connect/{from}/{to}/{id:int}/{numberId:int}/question/{encodedQuestion}")]
     public async Task OutboundConnectAiSpeechAssistantAsync(
         string from, string to, int id, int? numberId = null, [FromQuery] string instruction = null,
-        [FromQuery] bool useDirectAssistant = false)
+        [FromQuery] bool useDirectAssistant = false, string encodedQuestion = null, [FromQuery] string question = null)
     {
         if (HttpContext.WebSockets.IsWebSocketRequest)
         {
-            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {numberId}", from, to, id, numberId);
+            Log.Information("Outbound connect to assistant, from: {From}, to: {To}, assistantId: {AssistantId}, greeting: {numberId}, hasInstruction: {HasInstruction}, hasQuestion: {HasQuestion}",
+                from, to, id, numberId, !string.IsNullOrWhiteSpace(instruction),
+                !string.IsNullOrWhiteSpace(question) || !string.IsNullOrWhiteSpace(encodedQuestion));
             var command = new ConnectAiSpeechAssistantCommand
             {
                 From = from,
@@ -72,6 +77,7 @@ public class AiSpeechAssistantController : ControllerBase
                 Host = HttpContext.Request.Host.Host,
                 NumberId = numberId,
                 Instruction = instruction,
+                Question = string.IsNullOrWhiteSpace(question) ? DecodeQuestion(encodedQuestion) : question,
                 UseDirectAssistant = useDirectAssistant,
                 TwilioWebSocket = await HttpContext.WebSockets.AcceptWebSocketAsync(),
                 OrderRecordType = PhoneOrderRecordType.OutBount,
@@ -81,6 +87,22 @@ public class AiSpeechAssistantController : ControllerBase
         else
         {
             HttpContext.Response.StatusCode = 400;
+        }
+    }
+
+    private static string DecodeQuestion(string encodedQuestion)
+    {
+        if (string.IsNullOrWhiteSpace(encodedQuestion)) return null;
+
+        try
+        {
+            var value = encodedQuestion.Replace('-', '+').Replace('_', '/');
+            value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
+            return Encoding.UTF8.GetString(Convert.FromBase64String(value));
+        }
+        catch (FormatException)
+        {
+            return null;
         }
     }
 
