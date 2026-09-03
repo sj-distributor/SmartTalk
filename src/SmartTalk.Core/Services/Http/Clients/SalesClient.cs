@@ -7,6 +7,8 @@ namespace SmartTalk.Core.Services.Http.Clients;
 
 public interface ISalesClient : IScopedDependency
 {
+    Task<GetCustomerMaterialOverviewResponseDto> GetCustomerMaterialOverviewAsync(GetCustomerMaterialOverviewRequestDto request, CancellationToken cancellationToken);
+
     Task<GetAskInfoDetailListByCustomerResponseDto> GetAskInfoDetailListByCustomerAsync(GetAskInfoDetailListByCustomerRequestDto request, CancellationToken cancellationToken);
     
     Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken);
@@ -58,6 +60,20 @@ public class SalesClient : ISalesClient
         return await _httpClientFactory.PostAsJsonAsync<GetAskInfoDetailListByCustomerResponseDto>(
                 $"{_salesSetting.BaseUrl}/api/SalesOrder/GetAskInfoDetailListByCustomer",
                 new GetAskInfoDetailListByCustomerRequestDto { CustomerNumbers = customerNumbers },
+                headers: _headers,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<GetCustomerMaterialOverviewResponseDto> GetCustomerMaterialOverviewAsync(GetCustomerMaterialOverviewRequestDto request, CancellationToken cancellationToken)
+    {
+        var customerNumbers = NormalizeCustomerNumbers(request?.CustomerNumbers);
+        if (customerNumbers.Count == 0)
+            throw new ArgumentException("CustomerNumbers cannot be null or empty.");
+
+        return await _httpClientFactory.PostAsJsonAsync<GetCustomerMaterialOverviewResponseDto>(
+                $"{_salesSetting.BaseUrl}/api/SalesOrder/GetCustomerMaterialOverview",
+                new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = customerNumbers },
                 headers: _headers,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);

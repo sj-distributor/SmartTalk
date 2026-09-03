@@ -27,6 +27,13 @@ namespace SmartTalk.Core.Services.AiKids;
 public interface IAiKidRealtimeServiceV2 : IScopedDependency
 {
     Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken);
+
+    Task<RealtimeSessionOptions> BuildSessionOptionsAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken);
+
+    Task<RealtimeSessionOptions> BuildSessionOptionsAsync(
+        AiKidRealtimeCommand command,
+        CancellationToken cancellationToken,
+        CancellationToken callbackCancellationToken);
 }
 
 public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
@@ -60,6 +67,23 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
     }
 
     public async Task RealtimeAiConnectAsync(AiKidRealtimeCommand command, CancellationToken cancellationToken)
+    {
+        var options = await BuildSessionOptionsAsync(command, cancellationToken).ConfigureAwait(false);
+
+        await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<RealtimeSessionOptions> BuildSessionOptionsAsync(
+        AiKidRealtimeCommand command,
+        CancellationToken cancellationToken)
+    {
+        return BuildSessionOptionsAsync(command, cancellationToken, cancellationToken);
+    }
+
+    public async Task<RealtimeSessionOptions> BuildSessionOptionsAsync(
+        AiKidRealtimeCommand command,
+        CancellationToken cancellationToken,
+        CancellationToken callbackCancellationToken)
     {
         var assistant = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)
@@ -130,7 +154,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             OnTranscriptionsCompletedAsync = async (sessionId, transcriptions) =>
             {
                 var kid = await _aiSpeechAssistantDataProvider
-                    .GetAiKidAsync(agentId: assistant.AgentId, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    .GetAiKidAsync(
+                        agentId: assistant.AgentId,
+                        cancellationToken: callbackCancellationToken).ConfigureAwait(false);
 
                 if (kid == null) return;
 
@@ -148,7 +174,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             }
         };
 
-        await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
+        return options;
     }
 
     private RealtimeAiTtsConfig BuildTtsConfig(Domain.AISpeechAssistant.AiSpeechAssistant assistant, int sampleRate)

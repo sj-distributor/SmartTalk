@@ -14,6 +14,27 @@ public class SalesClientTests
     private readonly ISmartTalkHttpClientFactory _httpClientFactory = Substitute.For<ISmartTalkHttpClientFactory>();
 
     [Fact]
+    public async Task GetCustomerMaterialOverviewAsync_ShouldPostNormalizedCustomerNumbersOnce()
+    {
+        var capturedRequests = new List<GetCustomerMaterialOverviewRequestDto>();
+        var sut = BuildClient();
+
+        _httpClientFactory.PostAsJsonAsync<GetCustomerMaterialOverviewResponseDto>(
+                "https://sales.example.com/api/SalesOrder/GetCustomerMaterialOverview",
+                Arg.Do<object>(value => capturedRequests.Add((GetCustomerMaterialOverviewRequestDto)value)),
+                Arg.Any<CancellationToken>(),
+                headers: Arg.Any<Dictionary<string, string>>())
+            .Returns(new GetCustomerMaterialOverviewResponseDto { Code = 200, Data = [] });
+
+        await sut.GetCustomerMaterialOverviewAsync(
+            new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = [" 00001 ", "00002", "00001", ""] },
+            CancellationToken.None);
+
+        capturedRequests.Count.ShouldBe(1);
+        capturedRequests[0].CustomerNumbers.ShouldBe(new List<string> { "00001", "00002" });
+    }
+
+    [Fact]
     public async Task GetAskInfoDetailListByCustomerAsync_ShouldPostCustomerNumbersOnce()
     {
         var capturedRequests = new List<GetAskInfoDetailListByCustomerRequestDto>();

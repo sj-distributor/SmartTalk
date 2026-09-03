@@ -1,3 +1,5 @@
+using SmartTalk.Messages.Enums.Agent;
+
 namespace SmartTalk.Messages.Dto.AiSpeechAssistant;
 
 public class KnowledgeCopyRelatedInfoDto
@@ -12,5 +14,7 @@ public class KnowledgeCopyRelatedInfoDto
     
     public string AiAgentName { get; set; }
 
+    public AgentSourceSystem SourceSystem { get; set; }
+    
     public List<AiSpeechAssistantKnowledgeSceneRelationDto> SceneRelations { get; set; } = new();
 }
