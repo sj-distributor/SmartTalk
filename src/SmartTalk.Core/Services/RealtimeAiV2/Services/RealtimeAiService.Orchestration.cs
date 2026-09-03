@@ -1,8 +1,11 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using NAudio.Wave;
 using Serilog;
+using Serilog.Events;
+using SmartTalk.Messages.Enums.RealtimeAi;
 using SmartTalk.Core.Services.RealtimeAiV2.Adapters;
 using SmartTalk.Messages.Enums.RealtimeAi;
 
@@ -44,19 +47,34 @@ public partial class RealtimeAiService
 
     private async Task<(string Message, bool ClientIsClose)> ReadClientMessageAsync(byte[] buffer)
     {
+        var result = await _ctx.WebSocket.ReceiveAsync(buffer.AsMemory(), _ctx.SessionCts.Token).ConfigureAwait(false);
+
+        if (result.MessageType == WebSocketMessageType.Close) return (null, true);
+
+        // Whole-frame is the overwhelming majority: a Twilio media frame is around a kilobyte against
+        // a pooled buffer many times that, arriving fifty times a second for the length of the call.
+        // Decoding straight out of the pooled buffer drops a MemoryStream and its doubling regrowth
+        // per frame; the reassembly below is unchanged for the messages that actually need it.
+        if (result.EndOfMessage) return (Encoding.UTF8.GetString(buffer, 0, result.Count), false);
+
+        return await ReassembleClientMessageAsync(buffer, result).ConfigureAwait(false);
+    }
+
+    private async Task<(string Message, bool ClientIsClose)> ReassembleClientMessageAsync(byte[] buffer, ValueWebSocketReceiveResult firstFrame)
+    {
         using var ms = new MemoryStream();
 
-        ValueWebSocketReceiveResult result;
+        var result = firstFrame;
+        ms.Write(buffer, 0, result.Count);
 
-        do
+        while (!result.EndOfMessage)
         {
             result = await _ctx.WebSocket.ReceiveAsync(buffer.AsMemory(), _ctx.SessionCts.Token).ConfigureAwait(false);
 
             if (result.MessageType == WebSocketMessageType.Close) return (null, true);
 
             ms.Write(buffer, 0, result.Count);
-            
-        } while (!result.EndOfMessage);
+        }
 
         return (Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length), false);
     }
@@ -102,7 +120,19 @@ public partial class RealtimeAiService
 
     private async Task HandleClientAudioAsync(string base64Payload)
     {
-        var providerBase64 = await TranscodeAudioAsync(base64Payload, AudioSource.Client).ConfigureAwait(false);
+        string providerBase64;
+
+        try
+        {
+            providerBase64 = await TranscodeAudioAsync(base64Payload, AudioSource.Client).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // A codec or sample-rate mismatch throws on every frame and garbles the whole call. Named
+            // so the operator sees which stage failed, not just that handling a message did.
+            Log.Error(ex, "[RealtimeAi] Audio transcode failed, SessionId: {SessionId}, Direction: {Direction}", _ctx.SessionId, nameof(AudioSource.Client));
+            return;
+        }
 
         if (_ctx.IsClientAudioToProviderSuspended) return;
 
@@ -121,29 +151,73 @@ public partial class RealtimeAiService
 
     private async Task CleanupSessionAsync(bool clientIsClose)
     {
+        // Reachable from the orchestration loop's finally and from ConnectAsync's, so the two cannot
+        // both run it — a session must not flush its transcript or notify its consumer twice.
+        if (Interlocked.Exchange(ref _ctx.CleanupClaimed, 1) == 1) return;
+
+        var outcome = ResolveSessionOutcome(clientIsClose);
+
         if (clientIsClose)
             await SafeExecuteAsync(
-                () => _ctx.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close acknowledged", CancellationToken.None), "acknowledge client close");
+                () => _ctx.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close acknowledged", CancellationToken.None), RealtimeAiCleanupStep.AcknowledgeClientClose);
         else
         {
-            Log.Warning("[RealtimeAi] Client disconnected abnormally, SessionId: {SessionId}, WebSocketState: {WebSocketState}", _ctx.SessionId, GetWebSocketStateSafe());
-
             if (_ctx.Options.MaxSessionDuration.HasValue)
                 await SafeExecuteAsync(
-                    () => CloseClientWebSocketIfOpenAsync("Session ended"), "close client socket");
+                    () => CloseClientWebSocketIfOpenAsync("Session ended"), RealtimeAiCleanupStep.CloseClientSocket);
         }
         
         await SafeExecuteAsync(
-            () => DisconnectFromProviderAsync(clientIsClose ? "Client disconnected" : "Client disconnected abnormally"), "disconnect from provider");
+            () => DisconnectFromProviderAsync(clientIsClose ? "Client disconnected" : "Client disconnected abnormally"), RealtimeAiCleanupStep.DisconnectProvider);
 
         await SafeExecuteAsync(
-            () => { _inactivityTimerManager.StopTimer(_ctx.SessionId); return Task.CompletedTask; }, "stop inactivity timer");
+            () => { _inactivityTimerManager.StopTimer(_ctx.SessionId); return Task.CompletedTask; }, RealtimeAiCleanupStep.StopIdleTimer);
 
         await SafeExecuteAsync(
-            () => _ctx.Options?.OnSessionEndedAsync?.Invoke(_ctx.SessionId) ?? Task.CompletedTask, "invoke OnSessionEndedAsync");
+            () => _ctx.Options?.OnSessionEndedAsync?.Invoke(_ctx.SessionId) ?? Task.CompletedTask, RealtimeAiCleanupStep.InvokeSessionEnded);
 
-        await SafeExecuteAsync(HandleRecordingAsync, "handle recording");
-        await SafeExecuteAsync(HandleTranscriptionsAsync, "handle transcriptions");
+        await SafeExecuteAsync(HandleRecordingAsync, RealtimeAiCleanupStep.HandleRecording);
+        await SafeExecuteAsync(HandleTranscriptionsAsync, RealtimeAiCleanupStep.HandleTranscriptions);
+
+        LogSessionEnded(outcome);
+    }
+
+    /// <summary>
+    /// A deliberate teardown records its own cause; anything else is read off the client socket. The
+    /// duration ceiling is inferred rather than signalled because CancelAfter shares the session CTS
+    /// with every other cancellation path, so there is nothing to distinguish it at the callback.
+    /// </summary>
+    private RealtimeAiSessionOutcome ResolveSessionOutcome(bool clientIsClose)
+    {
+        if (_ctx.TerminationCause is { } cause) return cause;
+
+        if (clientIsClose) return RealtimeAiSessionOutcome.ClientClosed;
+
+        if (_ctx.Options.MaxSessionDuration is { } ceiling && Stopwatch.GetElapsedTime(_ctx.SessionStartedAt) >= ceiling)
+            return RealtimeAiSessionOutcome.MaxDurationReached;
+
+        return RealtimeAiSessionOutcome.ClientAborted;
+    }
+
+    /// <summary>
+    /// One line per session carrying how it ended and what it produced, levelled by outcome so
+    /// "abnormal disconnect rate" becomes a number worth alerting on. Replaces two Warnings that
+    /// attributed every ending — including the engine's own decisions — to the client.
+    /// </summary>
+    private void LogSessionEnded(RealtimeAiSessionOutcome outcome)
+    {
+        var level = outcome switch
+        {
+            RealtimeAiSessionOutcome.ProviderFault => LogEventLevel.Error,
+            RealtimeAiSessionOutcome.ClientAborted => LogEventLevel.Warning,
+            _ => LogEventLevel.Information
+        };
+
+        Log.Write(level,
+            "[RealtimeAi] Session ended, SessionId: {SessionId}, Outcome: {Outcome}, ElapsedSessionMs: {ElapsedSessionMs}, " +
+            "TurnCount: {TurnCount}, TranscriptionCount: {TranscriptionCount}, WebSocketState: {WebSocketState}",
+            _ctx.SessionId, outcome, (long)Stopwatch.GetElapsedTime(_ctx.SessionStartedAt).TotalMilliseconds,
+            _ctx.Round, _ctx.Transcriptions.Count, GetWebSocketStateSafe());
     }
 
     private async Task CloseClientWebSocketIfOpenAsync(string reason)
@@ -167,8 +241,7 @@ public partial class RealtimeAiService
             ? _ctx.TtsProvider.OutputCodec
             : _ctx.ProviderAdapter.GetPreferredCodec(clientCodec);
         var (sourceCodec, targetCodec) = source == AudioSource.Client ? (clientCodec, providerCodec) : (providerCodec, clientCodec);
-        var sourceSampleRate = ResolveAudioSampleRate(sourceCodec, source);
-        var targetSampleRate = ResolveAudioSampleRate(targetCodec, source == AudioSource.Client ? AudioSource.Provider : AudioSource.Client);
+        var (sourceSampleRate, targetSampleRate) = ResolveAudioSampleRates(source, clientCodec, providerCodec);
 
         var rawBytes = await RecordAudioIfRequiredAsync(base64Input, sourceCodec, source, sourceSampleRate).ConfigureAwait(false);
 
@@ -190,13 +263,26 @@ public partial class RealtimeAiService
         return Convert.ToBase64String(outputBytes);
     }
 
-    private int ResolveAudioSampleRate(RealtimeAiAudioCodec codec, AudioSource source)
-    {
-        if (source == AudioSource.Provider)
-            return _ctx.TtsProvider.OutputSampleRate;
-
-        return AudioCodecConverter.GetSampleRate(codec);
-    }
+    /// <summary>
+    /// The rates for one leg of the call. The two legs do not mirror each other, which is the trap:
+    /// only the DOWNLINK's source comes from the voice provider, because it is the one number nothing
+    /// else knows — a voice may emit a codec at a rate that is not that codec's nominal one.
+    ///
+    /// <para>The uplink's target used to read that same number, so the caller's microphone audio was
+    /// resampled to the voice's playback rate before being handed to a model that had been told to
+    /// expect the client's. It was invisible because the two coincide on both shipped paths: the
+    /// built-in passthrough derives its rate from the negotiated codec, and MiniMax defaults to 8000.
+    /// Raising a voice's sample rate for audio quality — an ordinary thing to do — would have pitched
+    /// and stretched the speech going INTO the model, with nothing logged to say so.</para>
+    ///
+    /// <para>Do not collapse both legs onto <c>GetSampleRate</c>. It compiles, warns about nothing, and
+    /// passes every test but the downlink one, while dropping the resample a voice at a non-nominal
+    /// rate needs.</para>
+    /// </summary>
+    private (int Source, int Target) ResolveAudioSampleRates(AudioSource source, RealtimeAiAudioCodec clientCodec, RealtimeAiAudioCodec providerCodec) =>
+        source == AudioSource.Client
+            ? (AudioCodecConverter.GetSampleRate(clientCodec), AudioCodecConverter.GetSampleRate(providerCodec))
+            : (_ctx.TtsProvider.OutputSampleRate, AudioCodecConverter.GetSampleRate(clientCodec));
 
     /// <summary>
     /// Decides whether recording should happen, decodes and writes to buffer if so.
@@ -235,7 +321,15 @@ public partial class RealtimeAiService
 
     private async Task HandleTranscriptionsAsync()
     {
-        if (_ctx.Options.OnTranscriptionsCompletedAsync == null || _ctx.Transcriptions.IsEmpty) return;
+        if (_ctx.Options.OnTranscriptionsCompletedAsync == null) return;
+
+        if (_ctx.Transcriptions.IsEmpty)
+        {
+            // A finished call that transcribed nothing is the exact shape of the calls that silently
+            // never reach the database, so it is worth surfacing rather than returning quietly.
+            Log.Warning("[RealtimeAi] Session ended with no transcriptions, SessionId: {SessionId}", _ctx.SessionId);
+            return;
+        }
 
         var transcriptions = _ctx.Transcriptions.Select(t => (t.Speaker, t.Text)).ToList();
         
@@ -269,7 +363,7 @@ public partial class RealtimeAiService
 
     private async Task HandleRecordingAsync()
     {
-        if (!_ctx.Options.EnableRecording || _ctx.Options.OnRecordingCompleteAsync == null) return;
+        if (!_ctx.Options.EnableRecording) return;
         if (_ctx.AudioBuffer is null) return;
 
         var buffer = _ctx.AudioBuffer;
@@ -277,9 +371,18 @@ public partial class RealtimeAiService
 
         try
         {
+            // Extraction and encoding produce a byte[] the size of the whole call plus a second copy
+            // behind WaveFileWriter. With no consumer for the result that is pure garbage, so skip
+            // it — but skip it from INSIDE the try, or the buffer never gets disposed either.
+            if (_ctx.Options.OnRecordingCompleteAsync == null) return;
+
             var pcmBytes = await buffer.ExtractAsync().ConfigureAwait(false);
 
-            if (pcmBytes.Length == 0) return;
+            if (pcmBytes.Length == 0)
+            {
+                Log.Warning("[RealtimeAi] Recording was enabled but no audio was recorded, SessionId: {SessionId}", _ctx.SessionId);
+                return;
+            }
 
             var waveFormat = new WaveFormat(24000, 16, 1);
             using var wavStream = new MemoryStream();
@@ -298,15 +401,17 @@ public partial class RealtimeAiService
         }
     }
     
-    private async Task SafeExecuteAsync(Func<Task> action, string operationName)
+    private async Task SafeExecuteAsync(Func<Task> action, RealtimeAiCleanupStep step)
     {
         try
         {
             await action().ConfigureAwait(false);
+
+            Log.Debug("[RealtimeAi] Cleanup step done, SessionId: {SessionId}, CleanupStep: {CleanupStep}", _ctx.SessionId, step);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[RealtimeAi] Cleanup failed: {Operation}, SessionId: {SessionId}", operationName, _ctx.SessionId);
+            Log.Error(ex, "[RealtimeAi] Cleanup step failed, SessionId: {SessionId}, CleanupStep: {CleanupStep}", _ctx.SessionId, step);
         }
     }
 }

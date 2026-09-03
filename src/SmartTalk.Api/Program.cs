@@ -38,6 +38,21 @@ public class Program
                 ApiKey = MaskApiKey(c.ApiKey),
                 c.ProviderSpecificConfig
             })
+            // Credentials live in query strings often enough that a URI reaching a sink whole is a
+            // standing risk; the path is the diagnostic part.
+            .Destructure.ByTransforming<Uri>(u => u.GetLeftPart(UriPartial.Path))
+            // Global backstop. The realtime chain no longer destructures anything large, but these
+            // caps mean the next `{@Something}` added anywhere cannot quietly put a multi-KB payload
+            // — a resolved prompt, a menu, a knowledge blob — into Seq on every call.
+            //
+            // Deliberately no depth cap. This is the ROOT logger, so a cap rewrites every existing
+            // `{@...}` site in the process, not just the realtime chain — including the V1 path this
+            // deployment falls back to, which would land on degraded diagnostics precisely while it is
+            // being used. Serilog DELETES past the cap rather than marking it, so a depth of four
+            // rendered a paid order modifier's price and quantity as literal nulls: legal-looking
+            // values naming a bug that is not there.
+            .Destructure.ToMaximumStringLength(2048)
+            .Destructure.ToMaximumCollectionCount(50)
             .Enrich.FromLogContext()
             .Enrich.WithProperty("Application", application)
             .WriteTo.Console()

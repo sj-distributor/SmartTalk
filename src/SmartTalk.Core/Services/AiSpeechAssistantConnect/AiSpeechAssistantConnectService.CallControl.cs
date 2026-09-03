@@ -52,7 +52,10 @@ public partial class AiSpeechAssistantConnectService
     {
         GenerateRecordFromCall(new AiSpeechAssistantStreamContextDto
         {
-            CallSid = _ctx.CallSid, StreamSid = _ctx.StreamSid, Host = _ctx.Host, LastUserInfo = _ctx.LastUserInfo
+            CallSid = _ctx.CallSid, StreamSid = _ctx.StreamSid, Host = _ctx.Host, LastUserInfo = _ctx.LastUserInfo,
+            // No assistant ever ran on this call — it was bridged to a human. Saying so lets the
+            // record job skip explicitly instead of discovering it by dereferencing null.
+            IsTransfer = true
         });
     }
 }

@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Logging;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Smarties;
@@ -27,7 +28,10 @@ public partial class AiSpeechAssistantConnectService
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
 
-        Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
+        // Describes the prompt rather than reproducing it: the resolved text carries the caller's
+        // number, their CRM record and the menu, and this ran on every inbound call. The engine's
+        // session-start line logs the same length and hash, so the two are cross-checkable.
+        Log.Information("[AiAssistant] Prompt resolved, PromptChars: {PromptChars}", _ctx.Prompt?.Length ?? 0);
     }
 
     private async Task LoadAssistantInfoAsync(CancellationToken cancellationToken)
@@ -40,6 +44,12 @@ public partial class AiSpeechAssistantConnectService
         EnsureAssistantInfoComplete(assistant, knowledge);
 
         _ctx.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
+
+        // Puts AssistantId on every line of the call from here on, including the engine's own, so the
+        // engine's token line carries the dimension the consumer's duplicate used to add. Null-safe on
+        // purpose: DeferredLogScope treats a null as "remove the property", so a missing assistant
+        // costs a facet rather than the call.
+        _ctx.LogScope?.Set(LogProperties.AssistantId, _ctx.Assistant?.Id);
         _ctx.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
 
         _ctx.Prompt = string.Join("\n\n", new[]

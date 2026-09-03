@@ -293,6 +293,17 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
             switch (eventType)
             {
+                // Recognised chatter the engine has no action for. Kept out of Unknown so Warning
+                // stays a level worth alerting on — OpenAI GA emits several of these per round trip.
+                case "session.created":
+                case "conversation.item.created":
+                case "conversation.item.added":
+                case "response.output_item.added":
+                case "input_audio_buffer.committed":
+                case "input_audio_buffer.speech_stopped":
+                case "rate_limits.updated":
+                    return Result(RealtimeAiWssEventType.Ignored, eventType);
+
                 case "session.updated":
                     return Result(RealtimeAiWssEventType.SessionInitialized, rawMessage);
 
@@ -322,10 +333,14 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
                     var textDone = root.TryGetProperty("text", out var textDoneProp) ? textDoneProp.GetString() : null;
                     return Result(RealtimeAiWssEventType.ResponseTextDone, new RealtimeAiWssTextData { Text = textDone });
 
+                // An audio part is announced empty and filled in later — that is what this event is for —
+                // so blank here is ordinary once per turn, not an event the adapter failed to recognise.
+                // Its sibling response.content_part.done is deliberately left on Unknown: a part that is
+                // DONE and still empty is a different claim, and nothing observed says it is routine.
                 case "response.content_part.added":
                     var partDelta = ExtractTextFromContentPart(root, "part");
                     return string.IsNullOrWhiteSpace(partDelta)
-                        ? Result(RealtimeAiWssEventType.Unknown, eventType)
+                        ? Result(RealtimeAiWssEventType.Ignored, eventType)
                         : Result(RealtimeAiWssEventType.ResponseTextDelta, new RealtimeAiWssTextData { Text = partDelta });
 
                 case "response.content_part.done":
@@ -336,9 +351,14 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
                 case "response.output_item.done":
                     var itemText = ExtractTextFromOutputItem(root);
-                    return string.IsNullOrWhiteSpace(itemText)
-                        ? Result(RealtimeAiWssEventType.Unknown, eventType)
-                        : Result(RealtimeAiWssEventType.ResponseTextDone, new RealtimeAiWssTextData { Text = itemText });
+                    if (!string.IsNullOrWhiteSpace(itemText))
+                        return Result(RealtimeAiWssEventType.ResponseTextDone, new RealtimeAiWssTextData { Text = itemText });
+
+                    // Blank means two different things here and only one of them is routine. A
+                    // function_call item carries no content array by design, so every tool call lands
+                    // here; a message item that produced no words is the shape a wire-format change
+                    // takes, and is exactly the surface signal the Beta-sunset note above relies on.
+                    return Result(IsNonMessageOutputItem(root) ? RealtimeAiWssEventType.Ignored : RealtimeAiWssEventType.Unknown, eventType);
 
                 case "input_audio_buffer.speech_started":
                     return Result(RealtimeAiWssEventType.SpeechDetected);
@@ -460,6 +480,20 @@ public class OpenAiRealtimeAiProviderAdapter : IRealtimeAiProviderAdapter
 
         return chunks.Count == 0 ? null : string.Join(" ", chunks);
     }
+
+    /// <summary>
+    /// True only when the frame positively identifies an output item that is not a message — in
+    /// practice a <c>function_call</c>. Anything the type cannot be read from stays false, so an absent
+    /// item or an absent type reports as Unknown rather than being quietly filed as routine: the
+    /// classification has to fail toward visible, since not recognising a frame's shape is the thing
+    /// Unknown exists to report.
+    /// </summary>
+    private static bool IsNonMessageOutputItem(JsonElement root) =>
+        root.TryGetProperty("item", out var item)
+        && item.ValueKind == JsonValueKind.Object
+        && item.TryGetProperty("type", out var itemType)
+        && itemType.ValueKind == JsonValueKind.String
+        && !itemType.ValueEquals("message");
 
     private static string ExtractTextFromOutputItem(JsonElement root)
     {
