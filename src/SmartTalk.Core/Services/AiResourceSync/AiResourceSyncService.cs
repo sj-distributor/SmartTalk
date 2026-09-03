@@ -113,17 +113,14 @@ public class AiResourceSyncService : IAiResourceSyncService
         var preflightStats = new AiResourceSyncExecutionStatsDto();
         if (!TryValidateSyncLanguageMappings(mappings, preflightStats))
         {
-            Log.Warning(
-                "CRM sync skipped because required scene mappings are incomplete. CompanyId={CompanyId}",
-                company.Id);
+            var errorMessage = preflightStats.Warnings.Single();
+            Log.Warning("CRM sync failed because required scene mappings are incomplete. CompanyId={CompanyId}", company.Id);
 
             return new AiResourceSyncExecutionResult
             {
-                TotalCount = 0,
-                ShardCount = 0,
-                Shards = [],
                 Stats = preflightStats,
-                IsInitialRelease = false
+                IsSuccess = false,
+                ErrorMessage = errorMessage
             };
         }
 
@@ -1593,7 +1590,7 @@ public class AiResourceSyncService : IAiResourceSyncService
 
         var missingLanguageNames = string.Join(", ", missingLanguages);
         stats.Warnings.Add(
-            $"CRM sync skipped because these required languages have no active scene mapping: {missingLanguageNames}.");
+            $"CRM sync failed because these required languages have no active scene mapping: {missingLanguageNames}.");
         return false;
     }
 
