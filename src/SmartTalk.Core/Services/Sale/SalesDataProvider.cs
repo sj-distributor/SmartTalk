@@ -13,6 +13,9 @@ public interface ISalesDataProvider : IScopedDependency
     Task<List<Sales>> GetAllSalesAsync(CancellationToken cancellationToken);
 
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
+
+    Task AddSalesAsync(Sales sales, bool forceSave = true, CancellationToken cancellationToken = default);
+
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken);
 
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheBySoldToIdsAsync(List<string> soldToIds, CancellationToken cancellationToken);
@@ -43,10 +46,14 @@ public interface ISalesDataProvider : IScopedDependency
     Task<bool> IsParentCompletedAsync(int? parentRecordId, CancellationToken cancellationToken);
 
     Task<bool> HasPendingTasksByRecordIdAsync(int recordId, CancellationToken cancellationToken);
+
+    Task<List<int>> GetIncompleteRecordsWithAllTasksSentAsync(DateTimeOffset startTime, DateTimeOffset endTime, int batchSize, CancellationToken cancellationToken);
     
     Task<PhoneOrderPushTask> GetRecordPushTaskByRecordIdAsync(int recordId, CancellationToken cancellationToken);
 
     Task<AiSpeechAssistantKnowledgeVariableCache> GetDeliveryInfoCacheByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken);
+
+    Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default);
 }
 
 public class SalesDataProvider : ISalesDataProvider
@@ -78,6 +85,13 @@ public class SalesDataProvider : ISalesDataProvider
         if (type.HasValue) query = query.Where(s => s.Type == type.Value);
 
         return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AddSalesAsync(Sales sales, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(sales, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave) await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken)
@@ -234,6 +248,27 @@ public class SalesDataProvider : ISalesDataProvider
         ];
     }
     
+    public async Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default)
+    {
+        await _repository.InsertAsync(run, cancellationToken).ConfigureAwait(false);
+
+        if (forceSave)
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CrmSalesAutoSyncRun> GetLatestSuccessfulCrmSalesAutoSyncRunByModeAsync(
+        string mode, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+            return null;
+
+        return await _repository.Query<CrmSalesAutoSyncRun>()
+            .Where(x => x.Mode == mode && x.IsSuccess)
+            .OrderByDescending(x => x.CreatedDate)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private async Task UpsertKnowledgeVariableCacheAsync(
         string cacheKey,
         string filter,
@@ -352,6 +387,24 @@ public class SalesDataProvider : ISalesDataProvider
     public async Task<bool> HasPendingTasksByRecordIdAsync(int recordId, CancellationToken cancellationToken)
     {
         return await _repository.Query<PhoneOrderPushTask>().AnyAsync(t => t.RecordId == recordId && t.Status != PhoneOrderPushTaskStatus.Sent, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<int>> GetIncompleteRecordsWithAllTasksSentAsync(DateTimeOffset startTime, DateTimeOffset endTime, int batchSize, CancellationToken cancellationToken)
+    {
+        var taskQuery = _repository.Query<PhoneOrderPushTask>();
+
+        return await _repository.Query<PhoneOrderRecord>()
+            .Where(record => !record.IsCompleted
+                             && record.CreatedDate >= startTime
+                             && record.CreatedDate < endTime
+                             && taskQuery.Any(task => task.RecordId == record.Id)
+                             && !taskQuery.Any(task =>
+                                 task.RecordId == record.Id && task.Status != PhoneOrderPushTaskStatus.Sent))
+            .OrderBy(record => record.Id)
+            .Select(record => record.Id)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<PhoneOrderPushTask> GetRecordPushTaskByRecordIdAsync(int recordId, CancellationToken cancellationToken)

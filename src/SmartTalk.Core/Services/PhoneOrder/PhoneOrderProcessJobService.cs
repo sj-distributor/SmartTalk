@@ -3,6 +3,7 @@ using SmartTalk.Core.Constants;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
+using SmartTalk.Core.Services.Caching;
 using SmartTalk.Core.Services.Ffmpeg;
 using SmartTalk.Core.Services.Http;
 using SmartTalk.Core.Services.Http.Clients;
@@ -34,6 +35,8 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
     private readonly IOpenaiClient _openaiClient;
     private readonly TwilioSettings _twilioSettings;
     private readonly IPosUtilService _posUtilService;
+    private readonly IPosDataProvider _posDataProvider;
+    private readonly ICacheManager _cacheManager;
     private readonly ISmartiesClient _smartiesClient;
     private readonly TranslationClient _translationClient;
     private readonly IPhoneOrderService _phoneOrderService;
@@ -68,7 +71,9 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
         IPosUtilService posUtilService,
         IPhoneOrderUtilService phoneOrderUtilService,
-        ISalesCustomerMatchService salesCustomerMatchService)
+        ISalesCustomerMatchService salesCustomerMatchService,
+        IPosDataProvider posDataProvider,
+        ICacheManager cacheManager)
     {
         _salesClient = salesClient;
         _ffmpegService = ffmpegService;
@@ -90,6 +95,8 @@ public partial class PhoneOrderProcessJobService : IPhoneOrderProcessJobService
         _posUtilService = posUtilService;
         _phoneOrderUtilService = phoneOrderUtilService;
         _salesCustomerMatchService = salesCustomerMatchService;
+        _posDataProvider = posDataProvider;
+        _cacheManager = cacheManager;
     }
 
     public async Task CalculatePhoneOrderRecodingDurationAsync(SchedulingCalculatePhoneOrderRecodingDurationCommand command, CancellationToken cancellationToken)

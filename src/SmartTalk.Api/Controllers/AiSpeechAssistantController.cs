@@ -3,6 +3,7 @@ using Mediator.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using SmartTalk.Api.Authentication.TemporarySession;
 using SmartTalk.Messages.Commands.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Requests.AiSpeechAssistant;
@@ -140,6 +141,28 @@ public class AiSpeechAssistantController : ControllerBase
         
         return Ok(response);
     }
+
+    [Route("knowledge/capabilities"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeCapabilitiesResponse))]
+    public async Task<IActionResult> GetAiSpeechAssistantKnowledgeCapabilitiesAsync([FromQuery] GetAiSpeechAssistantKnowledgeCapabilitiesRequest request)
+    {
+        var response = await _mediator
+            .RequestAsync<GetAiSpeechAssistantKnowledgeCapabilitiesRequest, GetAiSpeechAssistantKnowledgeCapabilitiesResponse>(request)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
+
+    [Route("knowledge/capabilities/save"), HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantKnowledgeCapabilitiesResponse))]
+    public async Task<IActionResult> UpdateAiSpeechAssistantKnowledgeCapabilitiesAsync([FromBody] UpdateAiSpeechAssistantKnowledgeCapabilitiesCommand command)
+    {
+        var response = await _mediator
+            .SendAsync<UpdateAiSpeechAssistantKnowledgeCapabilitiesCommand, UpdateAiSpeechAssistantKnowledgeCapabilitiesResponse>(command)
+            .ConfigureAwait(false);
+
+        return Ok(response);
+    }
     
     [Route("knowledge/history"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantKnowledgeHistoryResponse))]
@@ -232,10 +255,21 @@ public class AiSpeechAssistantController : ControllerBase
     }
     
     [Route("session"), HttpGet]
+    [AccountOrTemporarySessionAuthorize]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetAiSpeechAssistantSessionResponse))]
     public async Task<IActionResult> GetAiSpeechAssistantSessionAsync([FromQuery] GetAiSpeechAssistantSessionRequest request)
     {
+        if (!IsTemporarySessionBoundTo(request.SessionId)) return Forbid();
+
         var response = await _mediator.RequestAsync<GetAiSpeechAssistantSessionRequest, GetAiSpeechAssistantSessionResponse>(request).ConfigureAwait(false);
+        if (IsTemporarySessionCredential() && response.Data?.Count > 0)
+        {
+            return Unauthorized(new
+            {
+                code = StatusCodes.Status401Unauthorized,
+                msg = "The interview session is invalid or has expired."
+            });
+        }
 
         return Ok(response);
     }
@@ -250,12 +284,30 @@ public class AiSpeechAssistantController : ControllerBase
     }
     
     [Route("session/update"), HttpPost]
+    [AccountOrTemporarySessionAuthorize]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UpdateAiSpeechAssistantSessionResponse))]
     public async Task<IActionResult> UpdateAiSpeechAssistantSessionAsync([FromBody] UpdateAiSpeechAssistantSessionCommand command)
     {
+        if (!IsTemporarySessionBoundTo(command.SessionId)) return Forbid();
+
         var response = await _mediator.SendAsync<UpdateAiSpeechAssistantSessionCommand, UpdateAiSpeechAssistantSessionResponse>(command).ConfigureAwait(false);
 
         return Ok(response);
+    }
+
+    private bool IsTemporarySessionBoundTo(Guid sessionId)
+    {
+        return !IsTemporarySessionCredential() ||
+               User.HasClaim(
+                   TemporarySessionAuthenticationDefaults.SessionIdClaim,
+                   sessionId.ToString("D"));
+    }
+
+    private bool IsTemporarySessionCredential()
+    {
+        return User.HasClaim(
+            TemporarySessionAuthenticationDefaults.CredentialTypeClaim,
+            TemporarySessionAuthenticationDefaults.CredentialType);
     }
     
     [Route("assistant/switch"), HttpPost]
