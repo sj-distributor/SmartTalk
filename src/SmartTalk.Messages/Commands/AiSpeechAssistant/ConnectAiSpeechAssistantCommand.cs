@@ -20,6 +20,12 @@ public class ConnectAiSpeechAssistantCommand : ICommand
     // 有值则用作本通对话指令 (覆盖 DB assistant prompt); 无值 = 照旧用 DB prompt (non-breaking)。
     public string Instruction { get; set; }
 
+    // 代客致电等场景的本通动态问题，由连接服务追加到 Assistant knowledge prompt，不覆盖知识库内容。
+    public string Question { get; set; }
+
+    // 为不依赖店铺/Agent 的外呼指定 Assistant；默认 false 保持原有路由流程。
+    public bool UseDirectAssistant { get; set; }
+
     public WebSocket TwilioWebSocket { get; set; }
     
     public PhoneOrderRecordType OrderRecordType { get; set; }
