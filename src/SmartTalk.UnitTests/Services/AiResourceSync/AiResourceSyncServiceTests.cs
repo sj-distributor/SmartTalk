@@ -407,8 +407,13 @@ public class AiResourceSyncServiceTests
             InitiatedByUserId = 888
         }, CancellationToken.None);
 
-        Assert.Equal(0, result.TotalCount);
+        Assert.False(result.IsSuccess);
+        Assert.Contains("required languages", result.ErrorMessage);
         Assert.Contains("required languages", result.Stats.Warnings.Single());
+        await salesDataProvider.Received(0).AddCrmSalesAutoSyncRunAsync(
+            Arg.Any<SmartTalk.Core.Domain.Sales.CrmSalesAutoSyncRun>(),
+            true,
+            Arg.Any<CancellationToken>());
         await mediator.DidNotReceive().SendAsync<AddAgentCommand, AddAgentResponse>(
             Arg.Any<AddAgentCommand>(),
             Arg.Any<CancellationToken>());

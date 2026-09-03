@@ -24,6 +24,10 @@ public class AiResourceSyncExecutionResult
     public AiResourceSyncExecutionStatsDto Stats { get; set; }
 
     public bool IsInitialRelease { get; set; }
+
+    public bool IsSuccess { get; set; } = true;
+
+    public string ErrorMessage { get; set; }
 }
 
 internal class AiResourceSyncCustomerLoadResult
