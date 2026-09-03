@@ -21,6 +21,7 @@ public partial class AiSpeechAssistantConnectService
         
         await ResolveGreetingAsync(cancellationToken).ConfigureAwait(false);
         await ResolveCustomerItemsAsync(cancellationToken).ConfigureAwait(false);
+        await ResolveDeliveryProgressAsync(cancellationToken).ConfigureAwait(false);
         await ResolveMenuItemsAsync(cancellationToken).ConfigureAwait(false);
         await ResolveCustomerInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolvePosPromptVariablesAsync(cancellationToken).ConfigureAwait(false);
@@ -178,6 +179,28 @@ public partial class AiSpeechAssistantConnectService
             .Replace("{HiFood_商品_商品数据}", value);
     }
 
+    private async Task ResolveDeliveryProgressAsync(CancellationToken cancellationToken)
+    {
+        if (!_ctx.Prompt.Contains("#{delivery_progress}", StringComparison.OrdinalIgnoreCase)) return;
+
+        var soldToIds = GetAssistantSoldToIds();
+        var deliveryProgressText = " ";
+
+        if (soldToIds.Count > 0)
+        {
+            var caches = await _salesDataProvider.GetDeliveryProgressCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+            var deliveryProgressValues = soldToIds
+                .Select(id => caches.FirstOrDefault(c => string.Equals(c.Filter, id, StringComparison.OrdinalIgnoreCase))?.CacheValue?.Trim())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .ToList();
+
+            if (deliveryProgressValues.Count > 0)
+                deliveryProgressText = string.Join(Environment.NewLine + Environment.NewLine, deliveryProgressValues);
+        }
+
+        _ctx.Prompt = _ctx.Prompt.Replace("#{delivery_progress}", deliveryProgressText);
+    }
     // ── Menu items ────────────────────────────────────────────────────────
 
     private sealed record MenuItemsFetchResult(string MenuItems);
@@ -436,6 +459,24 @@ public partial class AiSpeechAssistantConnectService
         };
     }
 
+    private List<string> GetAssistantSoldToIds()
+    {
+        if (string.IsNullOrWhiteSpace(_ctx.Assistant?.Name))
+            return [];
+
+        var soldToIds = new List<string>();
+
+        foreach (var soldToId in _ctx.Assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmedSoldToId = soldToId.Trim();
+            if (string.IsNullOrWhiteSpace(trimmedSoldToId)) continue;
+            if (soldToIds.Contains(trimmedSoldToId, StringComparer.OrdinalIgnoreCase)) continue;
+
+            soldToIds.Add(trimmedSoldToId);
+        }
+
+        return soldToIds;
+    }
     // ── Delivery info (CRM 送货日 / delivery_info) ─────────────────────────
 
     private sealed record DeliveryInfoFetchResult(string DeliveryValue);

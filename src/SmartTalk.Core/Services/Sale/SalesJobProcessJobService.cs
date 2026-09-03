@@ -34,7 +34,12 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly CustomerItemsRefreshBatchSizeSetting _customerItemsRefreshBatchSizeSetting;
 
-    public SalesJobProcessJobService(ICrmClient crmClient, ISalesService salesService, ISalesDataProvider salesDataProvider, ISmartTalkBackgroundJobClient backgroundJobClient, SpeechMaticsDataProvider speechMaticsDataProvide, CustomerItemsRefreshBatchSizeSetting customerItemsRefreshBatchSizeSetting)
+    public SalesJobProcessJobService(
+        ICrmClient crmClient,
+        ISalesService salesService,
+        ISalesDataProvider salesDataProvider,
+        ISmartTalkBackgroundJobClient backgroundJobClient,
+        CustomerItemsRefreshBatchSizeSetting customerItemsRefreshBatchSizeSetting)
     {
         _crmClient = crmClient;
         _salesService = salesService;
@@ -42,7 +47,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         _backgroundJobClient = backgroundJobClient;
         _customerItemsRefreshBatchSizeSetting = customerItemsRefreshBatchSizeSetting;
     }
-    
+
     public async Task ScheduleRefreshCustomerItemsCacheAsync(RefreshAllCustomerItemsCacheCommand command, CancellationToken cancellationToken)
     {
         Log.Information("Start full customer items cache refresh...");
@@ -65,7 +70,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             (int)Math.Ceiling(allSoldToIds.Count / (double)batchSize),
             batchSize);
     }
-    
+
     public async Task RefreshCustomerItemsCacheBySoldToIdAsync(string soldToId, CancellationToken cancellationToken)
     {
         await RefreshCustomerItemsCacheBySoldToIdsAsync([soldToId], cancellationToken).ConfigureAwait(false);
@@ -85,12 +90,24 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             Log.Information("Refreshing customer items cache for soldToIds: {SoldToIds}", ids);
 
             var customerItems = await _salesService.BuildCustomerItemsStringsAsync(ids, cancellationToken).ConfigureAwait(false);
-
             var cacheItems = ids.ToDictionary(
                 x => x,
                 x => customerItems.GetValueOrDefault(x) ?? string.Empty,
                 StringComparer.OrdinalIgnoreCase);
             await _salesDataProvider.UpsertCustomerItemsCachesAsync(cacheItems, cancellationToken).ConfigureAwait(false);
+
+            var deliveryProgresses = await _salesService
+                .BuildCustomerDeliveryProgressStringsAsync(ids, cancellationToken)
+                .ConfigureAwait(false);
+
+            for (var index = 0; index < ids.Count; index++)
+            {
+                var id = ids[index];
+                var deliveryProgress = deliveryProgresses.GetValueOrDefault(id) ?? string.Empty;
+                var shouldSave = index == ids.Count - 1;
+
+                await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, shouldSave, cancellationToken).ConfigureAwait(false);
+            }
 
             Log.Information("Customer items cache refreshed successfully for soldToIds: {SoldToIds}", ids);
         }
@@ -108,18 +125,17 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
-    
     public async Task ScheduleRefreshCrmCustomerInfoAsync(RefreshAllCustomerInfoCacheCommand command, CancellationToken cancellationToken)
     {
-        var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken);
+        var allSales = await _salesDataProvider.GetAllSalesAsync(cancellationToken).ConfigureAwait(false);
         var allSoldToIds = allSales.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct().ToList();
-        
+
         var crmToken = await _crmClient.GetCrmTokenAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(crmToken)) return;
 
         var totalPhones = 0;
         var phoneNumbersToRefresh = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        
+
         foreach (var soldToId in allSoldToIds)
         {
             var customerIds = soldToId
@@ -164,7 +180,6 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             phoneNumbersToRefresh.Count);
     }
 
-
     public async Task RefreshCrmCustomerInfoByPhoneNumberAsync(string phoneNumber, string crmToken, CancellationToken cancellationToken)
     {
         try
@@ -192,7 +207,7 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
             Log.Error(ex, "Failed to refresh CRM customer info cache for phone {Phone}", phoneNumber);
         }
     }
-    
+
     private string NormalizePhone(string phone)
     {
         if (string.IsNullOrWhiteSpace(phone)) return phone;
