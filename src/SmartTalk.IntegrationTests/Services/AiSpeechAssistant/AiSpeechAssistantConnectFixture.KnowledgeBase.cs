@@ -162,6 +162,71 @@ public partial class AiSpeechAssistantConnectFixture
     }
 
     [Fact]
+    public async Task ShouldAppendQuestionToKnowledgePrompt_WhenConnectCommandHasQuestion()
+    {
+        var assistantId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var assistant = new Core.Domain.AISpeechAssistant.AiSpeechAssistant
+            {
+                Name = "TestAssistant", AnsweringNumber = TestDidNumber, ModelProvider = RealtimeAiProvider.OpenAi,
+                ModelVoice = "alloy", IsDefault = true, IsDisplay = true
+            };
+            await repository.InsertAsync(assistant);
+            await unitOfWork.SaveChangesAsync();
+            assistantId = assistant.Id;
+
+            await repository.InsertAsync(new AiSpeechAssistantKnowledge
+            {
+                AssistantId = assistant.Id,
+                Prompt = "KNOWLEDGE_PROMPT_MARKER_keep_this_prompt",
+                Greetings = "Hello from the managed assistant knowledge.",
+                IsActive = true, Version = "1.0"
+            });
+        });
+
+        var twilioWs = new MockWebSocket();
+        twilioWs.EnqueueMessage(JsonConvert.SerializeObject(new
+        {
+            @event = "start",
+            start = new { callSid = "CA_QUESTION", streamSid = "MZ_QUESTION" }
+        }));
+
+        var openaiWs = CreateProviderMock();
+        openaiWs.EnqueueMessage(JsonConvert.SerializeObject(new { type = "session.updated" }));
+
+        const string question = "1. 今晚 7 点还有 4 位的位置吗?\n2. 如果没有，需要等多久?";
+
+        var command = new ConnectAiSpeechAssistantCommand
+        {
+            From = TestCallerNumber,
+            To = TestDidNumber,
+            Host = TestHost,
+            AssistantId = assistantId,
+            Question = question,
+            UseDirectAssistant = true,
+            TwilioWebSocket = twilioWs
+        };
+
+        await Run<IMediator>(async mediator =>
+        {
+            await mediator.SendAsync(command);
+        }, builder =>
+        {
+            builder.RegisterInstance(Substitute.For<ISmartTalkBackgroundJobClient>()).As<ISmartTalkBackgroundJobClient>();
+            builder.RegisterInstance(Substitute.For<ISmartiesClient>()).AsImplementedInterfaces();
+            openaiWs.Register(builder);
+        });
+
+        openaiWs.SentMessages.ShouldNotBeEmpty();
+        var sessionUpdate = Encoding.UTF8.GetString(openaiWs.SentMessages.First());
+        sessionUpdate.ShouldContain("KNOWLEDGE_PROMPT_MARKER_keep_this_prompt");
+        sessionUpdate.ShouldContain("For this call, ask the merchant the following customer questions in order:");
+        sessionUpdate.ShouldContain("今晚 7 点还有 4 位的位置吗?");
+    }
+
+    [Fact]
     public async Task ShouldBuildKnowledge_WithForwardedAssistantId()
     {
         await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>

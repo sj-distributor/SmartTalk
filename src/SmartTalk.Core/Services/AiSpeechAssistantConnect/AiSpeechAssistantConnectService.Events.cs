@@ -42,12 +42,16 @@ public partial class AiSpeechAssistantConnectService
         _ctx.CallSid = callSid;
         _ctx.StreamSid = streamSid;
 
-        // 代客致电: instruction 经 <Stream><Parameter> 到达 start 帧的 customParameters; URL 查询串通道不可靠时这里兜底回填。
-        // start 帧通常早于 OpenAI session-ready, 故 HandleSessionReadyAsync 多能读到; 已由 URL 设过则不覆盖。
+        // 代客致电: instruction/question 经 <Stream><Parameter> 到达 start 帧的 customParameters; URL/path 通道不可靠时这里兜底回填。
+        // question 的 URL/path 通道用于建立 session 前的 Prompt 拼接；start 帧回填仅用于后续会话上下文，不能追溯修改已发送的 session 配置。
         if (string.IsNullOrWhiteSpace(_ctx.Instruction) && metadata.TryGetValue("instruction", out var instruction) && !string.IsNullOrWhiteSpace(instruction))
             _ctx.Instruction = instruction;
 
-        Log.Information("[AiAssistant] Call started, CallSid: {CallSid}, StreamSid: {StreamSid}, HasInstruction: {HasInstruction}", callSid, streamSid, !string.IsNullOrWhiteSpace(_ctx.Instruction));
+        if (string.IsNullOrWhiteSpace(_ctx.Question) && metadata.TryGetValue("question", out var question) && !string.IsNullOrWhiteSpace(question))
+            _ctx.Question = question;
+
+        Log.Information("[AiAssistant] Call started, CallSid: {CallSid}, StreamSid: {StreamSid}, HasInstruction: {HasInstruction}, HasQuestion: {HasQuestion}",
+            callSid, streamSid, !string.IsNullOrWhiteSpace(_ctx.Instruction), !string.IsNullOrWhiteSpace(_ctx.Question));
 
         TriggerTwilioRecordingPhoneCall();
 

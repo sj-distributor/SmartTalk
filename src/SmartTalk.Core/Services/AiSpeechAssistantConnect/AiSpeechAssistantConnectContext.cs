@@ -26,6 +26,9 @@ public class AiSpeechAssistantConnectContext
     // 代客致电等场景: 调用方经 connect URL ?instruction= 传入的本通指令; 有值则覆盖 DB prompt (non-breaking)。
     public string Instruction { get; set; }
 
+    // 代客致电等场景: 调用方传入本通动态问题，由连接服务追加到 Assistant knowledge prompt。
+    public string Question { get; set; }
+
     // Assistant & knowledge
     public string Prompt { get; set; }
     public string CustomerItemsPromptTemplate { get; set; }

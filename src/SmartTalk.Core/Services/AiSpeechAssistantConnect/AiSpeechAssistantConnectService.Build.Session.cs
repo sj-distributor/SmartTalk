@@ -27,6 +27,7 @@ public partial class AiSpeechAssistantConnectService
         "- After a store has been confirmed, answer later product, stock, availability, warehouse-goods, or orderable-goods questions only from the current customer-items knowledge. Do not call this tool again unless the guest provides or corrects a different store name.\n" +
         "- If no store has been confirmed and the guest asks about HiFood product information, ask for the store, restaurant, or shop name first.\n" +
         "- Never use product, stock, availability, warehouse-goods, or orderable-goods information from memory or another store.";
+    private const string CallQuestionPromptHeader = "For this call, ask the merchant the following customer questions in order:";
 
     private RealtimeSessionOptions BuildSessionOptions()
     {
@@ -94,7 +95,9 @@ public partial class AiSpeechAssistantConnectService
                 _ctx.CustomerItemsPromptValue;
         }
 
-        return AppendCustomerItemsToolInstructions(prompt, _ctx.FunctionCalls);
+        prompt = AppendCustomerItemsToolInstructions(prompt, _ctx.FunctionCalls);
+
+        return AppendCallQuestion(prompt, _ctx.Question);
     }
 
     public static string AppendCustomerItemsToolInstructions(
@@ -161,7 +164,16 @@ public partial class AiSpeechAssistantConnectService
             ModelVoice = assistant.ModelVoice
         });
     }
-    
+    internal static string AppendCallQuestion(string prompt, string question)
+    {
+        if (string.IsNullOrWhiteSpace(question)) return prompt;
+
+        var questionSection = $"{CallQuestionPromptHeader}\n{question.Trim()}";
+
+        return string.IsNullOrWhiteSpace(prompt)
+            ? questionSection
+            : prompt.TrimEnd() + "\n\n" + questionSection;
+    }
     /// <summary>
     /// Logs per-turn OpenAI token usage with assistant + call context so cost reports
     /// can be reconstructed from structured Serilog properties. Intentionally fire-and-
