@@ -2,6 +2,7 @@ using System.Text;
 using Serilog;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Crm;
 using SmartTalk.Messages.Dto.Sales;
 
@@ -10,6 +11,12 @@ namespace SmartTalk.Core.Services.Sale;
 public interface ISalesService : IScopedDependency
 {
     Task<string> BuildCustomerItemsStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
+    Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
+    Task<Dictionary<string, string>> BuildCustomerDeliveryProgressStringsAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
+    Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken);
 
     Task<Dictionary<string, string>> BuildCustomerItemsStringsAsync(List<string> soldToIds, CancellationToken cancellationToken);
     
@@ -184,29 +191,83 @@ public class SalesService : ISalesService
         var withoutLeadingZeros = trimmed.TrimStart('0');
         return withoutLeadingZeros.Length == 0 ? "0" : withoutLeadingZeros;
     }
-    
-    public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
+
+    public async Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    {
+        var deliveryProgressByCustomer = await BuildCustomerDeliveryProgressStringsAsync(soldToIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        return string.Join(Environment.NewLine, deliveryProgressByCustomer.Values);
+    }
+
+    public async Task<Dictionary<string, string>> BuildCustomerDeliveryProgressStringsAsync(
+        List<string> soldToIds,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var normalizedSoldToIds = NormalizeSoldToIds(soldToIds);
+        if (normalizedSoldToIds.Count == 0)
+        {
+            Log.Warning("BuildCustomerDeliveryProgressStringsAsync called with empty soldToIds");
+            return result;
+        }
+
+        foreach (var batch in normalizedSoldToIds.Chunk(CustomerItemsQueryBatchSize))
+        {
+            var batchSoldToIds = batch.ToList();
+            var processedCustomerIds = batchSoldToIds.Select(id => "0000" + id).ToList();
+            var deliveryProgressResponse = await _salesClient.GetOrderArrivalTimeAsync(
+                new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds },
+                cancellationToken).ConfigureAwait(false);
+
+            var ordersByCustomer = (deliveryProgressResponse?.Data ?? [])
+                .Where(order => order != null)
+                .GroupBy(order => BuildCustomerLookupKey(order.CustomerId), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var soldToId in batchSoldToIds)
+            {
+                var customerOrders = ordersByCustomer.GetValueOrDefault(BuildCustomerLookupKey(soldToId)) ?? [];
+                result[soldToId] =
+                    $"=== 客户 {soldToId} 配送进度 ==={Environment.NewLine}{BuildDeliveryProgressText(customerOrders)}";
+            }
+        }
+
+        return result;
+    }
+
+    public async Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken)
     {
         var processedCustomerIds = customerIds.Select(id => "0000" + id).ToList();
 
-        var getOrderArrivalTimeList = await _salesClient.GetOrderArrivalTimeAsync(
+        var deliveryProgressResponse = await _salesClient.GetOrderArrivalTimeAsync(
             new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds }, cancellationToken).ConfigureAwait(false);
 
-        if (getOrderArrivalTimeList.Data.Count == 0) return "这位客户暂时没有订单。";
+        return BuildDeliveryProgressText(deliveryProgressResponse?.Data ?? []);
+    }
+
+    private string BuildDeliveryProgressText(List<GetOrderArrivalTimeDataDto> orders)
+    {
+        if (orders.Count == 0) return "这位客户暂时没有订单。";
         
         var resultBuilder = new StringBuilder();
         
-        var notDeliveredOrders = getOrderArrivalTimeList.Data.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
+        var notDeliveredOrders = orders.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
         
-        var deliveringOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 4).ToList();
+        var deliveringOrders = orders.Where(order => order.OrderStatus == 4).ToList();
         
-        var completedOrders = getOrderArrivalTimeList.Data.Where(order => order.OrderStatus == 7).ToList();
+        var completedOrders = orders.Where(order => order.OrderStatus == 7).ToList();
         
         AppendOrderSection(resultBuilder, "未配送", notDeliveredOrders);
         AppendOrderSection(resultBuilder, "配送中", deliveringOrders);
         AppendOrderSection(resultBuilder, "已完成", completedOrders);
 
         return resultBuilder.ToString();
+    }
+
+    public async Task<string> HandleOrderArrivalTimeList(List<string> customerIds, CancellationToken cancellationToken)
+    {
+        return await BuildDeliveryProgressListAsync(customerIds, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CrmCustomerPhoneKnowledgeDto> BuildCrmKnowledgeByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
@@ -503,10 +564,19 @@ public class SalesService : ISalesService
             {
                 var order = orders[i];
                 builder.AppendLine(
-                    $"{i + 1}. 订单号码：{order.SalesOrderNumber} ，客户ID：{order.CustomerId} ，预计送到时间：{order.EstimatedDeliveryTime}");
+                    $"{i + 1}. 订单号码：{order.SalesOrderNumber} ，客户ID：{order.CustomerId} ，预计送到时间：{FormatUtcAsPst(order.EstimatedDeliveryTime)}");
             }
             builder.AppendLine();
         }
+    }
+
+    private static string FormatUtcAsPst(DateTime utcTime)
+    {
+        var specifiedUtcTime = utcTime.Kind == DateTimeKind.Utc
+            ? utcTime
+            : DateTime.SpecifyKind(utcTime, DateTimeKind.Utc);
+
+        return TimeZoneInfo.ConvertTimeFromUtc(specifiedUtcTime, PstTimeZone.Get()).ToString("yyyy-MM-dd HH:mm:ss");
     }
 
 }

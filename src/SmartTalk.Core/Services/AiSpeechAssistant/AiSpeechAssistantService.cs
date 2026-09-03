@@ -39,6 +39,7 @@ using SmartTalk.Core.Services.Timer;
 using SmartTalk.Core.Settings.Azure;
 using SmartTalk.Core.Settings.OpenAi;
 using SmartTalk.Core.Services.Twilio;
+using SmartTalk.Core.Settings.AiSpeechAssistant;
 using SmartTalk.Core.Settings.WorkWeChat;
 using SmartTalk.Core.Settings.ZhiPuAi;
 using Task = System.Threading.Tasks.Task;
@@ -80,6 +81,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartiesClient _smartiesClient;
     private readonly ZhiPuAiSettings _zhiPuAiSettings;
     private readonly IRedisSafeRunner _redisSafeRunner;
+    private readonly IAiSpeechAssistantSessionCredentialService _sessionCredentialService;
     private readonly IPosDataProvider _posDataProvider;
     private readonly IPosUtilService _posUtilService;
     private readonly IPhoneOrderService _phoneOrderService;
@@ -97,6 +99,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
     private readonly ISmartTalkBackgroundJobClient _backgroundJobClient;
     private readonly ITwilioService _twilioService;
     private readonly IAiSpeechAssistantDataProvider _aiSpeechAssistantDataProvider;
+    private readonly AiSpeechAssistantSettings _aiSpeechAssistantSettings;
     private readonly IAiSpeechAssistantKnowledgePromptService _aiSpeechAssistantKnowledgePromptService;
     private readonly IKnowledgeScenarioDataProvider _knowledgeScenarioDataProvider;
 
@@ -121,6 +124,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartiesClient smartiesClient,
         ZhiPuAiSettings zhiPuAiSettings,
         IRedisSafeRunner redisSafeRunner,
+        IAiSpeechAssistantSessionCredentialService sessionCredentialService,
         IPosDataProvider posDataProvider,
         IPosUtilService posUtilService,
         IPhoneOrderService phoneOrderService,
@@ -138,6 +142,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         ISmartTalkBackgroundJobClient backgroundJobClient,
         ITwilioService twilioService,
         IAiSpeechAssistantDataProvider aiSpeechAssistantDataProvider,
+        AiSpeechAssistantSettings aiSpeechAssistantSettings,
         IAiSpeechAssistantKnowledgePromptService aiSpeechAssistantKnowledgePromptService,
         IKnowledgeScenarioDataProvider knowledgeScenarioDataProvider,
         WebSocket openaiWebSocket = null)
@@ -154,6 +159,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _smartiesClient = smartiesClient;
         _zhiPuAiSettings = zhiPuAiSettings;
         _redisSafeRunner = redisSafeRunner;
+        _sessionCredentialService = sessionCredentialService;
         _posDataProvider = posDataProvider;
         _posUtilService = posUtilService;
         _agentDataProvider = agentDataProvider;
@@ -171,6 +177,7 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
         _twilioService = twilioService;
         _inactivityTimerManager = inactivityTimerManager;
         _aiSpeechAssistantDataProvider = aiSpeechAssistantDataProvider;
+        _aiSpeechAssistantSettings = aiSpeechAssistantSettings;
         _aiSpeechAssistantKnowledgePromptService = aiSpeechAssistantKnowledgePromptService;
         _knowledgeScenarioDataProvider = knowledgeScenarioDataProvider;
 
@@ -297,16 +304,47 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             finalPrompt = finalPrompt.Replace("#{greeting}", knowledge.Greetings ?? string.Empty);
         }
         
+        var soldToIds = (assistant?.Name ?? string.Empty)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         if (finalPrompt.Contains("#{customer_items}", StringComparison.OrdinalIgnoreCase))
         {
+            var customerItemsText = " ";
+
             if (!string.IsNullOrWhiteSpace(assistant.Name))
             {
                 var caches = await _salesDataProvider.GetCustomerItemsCacheByAssistantNameAsync(assistant.Name, cancellationToken).ConfigureAwait(false);
 
                 var customerItems = caches.Where(c => !string.IsNullOrEmpty(c.CacheValue)).Select(c => c.CacheValue.Trim()).Distinct().ToList();
 
-                finalPrompt = finalPrompt.Replace("#{customer_items}", customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ");
+                customerItemsText = customerItems.Any() ? string.Join(Environment.NewLine + Environment.NewLine, customerItems.Take(50)) : " ";
             }
+
+            finalPrompt = finalPrompt.Replace("#{customer_items}", customerItemsText);
+        }
+
+        if (finalPrompt.Contains("#{delivery_progress}", StringComparison.OrdinalIgnoreCase))
+        {
+            var deliveryProgressText = " ";
+
+            if (soldToIds.Any())
+            {
+                var caches = await _salesDataProvider.GetDeliveryProgressCacheBySoldToIdsAsync(soldToIds, cancellationToken).ConfigureAwait(false);
+
+                var deliveryProgressValues = soldToIds
+                    .Select(id => caches.FirstOrDefault(c => string.Equals(c.Filter, id, StringComparison.OrdinalIgnoreCase))?.CacheValue?.Trim())
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToList();
+
+                deliveryProgressText = deliveryProgressValues.Any()
+                    ? string.Join(Environment.NewLine + Environment.NewLine, deliveryProgressValues)
+                    : " ";
+            }
+
+            finalPrompt = finalPrompt.Replace("#{delivery_progress}", deliveryProgressText);
         }
         
         if (agentId.HasValue && finalPrompt.Contains("#{menu_items}", StringComparison.OrdinalIgnoreCase))

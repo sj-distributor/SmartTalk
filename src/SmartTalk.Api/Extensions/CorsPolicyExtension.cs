@@ -4,6 +4,8 @@ namespace SmartTalk.Api.Extensions;
 
 public static class CorsPolicyExtension
 {
+    public const string RealtimeAiWebRtcPocPolicy = "RealtimeAiWebRtcPoc";
+
     public static IServiceCollection AddCorsPolicy(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddCors(options =>
@@ -16,6 +18,15 @@ public static class CorsPolicyExtension
                         .AllowAnyMethod()
                         .AllowCredentials();
                 });
+
+            // Isolated POC policy: AllowAnyOrigin lets the standalone diagnostic HTML page
+            // POST SDP without changing the existing application's CORS behavior.
+            options.AddPolicy(
+                RealtimeAiWebRtcPocPolicy,
+                policy => policy
+                    .AllowAnyOrigin()
+                    .AllowAnyHeader()
+                    .AllowAnyMethod());
         });
         
         return services;

@@ -8,10 +8,12 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 using SmartTalk.Core.Domain.AISpeechAssistant;
+using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.PhoneOrder;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.Agents;
 using SmartTalk.Core.Services.Http.Clients;
+using SmartTalk.Core.Services.KnowledgeScenario;
 using SmartTalk.Core.Services.PhoneOrder;
 using SmartTalk.Core.Services.Pos;
 using SmartTalk.Core.Services.Restaurants;
@@ -24,6 +26,7 @@ using SmartTalk.Messages.Dto.Agent;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Dto.Restaurant;
 using SmartTalk.Messages.Dto.WebSocket;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.PhoneOrder;
 using SmartTalk.Messages.Enums.STT;
@@ -37,6 +40,10 @@ public interface IAiSpeechAssistantProcessJobService : IScopedDependency
     Task SyncAiSpeechAssistantLanguageAsync(SyncAiSpeechAssistantLanguageCommand command, CancellationToken cancellationToken);
 
     Task SyncAiSpeechAssistantKnowledgePromptAsync(SyncAiSpeechAssistantKnowledgePromptCommand command, CancellationToken cancellationToken);
+
+    Task SyncAiSpeechAssistantKnowledgeDetailAsync(SyncAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken);
+
+    Task CleanupAiSpeechAssistantKnowledgeByLanguageAsync(CleanupAiSpeechAssistantKnowledgeByLanguageCommand command, CancellationToken cancellationToken);
     
     Task RecordAiSpeechAssistantCallAsync(AiSpeechAssistantStreamContextDto context, PhoneOrderRecordType orderRecordType, CancellationToken cancellationToken);
 }
@@ -176,14 +183,29 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         foreach (var assistant in assistants)
         {
-            if (!TryGetCustomerId(assistant, out var customerId)) continue;
+            if (!TryGetCustomerIds(assistant, out var customerIds)) continue;
+            var originalModelLanguage = assistant.ModelLanguage;
 
             try
             {
-                var contacts = await _crmClient.GetCustomerContactsAsync(customerId, crmToken, cancellationToken).ConfigureAwait(false);
-                var language = BuildLanguageText(contacts);
+                var allContacts = new List<SmartTalk.Messages.Dto.Crm.CrmContactDto>();
+                foreach (var customerId in customerIds)
+                {
+                    var contacts = await _crmClient.GetCustomerContactsAsync(customerId, crmToken, cancellationToken).ConfigureAwait(false);
+                    if (contacts is { Count: > 0 })
+                        allContacts.AddRange(contacts);
+                }
 
-                if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal))
+                var language = BuildLanguageText(allContacts);
+                if (string.IsNullOrWhiteSpace(assistant.ModelLanguage))
+                {
+                    var customer = await _crmClient.GetSalesAutoSyncCustomerBySapIdAsync(customerIds[0], cancellationToken).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(customer?.Language))
+                        assistant.ModelLanguage = AiResourceSyncLanguageConverter.ToModelLanguage(customer.Language);
+                }
+
+                if (!string.Equals(assistant.Language ?? string.Empty, language, StringComparison.Ordinal) ||
+                    !string.Equals(originalModelLanguage ?? string.Empty, assistant.ModelLanguage ?? string.Empty, StringComparison.Ordinal))
                 {
                     assistant.Language = language;
                     updates.Add(assistant);
@@ -191,7 +213,7 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
             }
             catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
             {
-                Log.Warning(ex, "Rate limited while syncing language for assistant {AssistantId} (CustomerId: {CustomerId})", assistant.Id, customerId);
+                Log.Warning(ex, "Rate limited while syncing language for assistant {AssistantId} (CustomerIds: {CustomerIds})", assistant.Id, string.Join("/", customerIds));
                 await Task.Delay(rateLimitDelay, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -204,17 +226,23 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         await _speechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(updates, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        static bool TryGetCustomerId(Domain.AISpeechAssistant.AiSpeechAssistant assistant, out string customerId)
+        static bool TryGetCustomerIds(Domain.AISpeechAssistant.AiSpeechAssistant assistant, out List<string> customerIds)
         {
-            customerId = null;
-            if (string.IsNullOrWhiteSpace(assistant.Name)) return false;
+            customerIds = new List<string>();
+            if (string.IsNullOrWhiteSpace(assistant.Name))
+                return false;
 
-            var rawCustomerId = assistant.Name.Trim();
-            var firstSegment = rawCustomerId.Split('/')[0].Trim();
-            if (string.IsNullOrEmpty(firstSegment) || !char.IsDigit(firstSegment[0])) return false;
+            var idsPart = assistant.Name
+                .Trim()
+                .Split(" (", 2, StringSplitOptions.TrimEntries)[0];
 
-            customerId = firstSegment;
-            return true;
+            customerIds = idsPart
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => x.All(char.IsDigit))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return customerIds.Count > 0;
         }
     }
 
@@ -282,6 +310,65 @@ public class AiSpeechAssistantProcessJobService : IAiSpeechAssistantProcessJobSe
 
         await _speechAssistantDataProvider
             .UpdateAiSpeechAssistantKnowledgesAsync(updates, true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SyncAiSpeechAssistantKnowledgeDetailAsync(SyncAiSpeechAssistantKnowledgeDetailCommand command, CancellationToken cancellationToken)
+    {
+        var companyName = _salesSetting.CompanyName?.Trim();
+        if (string.IsNullOrWhiteSpace(companyName))
+        {
+            Log.Information("Skip syncing assistant knowledge details: Sales CompanyName is empty.");
+            return;
+        }
+
+        var company = await _posDataProvider.GetPosCompanyByNameAsync(companyName, cancellationToken).ConfigureAwait(false);
+        if (company == null)
+        {
+            Log.Information("Skip syncing assistant knowledge details: company not found: {CompanyName}", companyName);
+            return;
+        }
+
+        Log.Information("[Job] SyncAiSpeechAssistantKnowledgeDetail. CompanyId={CompanyId}", company.Id);
+        await _aiSpeechAssistantKnowledgePromptService.RefreshKnowledgeDetailsByCompanyIdAsync(company.Id, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CleanupAiSpeechAssistantKnowledgeByLanguageAsync(CleanupAiSpeechAssistantKnowledgeByLanguageCommand command, CancellationToken cancellationToken)
+    {
+        var companyId = command.CompanyId;
+        var targetLanguages = (command.Languages ?? []).Distinct().ToHashSet();
+        if (companyId <= 0 || targetLanguages.Count == 0)
+            return;
+
+        var assistantKnowledges = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgesByCompanyIdAsync(companyId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var knowledgeIds = assistantKnowledges
+            .Where(x => x.SourceSystem == AgentSourceSystem.AiResource)
+            .Select(x => x.KnowledgeId)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+        if (knowledgeIds.Count == 0)
+            return;
+
+        var knowledges = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgesAsync(knowledgeIds, cancellationToken).ConfigureAwait(false);
+        var staleKnowledges = knowledges
+            .Where(x => Enum.TryParse<SmartTalk.Messages.Enums.KnowledgeScenario.AutoAddLanguage>(x.ModelLanguage, true, out var language) && targetLanguages.Contains(language))
+            .ToList();
+        if (staleKnowledges.Count == 0)
+            return;
+
+        var staleKnowledgeIds = staleKnowledges.Select(x => x.Id).ToList();
+        var relations = await _speechAssistantDataProvider.GetAiSpeechAssistantKnowledgeSceneRelationsByKnowledgeIdsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
+
+        var crmRelationsToDelete = relations
+            .Where(x => x.SourceType == AiSpeechAssistantKnowledgeSceneRelationSourceType.CrmAutoSync)
+            .ToList();
+
+        if (crmRelationsToDelete.Count == 0)
+            return;
+
+        await _speechAssistantDataProvider.DeleteAiSpeechAssistantKnowledgeSceneRelationsAsync(crmRelationsToDelete, true, cancellationToken).ConfigureAwait(false);
+
+        await _aiSpeechAssistantKnowledgePromptService.RefreshScenePromptsAsync(staleKnowledgeIds, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool TryMergeNormalizedJson(int knowledgeId, string knowledgeJson, IEnumerable<string> copyKnowledgePoints, out string mergedJson)

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using SmartTalk.Api.Authentication.ApiKey;
 using SmartTalk.Api.Authentication.OME;
+using SmartTalk.Api.Authentication.TemporarySession;
 using SmartTalk.Api.Authentication.Wiltechs;
 using SmartTalk.Core.Services.Identity;
 using SmartTalk.Core.Settings.Authentication;
@@ -38,6 +39,8 @@ public static class AuthenticationExtension
             })
             .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
                 AuthenticationSchemeConstants.ApiKeyAuthenticationScheme, _ => { })
+            .AddScheme<TemporarySessionAuthenticationOptions, TemporarySessionAuthenticationHandler>(
+                AuthenticationSchemeConstants.TemporarySessionAuthenticationScheme, _ => { })
             .AddScheme<WiltechsAuthenticationOptions, WiltechsAuthenticationHandler>(
                 AuthenticationSchemeConstants.WiltechsAuthenticationScheme, options =>
                 {
@@ -60,6 +63,26 @@ public static class AuthenticationExtension
                 AuthenticationSchemeConstants.ApiKeyAuthenticationScheme,
                 AuthenticationSchemeConstants.WiltechsAuthenticationScheme,
                 AuthenticationSchemeConstants.OMEAuthenticationScheme).RequireAuthenticatedUser().Build();
+
+            options.AddPolicy(
+                TemporarySessionAuthenticationDefaults.AccountOrTemporarySessionPolicy,
+                new AuthorizationPolicyBuilder(
+                        JwtBearerDefaults.AuthenticationScheme,
+                        AuthenticationSchemeConstants.ApiKeyAuthenticationScheme,
+                        AuthenticationSchemeConstants.WiltechsAuthenticationScheme,
+                        AuthenticationSchemeConstants.OMEAuthenticationScheme,
+                        AuthenticationSchemeConstants.TemporarySessionAuthenticationScheme)
+                    .RequireAuthenticatedUser()
+                    .Build());
+
+            options.AddPolicy(
+                TemporarySessionAuthenticationDefaults.TemporarySessionPolicy,
+                new AuthorizationPolicyBuilder(AuthenticationSchemeConstants.TemporarySessionAuthenticationScheme)
+                    .RequireAuthenticatedUser()
+                    .RequireClaim(
+                        TemporarySessionAuthenticationDefaults.CredentialTypeClaim,
+                        TemporarySessionAuthenticationDefaults.CredentialType)
+                    .Build());
         });
         
         RegisterCurrentUser(services, configuration);
