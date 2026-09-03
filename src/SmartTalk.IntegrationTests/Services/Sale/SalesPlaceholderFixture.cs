@@ -22,6 +22,11 @@ public class SalesPlaceholderFixture
         var mapper = Substitute.For<IMapper>();
         var aiSpeechAssistantDataProvider = Substitute.For<IAiSpeechAssistantDataProvider>();
         var salesDataProvider = Substitute.For<ISalesDataProvider>();
+        var aiSpeechAssistantKnowledgePromptService = Substitute.For<IAiSpeechAssistantKnowledgePromptService>();
+        aiSpeechAssistantKnowledgePromptService
+            .BuildFinalPrompt(Arg.Any<AiSpeechAssistantKnowledge>())
+            .Returns("到货信息:\n#{delivery_progress}");
+
         var assistantService = new AiSpeechAssistantService(
             clock: null!,
             mapper: mapper,
@@ -54,7 +59,7 @@ public class SalesPlaceholderFixture
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
             fileTextExtractor:null!,
             aiSpeechAssistantSettings: null!,
-            aiSpeechAssistantKnowledgePromptService: null!,
+            aiSpeechAssistantKnowledgePromptService: aiSpeechAssistantKnowledgePromptService,
             knowledgeScenarioDataProvider: null!,
             openaiWebSocket: null!);
 
@@ -67,7 +72,7 @@ public class SalesPlaceholderFixture
                 new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
                 {
                     Id = 1,
-                    Name = "1001/1002"
+                    Name = "1001 / 1002 / 1001"
                 },
                 new AiSpeechAssistantKnowledge
                 {
@@ -112,7 +117,7 @@ public class SalesPlaceholderFixture
     }
 
     [Fact]
-    public async Task ShouldRefreshDeliveryProgressCacheByIndividualSoldToId()
+    public async Task ShouldRefreshDeliveryProgressCacheBySoldToIdBatch()
     {
         var crmClient = Substitute.For<ICrmClient>();
         var salesService = Substitute.For<ISalesService>();
@@ -127,14 +132,14 @@ public class SalesPlaceholderFixture
                 Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1002"),
                 Arg.Any<CancellationToken>())
             .Returns("商品1002");
-        salesService.BuildCustomerDeliveryProgressStringAsync(
-                Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1001"),
+        salesService.BuildCustomerDeliveryProgressStringsAsync(
+                Arg.Is<List<string>>(x => x.Count == 2 && x[0] == "1001" && x[1] == "1002"),
                 Arg.Any<CancellationToken>())
-            .Returns("到货1001");
-        salesService.BuildCustomerDeliveryProgressStringAsync(
-                Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1002"),
-                Arg.Any<CancellationToken>())
-            .Returns("到货1002");
+            .Returns(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["1001"] = "到货1001",
+                ["1002"] = "到货1002"
+            });
 
         var sut = new SalesJobProcessJobService(crmClient, salesService, salesDataProvider, backgroundJobClient, null!);
 

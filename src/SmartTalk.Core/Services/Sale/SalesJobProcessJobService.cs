@@ -96,10 +96,14 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
                 StringComparer.OrdinalIgnoreCase);
             await _salesDataProvider.UpsertCustomerItemsCachesAsync(cacheItems, cancellationToken).ConfigureAwait(false);
 
+            var deliveryProgresses = await _salesService
+                .BuildCustomerDeliveryProgressStringsAsync(ids, cancellationToken)
+                .ConfigureAwait(false);
+
             for (var index = 0; index < ids.Count; index++)
             {
                 var id = ids[index];
-                var deliveryProgress = await _salesService.BuildCustomerDeliveryProgressStringAsync([id], cancellationToken).ConfigureAwait(false);
+                var deliveryProgress = deliveryProgresses.GetValueOrDefault(id) ?? string.Empty;
                 var shouldSave = index == ids.Count - 1;
 
                 await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, shouldSave, cancellationToken).ConfigureAwait(false);
