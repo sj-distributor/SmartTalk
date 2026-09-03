@@ -14,6 +14,8 @@ public interface ISalesService : IScopedDependency
 
     Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken);
 
+    Task<Dictionary<string, string>> BuildCustomerDeliveryProgressStringsAsync(List<string> soldToIds, CancellationToken cancellationToken);
+
     Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken);
 
     Task<Dictionary<string, string>> BuildCustomerItemsStringsAsync(List<string> soldToIds, CancellationToken cancellationToken);
@@ -192,24 +194,46 @@ public class SalesService : ISalesService
     
     public async Task<string> BuildCustomerDeliveryProgressStringAsync(List<string> soldToIds, CancellationToken cancellationToken)
     {
-        var deliveryProgressTexts = new List<string>();
+        var deliveryProgressByCustomer = await BuildCustomerDeliveryProgressStringsAsync(soldToIds, cancellationToken)
+            .ConfigureAwait(false);
 
-        if (soldToIds == null || soldToIds.Count == 0)
+        return string.Join(Environment.NewLine, deliveryProgressByCustomer.Values);
+    }
+
+    public async Task<Dictionary<string, string>> BuildCustomerDeliveryProgressStringsAsync(
+        List<string> soldToIds,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var normalizedSoldToIds = NormalizeSoldToIds(soldToIds);
+        if (normalizedSoldToIds.Count == 0)
         {
-            Log.Warning("BuildCustomerDeliveryProgressStringAsync called with empty soldToIds");
-            return string.Empty;
+            Log.Warning("BuildCustomerDeliveryProgressStringsAsync called with empty soldToIds");
+            return result;
         }
 
-        foreach (var soldToId in soldToIds)
+        foreach (var batch in normalizedSoldToIds.Chunk(CustomerItemsQueryBatchSize))
         {
-            var deliveryProgressText = await HandleOrderArrivalTimeList([soldToId], cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(deliveryProgressText)) continue;
+            var batchSoldToIds = batch.ToList();
+            var processedCustomerIds = batchSoldToIds.Select(id => "0000" + id).ToList();
+            var deliveryProgressResponse = await _salesClient.GetOrderArrivalTimeAsync(
+                new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds },
+                cancellationToken).ConfigureAwait(false);
 
-            deliveryProgressTexts.Add($"=== 客户 {soldToId} 配送进度 ===");
-            deliveryProgressTexts.Add(deliveryProgressText.TrimEnd());
+            var ordersByCustomer = (deliveryProgressResponse?.Data ?? [])
+                .Where(order => order != null)
+                .GroupBy(order => BuildCustomerLookupKey(order.CustomerId), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var soldToId in batchSoldToIds)
+            {
+                var customerOrders = ordersByCustomer.GetValueOrDefault(BuildCustomerLookupKey(soldToId)) ?? [];
+                result[soldToId] =
+                    $"=== 客户 {soldToId} 配送进度 ==={Environment.NewLine}{BuildDeliveryProgressText(customerOrders)}";
+            }
         }
 
-        return string.Join(Environment.NewLine, deliveryProgressTexts);
+        return result;
     }
 
     public async Task<string> BuildDeliveryProgressListAsync(List<string> customerIds, CancellationToken cancellationToken)
@@ -219,15 +243,20 @@ public class SalesService : ISalesService
         var deliveryProgressResponse = await _salesClient.GetOrderArrivalTimeAsync(
             new GetOrderArrivalTimeRequestDto { CustomerIds = processedCustomerIds }, cancellationToken).ConfigureAwait(false);
 
-        if (deliveryProgressResponse.Data.Count == 0) return "这位客户暂时没有订单。";
+        return BuildDeliveryProgressText(deliveryProgressResponse?.Data ?? []);
+    }
+
+    private string BuildDeliveryProgressText(List<GetOrderArrivalTimeDataDto> orders)
+    {
+        if (orders.Count == 0) return "这位客户暂时没有订单。";
         
         var resultBuilder = new StringBuilder();
         
-        var notDeliveredOrders = deliveryProgressResponse.Data.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
+        var notDeliveredOrders = orders.Where(order => new[] { 0, 1, 2, 3, 5, 6, 8 }.Contains(order.OrderStatus)).ToList();
         
-        var deliveringOrders = deliveryProgressResponse.Data.Where(order => order.OrderStatus == 4).ToList();
+        var deliveringOrders = orders.Where(order => order.OrderStatus == 4).ToList();
         
-        var completedOrders = deliveryProgressResponse.Data.Where(order => order.OrderStatus == 7).ToList();
+        var completedOrders = orders.Where(order => order.OrderStatus == 7).ToList();
         
         AppendOrderSection(resultBuilder, "未配送", notDeliveredOrders);
         AppendOrderSection(resultBuilder, "配送中", deliveringOrders);

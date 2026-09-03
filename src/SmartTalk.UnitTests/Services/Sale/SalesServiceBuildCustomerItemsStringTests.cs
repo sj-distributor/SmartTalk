@@ -189,6 +189,30 @@ public class SalesServiceBuildCustomerItemsStringTests
     }
 
     [Fact]
+    public async Task BuildCustomerDeliveryProgressStringsAsync_ShouldQuerySalesClientInBatchesOfTen()
+    {
+        var crmClient = Substitute.For<ICrmClient>();
+        var salesClient = Substitute.For<ISalesClient>();
+        var arrivalRequests = new List<List<string>>();
+        var customerIds = Enumerable.Range(1, 21).Select(x => x.ToString("00000")).ToList();
+
+        salesClient.GetOrderArrivalTimeAsync(
+                Arg.Do<GetOrderArrivalTimeRequestDto>(x => arrivalRequests.Add(x.CustomerIds)),
+                Arg.Any<CancellationToken>())
+            .Returns(new GetOrderArrivalTimeResponseDto { Data = [] });
+
+        var service = new SalesService(crmClient, salesClient);
+
+        var result = await service.BuildCustomerDeliveryProgressStringsAsync(customerIds, CancellationToken.None);
+
+        arrivalRequests.Count.ShouldBe(3);
+        arrivalRequests[0].ShouldBe(customerIds.Take(10).Select(x => "0000" + x).ToList());
+        arrivalRequests[1].ShouldBe(customerIds.Skip(10).Take(10).Select(x => "0000" + x).ToList());
+        arrivalRequests[2].ShouldBe(customerIds.Skip(20).Select(x => "0000" + x).ToList());
+        result.Count.ShouldBe(21);
+    }
+
+    [Fact]
     public async Task BuildDeliveryProgressListAsync_ShouldRenderEstimatedDeliveryTimeInPst()
     {
         var crmClient = Substitute.For<ICrmClient>();

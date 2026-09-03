@@ -358,8 +358,12 @@ public partial class AiSpeechAssistantService : IAiSpeechAssistantService
             .Replace("#{customer_phone}", from.StartsWith("+1") ? from[2..] : from)
             .Replace("#{pst_date}", $"{pstTime.Date:yyyy-MM-dd} {pstTime.DayOfWeek}");
 
-        var candidateCustomerIds = SplitAssistantCustomerIds(assistant.Name);
-        var soldToIds = !string.IsNullOrEmpty(assistant.Name) ? assistant.Name.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>();
+        var candidateCustomerIds = SplitAssistantCustomerIds(assistant?.Name);
+        var soldToIds = (assistant?.Name ?? string.Empty)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (numberId.HasValue && finalPrompt.Contains("#{greeting}"))
         {

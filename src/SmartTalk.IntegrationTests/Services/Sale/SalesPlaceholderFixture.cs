@@ -78,7 +78,7 @@ public class SalesPlaceholderFixture
                 new SmartTalk.Core.Domain.AISpeechAssistant.AiSpeechAssistant
                 {
                     Id = 1,
-                    Name = "1001/1002"
+                    Name = "1001 / 1002 / 1001"
                 },
                 new AiSpeechAssistantKnowledge
                 {
@@ -126,7 +126,7 @@ public class SalesPlaceholderFixture
     }
 
     [Fact]
-    public async Task ShouldRefreshDeliveryProgressCacheByIndividualSoldToId()
+    public async Task ShouldRefreshDeliveryProgressCacheBySoldToIdBatch()
     {
         var crmClient = Substitute.For<ICrmClient>();
         var salesService = Substitute.For<ISalesService>();
@@ -141,14 +141,14 @@ public class SalesPlaceholderFixture
                 ["1001"] = "商品1001",
                 ["1002"] = "商品1002"
             });
-        salesService.BuildCustomerDeliveryProgressStringAsync(
-                Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1001"),
+        salesService.BuildCustomerDeliveryProgressStringsAsync(
+                Arg.Is<List<string>>(x => x.Count == 2 && x[0] == "1001" && x[1] == "1002"),
                 Arg.Any<CancellationToken>())
-            .Returns("到货1001");
-        salesService.BuildCustomerDeliveryProgressStringAsync(
-                Arg.Is<List<string>>(x => x.Count == 1 && x[0] == "1002"),
-                Arg.Any<CancellationToken>())
-            .Returns("到货1002");
+            .Returns(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["1001"] = "到货1001",
+                ["1002"] = "到货1002"
+            });
 
         var configuration = new ConfigurationBuilder().Build();
         var sut = new SalesJobProcessJobService(

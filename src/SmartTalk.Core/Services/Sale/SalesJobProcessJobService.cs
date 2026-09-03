@@ -106,13 +106,17 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
                 StringComparer.OrdinalIgnoreCase);
             await _salesDataProvider.UpsertCustomerItemsCachesAsync(cacheItems, cancellationToken).ConfigureAwait(false);
 
-            for (var i = 0; i < ids.Count; i++)
-            {
-                var id = ids[i];
-                var forceSave = i == ids.Count - 1;
-                var deliveryProgress = await _salesService.BuildCustomerDeliveryProgressStringAsync([id], cancellationToken).ConfigureAwait(false);
+            var deliveryProgresses = await _salesService
+                .BuildCustomerDeliveryProgressStringsAsync(ids, cancellationToken)
+                .ConfigureAwait(false);
 
-                await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, forceSave, cancellationToken).ConfigureAwait(false);
+            for (var index = 0; index < ids.Count; index++)
+            {
+                var id = ids[index];
+                var deliveryProgress = deliveryProgresses.GetValueOrDefault(id) ?? string.Empty;
+                var shouldSave = index == ids.Count - 1;
+
+                await _salesDataProvider.UpsertDeliveryProgressCacheAsync(id, deliveryProgress, shouldSave, cancellationToken).ConfigureAwait(false);
             }
 
             Log.Information("Customer items cache refreshed successfully for soldToIds: {SoldToIds}", ids);

@@ -96,10 +96,14 @@ public class SalesJobProcessJobServiceTests
                 ["00001"] = "items-1",
                 ["00002"] = "items-2"
             });
-        _salesService.BuildCustomerDeliveryProgressStringAsync(
-                Arg.Any<List<string>>(),
+        _salesService.BuildCustomerDeliveryProgressStringsAsync(
+                Arg.Is<List<string>>(x => x.SequenceEqual(new[] { "00001", "00002" })),
                 Arg.Any<CancellationToken>())
-            .Returns(x => $"delivery-{((List<string>)x[0])[0]}");
+            .Returns(new Dictionary<string, string>
+            {
+                ["00001"] = "delivery-00001",
+                ["00002"] = "delivery-00002"
+            });
 
         var sut = BuildService();
 

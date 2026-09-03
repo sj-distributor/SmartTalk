@@ -11,8 +11,8 @@ namespace SmartTalk.Core.Services.Sale;
 public interface ISalesDataProvider : IScopedDependency
 {
     Task<List<Sales>> GetAllSalesAsync(CancellationToken cancellationToken);
-    
     Task<Sales> GetCallInSalesByNameAsync(string assistantName, SalesCallType? type, CancellationToken cancellationToken);
+
     Task AddSalesAsync(Sales sales, bool forceSave = true, CancellationToken cancellationToken = default);
 
     Task<List<AiSpeechAssistantKnowledgeVariableCache>> GetCustomerItemsCacheByAssistantNameAsync(string assistantName, CancellationToken cancellationToken);
@@ -53,6 +53,9 @@ public interface ISalesDataProvider : IScopedDependency
     Task<PhoneOrderPushTask> GetRecordPushTaskByRecordIdAsync(int recordId, CancellationToken cancellationToken);
 
     Task AddCrmSalesAutoSyncRunAsync(CrmSalesAutoSyncRun run, bool forceSave = true, CancellationToken cancellationToken = default);
+
+    Task<CrmSalesAutoSyncRun> GetLatestSuccessfulCrmSalesAutoSyncRunByModeAsync(
+        string mode, CancellationToken cancellationToken = default);
 }
 
 public class SalesDataProvider : ISalesDataProvider
@@ -256,6 +259,19 @@ public class SalesDataProvider : ISalesDataProvider
         ];
     }
     
+    public async Task<CrmSalesAutoSyncRun> GetLatestSuccessfulCrmSalesAutoSyncRunByModeAsync(
+        string mode, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+            return null;
+
+        return await _repository.Query<CrmSalesAutoSyncRun>()
+            .Where(x => x.Mode == mode && x.IsSuccess)
+            .OrderByDescending(x => x.CreatedDate)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private async Task UpsertKnowledgeVariableCacheAsync(
         string cacheKey,
         string filter,
