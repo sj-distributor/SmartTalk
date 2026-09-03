@@ -35,15 +35,15 @@ public class SalesPlaceholderFixture
             smartiesClient: null!,
             zhiPuAiSettings: null!,
             redisSafeRunner: null!,
+            sessionCredentialService: null!,
             posDataProvider: null!,
             posUtilService: null!,
             phoneOrderService: null!,
             agentDataProvider: null!,
+            agentTransferCallRoutingService: null!,
             attachmentService: null!,
-            speechMaticsService: null!,
             salesDataProvider: salesDataProvider,
             speechToTextService: null!,
-            fileTextExtractor: null!,
             workWeChatKeySetting: null!,
             httpClientFactory: null!,
             restaurantDataProvider: null!,
@@ -52,6 +52,10 @@ public class SalesPlaceholderFixture
             backgroundJobClient: null!,
             twilioService: null!,
             aiSpeechAssistantDataProvider: aiSpeechAssistantDataProvider,
+            fileTextExtractor:null!,
+            aiSpeechAssistantSettings: null!,
+            aiSpeechAssistantKnowledgePromptService: null!,
+            knowledgeScenarioDataProvider: null!,
             openaiWebSocket: null!);
 
         aiSpeechAssistantDataProvider
@@ -93,7 +97,7 @@ public class SalesPlaceholderFixture
 
         var task = (Task)buildMethod!.Invoke(
             assistantService,
-            ["+15550001", "+15550002", null, null, null, CancellationToken.None])!;
+            ["+15550001", "+15550002", null, null, null, null, CancellationToken.None])!;
         await task;
 
         var streamContextField = typeof(AiSpeechAssistantService).GetField(

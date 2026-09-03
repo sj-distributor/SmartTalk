@@ -39,7 +39,6 @@ public class SalesJobProcessJobService : ISalesJobProcessJobService
         ISalesService salesService,
         ISalesDataProvider salesDataProvider,
         ISmartTalkBackgroundJobClient backgroundJobClient,
-        SpeechMaticsDataProvider speechMaticsDataProvide,
         CustomerItemsRefreshBatchSizeSetting customerItemsRefreshBatchSizeSetting)
     {
         _crmClient = crmClient;
