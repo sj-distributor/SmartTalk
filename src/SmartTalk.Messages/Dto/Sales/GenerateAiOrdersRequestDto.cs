@@ -1,8 +1,13 @@
+using System.Text.Json.Serialization;
+
 namespace SmartTalk.Messages.Dto.Sales;
 
 public class GenerateAiOrdersRequestDto
 {
     public string AiModel { get; set; }
+
+    [JsonPropertyName("order_source")]
+    public string OrderSource { get; set; }
     
     public AiOrderInfoDto AiOrderInfoDto { get; set; }
     
