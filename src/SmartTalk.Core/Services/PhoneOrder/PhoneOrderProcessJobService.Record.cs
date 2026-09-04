@@ -820,11 +820,13 @@ public partial class PhoneOrderProcessJobService
         return $"{storeOrder.StoreName}_{storeOrder.DeliveryDate:yyyyMMdd}";
     }
 
-    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems, string flow, int recordId, CancellationToken cancellationToken) 
+    private async Task<List<ExtractedOrderDto>> ExtractAndMatchOrderItemsFromReportAsync(string reportText, List<CustomerMaterialCandidateDto> historyItems, string flow, int recordId, CancellationToken cancellationToken)
     { 
         var client = new ChatClient("gpt-4.1", _openAiSettings.ApiKey);
 
-        var materialListText = string.Join("\n", historyItems.Select(x => $"{x.MaterialDesc} ({x.Material})【{x.invoiceDate}】"));
+        var materialListText = string.Join("\n", historyItems.Select(x =>
+            $"{x.MaterialDescription} ({x.MaterialNumber})" +
+            $"【sourceType:{x.SourceType},isAssign:{x.IsAssign ?? string.Empty},lastUpdate:{x.LastUpdate},lastInvoiceDate:{x.LastInvoiceDate},atr:{x.Atr}】"));
 
         var systemPrompt =
             "你是一名訂單分析助手。請從下面的客戶分析報告文字中提取所有下單的物料名稱、數量、單位，並且用歷史物料列表盡力匹配每個物料的materialNumber。「優先準確匹配物料列表中靠前的物料，如果有多個同類一樣物料，選用歷史列表中排在前的。」" +
@@ -835,6 +837,16 @@ public partial class PhoneOrderProcessJobService
             "歷史物料列表中的日期只用於匹配 materialNumber，不能作為 DeliveryDate。\n" +
             "範例 JSON 中的 DeliveryDate 只是格式示例，不是今天日期，也不是默認送貨日期，不能照抄或參照範例日期推斷。\n" +
             "只有客戶分析報告中非常清楚地提到具體送貨日期（例如幾月幾日）時，才可以填入 DeliveryDate；否則 DeliveryDate 必須留空字符串。\n" +
+            "【客戶單位與物料單位偏好】\n" +
+            "1. 客戶說箱、case、cs 時，unit 必須保留客戶原話，materialNumber 優先匹配箱/CS item。\n" +
+            "2. 客戶說 PC、包、件、隻、盒、扎、tray 等非箱非磅單位時，unit 必須保留客戶原話，materialNumber 優先匹配 PC item。\n" +
+            "3. 客戶說磅、lb、lbs、pound 時，unit 必須保留客戶原話，不得誤判為箱或 PC；此處只做單位和物料匹配偏好，不做價格比較。\n" +
+            "【使用意向與 ATR】\n" +
+            "只可從 ATR 大於 0 的候選中選擇。剩餘候選按以下優先級選料：" +
+            "1. isAssign =「指定」；" +
+            "2. isAssign =「可用」；" +
+            "3. isAssign 為空字符串。若同一優先級有多個候選，AskInfo 取 lastUpdate 最新，History 取 lastInvoiceDate 最新。" +
+            "若沒有 ATR 大於 0 的候選，materialNumber 必須留空。\n" +
             
             "【訂單意圖判斷規則（非常重要）】\n" +
             "1. 如果客戶明確表示取消整張訂單、全部不要、整單取消、今天的單都不要，請在該店鋪標記 IsDeleteWholeOrder=true，orders 可以為空陣列。\n" +
@@ -946,6 +958,7 @@ public partial class PhoneOrderProcessJobService
                             Log.Information("AiOrderItemMatched Flow={Flow} RequestType={RequestType} RecordId={RecordId} ItemName={ItemName} DurationMs={DurationMs} Matched={Matched}", flow, "MatchMaterialNumber", recordId, name, matchStopwatch.ElapsedMilliseconds, !string.IsNullOrWhiteSpace(materialNumber));
                         }
                         
+                        var unitType = CustomerOrderUnitClassifier.Classify(unit);
                         storeDto.Orders.Add(new ExtractedOrderItemDto
                         {
                             Unit = unit,
@@ -954,7 +967,11 @@ public partial class PhoneOrderProcessJobService
                             MarkForDelete = markForDelete,
                             MaterialNumber = materialNumber,
                             Restored = restored,
-                            IsTargetQuantity = isTargetQuantity
+                            IsTargetQuantity = isTargetQuantity,
+                            OrderUnitType = unitType,
+                            PreferredMaterialUnit = CustomerOrderUnitClassifier.GetPreferredMaterialUnit(unit),
+                            IsCaseOrder = unitType == CustomerOrderUnitClassifier.Case,
+                            IsPieceOrder = unitType == CustomerOrderUnitClassifier.Piece
                         });
                     } 
                 }
@@ -971,10 +988,11 @@ public partial class PhoneOrderProcessJobService
         } 
     }
     
-    private async Task<List<(string Material, string MaterialDesc, DateTime? InvoiceDate)>> GetCustomerHistoryItemsBySoldToIdAsync(List<string> soldToIds, CancellationToken cancellationToken)
+    private async Task<List<CustomerMaterialCandidateDto>> GetCustomerHistoryItemsBySoldToIdAsync(
+        List<string> soldToIds,
+        CancellationToken cancellationToken)
     {
-        List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems = new List<(string, string, DateTime?)>();
-
+        var historyItems = new List<CustomerMaterialCandidateDto>();
         var customerIds = soldToIds?
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x.Trim())
@@ -983,55 +1001,165 @@ public partial class PhoneOrderProcessJobService
 
         foreach (var batch in customerIds.Chunk(10))
         {
-            var batchCustomerIds = batch.ToList();
-            var materialOverviewResponse = await _salesClient.GetCustomerMaterialOverviewAsync(new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = batchCustomerIds }, cancellationToken).ConfigureAwait(false);
+            var materialOverviewResponse = await _salesClient
+                .GetCustomerMaterialOverviewAsync(
+                    new GetCustomerMaterialOverviewRequestDto { CustomerNumbers = batch.ToList() },
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             if (materialOverviewResponse?.Code != 200)
             {
-                Log.Warning("GetCustomerMaterialOverviewAsync returned non-success response. ResultCode: {ResultCode}, ResultMsg: {ResultMsg}", materialOverviewResponse?.Code, materialOverviewResponse?.Message);
+                Log.Warning(
+                    "GetCustomerMaterialOverviewAsync returned non-success response. ResultCode={ResultCode}, ResultMsg={ResultMsg}",
+                    materialOverviewResponse?.Code,
+                    materialOverviewResponse?.Message);
                 continue;
             }
 
-            if (materialOverviewResponse?.Data != null && materialOverviewResponse.Data.Any())
-                historyItems.AddRange(materialOverviewResponse.Data
-                    .SelectMany(x => x.Items ?? [])
-                    .Where(x => !string.IsNullOrWhiteSpace(x.MaterialNumber))
-                    .Select(x => (x.MaterialNumber, x.MaterialDescription, x.LastInvoiceDate)));
+            foreach (var overview in materialOverviewResponse.Data ?? [])
+            {
+                foreach (var item in overview.Items ?? [])
+                {
+                    if (string.IsNullOrWhiteSpace(item?.MaterialNumber) ||
+                        string.Equals(item.IsAssign, "不用", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    historyItems.Add(new CustomerMaterialCandidateDto
+                    {
+                        CustomerNumber = overview.CustomerNumber,
+                        SourceType = NormalizeMaterialSourceType(item.SourceType),
+                        MaterialNumber = item.MaterialNumber,
+                        MaterialDescription = item.MaterialDescription,
+                        Plant = item.Plant,
+                        MaterialType = item.MaterialType,
+                        Atr = item.Atr,
+                        IsAssign = item.IsAssign ?? string.Empty,
+                        LastInvoiceDate = item.LastInvoiceDate,
+                        LastUpdate = item.LastUpdate
+                    });
+                }
+            }
         }
 
-        return historyItems;
+        return await RefreshMaterialAtrAsync(historyItems, cancellationToken).ConfigureAwait(false);
     }
 
-    private string MatchMaterialNumber(string itemName, string baseNumber, string unit, List<(string Material, string MaterialDesc, DateTime? invoiceDate)> historyItems)
+    private async Task<List<CustomerMaterialCandidateDto>> RefreshMaterialAtrAsync(List<CustomerMaterialCandidateDto> candidates, CancellationToken cancellationToken)
     {
-        var candidates = historyItems.Where(x => x.MaterialDesc != null && x.MaterialDesc.Contains(itemName, StringComparison.OrdinalIgnoreCase)).Select(x => x.Material).ToList();
+        foreach (var candidate in candidates)
+            candidate.Atr = 0;
+
+        if (candidates.Count == 0)
+            return candidates;
+
+        var request = new GetMaterialAtrRequestDto
+        {
+            Items = candidates.Select(candidate => new GetMaterialAtrItemDto
+            {
+                CustomerNumber = candidate.CustomerNumber,
+                SourceType = NormalizeMaterialSourceType(candidate.SourceType),
+                Plant = candidate.Plant,
+                MaterialNumber = candidate.MaterialNumber,
+                MaterialType = candidate.MaterialType
+            }).ToList()
+        };
+
+        try
+        {
+            var response = await _salesClient.GetMaterialAtrAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response?.Code != 200 || response.Data == null)
+            {
+                Log.Warning(
+                    "GetMaterialAtrAsync returned non-success response. ResultCode={ResultCode}, ResultMsg={ResultMsg}",
+                    response?.Code,
+                    response?.Message);
+                return candidates;
+            }
+
+            for (var index = 0; index < candidates.Count && index < response.Data.Count; index++)
+                candidates[index].Atr = (decimal)Math.Max(0, response.Data[index].Atr);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Refresh material ATR failed. CandidateCount={CandidateCount}", candidates.Count);
+        }
+
+        return candidates;
+    }
+
+    private static string NormalizeMaterialSourceType(string sourceType)
+    {
+        return string.Equals(sourceType, "AskInfo", StringComparison.OrdinalIgnoreCase)
+            ? "AskInfo"
+            : "History";
+    }
+
+    private string MatchMaterialNumber(
+        string itemName,
+        string baseNumber,
+        string unit,
+        List<CustomerMaterialCandidateDto> historyItems)
+    {
+        var candidates = historyItems
+            .Where(x => x.Atr > 0 &&
+                        x.MaterialDescription != null &&
+                        x.MaterialDescription.Contains(itemName, StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.MaterialNumber)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         Log.Information("Candidate material code list: {@Candidates}", candidates);
 
-        if (!candidates.Any()) return string.IsNullOrEmpty(baseNumber) ? "" : baseNumber;
+        var candidateDetails = historyItems
+            .Where(x => x.Atr > 0 &&
+                        x.MaterialDescription != null &&
+                        x.MaterialDescription.Contains(itemName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
-        if (!string.IsNullOrWhiteSpace(baseNumber) &&
-            candidates.Contains(baseNumber, StringComparer.OrdinalIgnoreCase))
-            return baseNumber;
+        if (candidateDetails.Count == 0)
+            return string.Empty;
 
-        if (candidates.Count == 1) return candidates.First();
+        var askInfoCandidates = candidateDetails
+            .Where(x => string.Equals(x.SourceType, "AskInfo", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var selectionPool = askInfoCandidates.Count > 0
+            ? askInfoCandidates
+            : candidateDetails.Where(x => string.Equals(x.SourceType, "History", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        var isCase = !string.IsNullOrWhiteSpace(unit) && (unit.Contains("case", StringComparison.OrdinalIgnoreCase) || unit.Contains("箱"));
-        if (isCase)
+        if (selectionPool.Count == 0)
+            selectionPool = candidateDetails;
+
+        var assignedCandidates = selectionPool
+            .Where(x => string.Equals(x.IsAssign, "指定", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (assignedCandidates.Count > 0)
+            selectionPool = assignedCandidates;
+
+        var preferredUnit = CustomerOrderUnitClassifier.GetPreferredMaterialUnit(unit);
+        if (!string.IsNullOrEmpty(preferredUnit))
         {
-            var noPcList = candidates.Where(x => !x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
-
-            if (noPcList.Any())
-                return noPcList.First(); 
-            
-            return candidates.First();
+            var unitCandidates = selectionPool
+                .Where(x => IsMaterialUnitMatch(x.MaterialNumber, preferredUnit))
+                .ToList();
+            if (unitCandidates.Count > 0)
+                selectionPool = unitCandidates;
         }
-        
-        var pcList = candidates.Where(x => x.Contains("PC", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        if (pcList.Any())
-            return pcList.First();
-        
-        return candidates.First();
+        var selected = selectionPool
+            .OrderByDescending(x => string.Equals(x.SourceType, "AskInfo", StringComparison.OrdinalIgnoreCase)
+                ? x.LastUpdate
+                : x.LastInvoiceDate)
+            .ThenByDescending(x => string.Equals(x.MaterialNumber, baseNumber, StringComparison.OrdinalIgnoreCase))
+            .First();
+
+        return selected.MaterialNumber;
+    }
+
+    private static bool IsMaterialUnitMatch(string materialNumber, string preferredUnit)
+    {
+        if (string.Equals(preferredUnit, CustomerOrderUnitClassifier.Case, StringComparison.OrdinalIgnoreCase))
+            return !materialNumber.Contains("PC", StringComparison.OrdinalIgnoreCase);
+
+        return materialNumber.Contains("PC", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string> ResolveSoldToIdAsync(ExtractedOrderDto storeOrder, Domain.AISpeechAssistant.AiSpeechAssistant aiSpeechAssistant, List<string> soldToIds, CancellationToken cancellationToken) 
@@ -1089,6 +1217,10 @@ public partial class PhoneOrderProcessJobService
                     AiMaterialDesc = i.AiMaterialDesc,
                     MaterialQuantity = i.Quantity,
                     AiUnit = i.Unit,
+                    OrderUnitType = CustomerOrderUnitClassifier.Classify(i.Unit),
+                    PreferredMaterialUnit = CustomerOrderUnitClassifier.GetPreferredMaterialUnit(i.Unit),
+                    IsCaseOrder = CustomerOrderUnitClassifier.IsCase(i.Unit),
+                    IsPieceOrder = CustomerOrderUnitClassifier.Classify(i.Unit) == CustomerOrderUnitClassifier.Piece,
                     MarkForDelete = i.MarkForDelete,
                     Restored = i.Restored,
                     IsTargetQuantity = i.IsTargetQuantity
@@ -1138,7 +1270,7 @@ public partial class PhoneOrderProcessJobService
         return phoneNumbers;
     }
 
-    private void BackfillMaterialNumbers(ExtractedOrderDto storeOrder, List<(string Material, string MaterialDesc, DateTime? InvoiceDate)> historyItems)
+    private void BackfillMaterialNumbers(ExtractedOrderDto storeOrder, List<CustomerMaterialCandidateDto> historyItems)
     {
         if (historyItems.Count == 0) return;
 
@@ -1378,6 +1510,10 @@ public partial class PhoneOrderProcessJobService
                 item.AiMaterialDesc,
                 Quantity = item.MaterialQuantity,
                 Unit = item.AiUnit,
+                item.OrderUnitType,
+                item.PreferredMaterialUnit,
+                item.IsCaseOrder,
+                item.IsPieceOrder,
                 item.MarkForDelete,
                 OriginalQuantity = ParseOriginalQuantity(item.AiMaterialDesc),
                 item.IsProcessed
@@ -1413,6 +1549,7 @@ public partial class PhoneOrderProcessJobService
             "若 通话中的 Name == 草稿基准名，视为同一物料。\n" +
             "  - **需要尽量匹配上。**。\n" +
             "  - **严禁**：严禁将 material_number 为空的商品直接忽略，即使物料号和名称意图匹配不上，都都必须要保留。\n" +
+            "4. 单位偏好：本次通话单位为箱、case、cs时，优先使用箱/CS item；单位为PC、包、件、隻、盒、扎、tray等非箱非磅单位时，优先使用PC item；单位为磅、lb、lbs、pound时保留磅单位，不得误判为箱或PC。此规则只用于物料匹配偏好，不进行价格比较。\n" +
             
             "【关键规则二：计算与生成（Strict）】\n" +
             " **对于每一个用户输入的商品**：\n" +
@@ -1559,7 +1696,19 @@ public partial class PhoneOrderProcessJobService
                         MaterialNumber = materialNumber,
                         MarkForDelete = markForDelete,
                         Restored = restored,
-                        IsTargetQuantity = isTargetQuantity
+                        IsTargetQuantity = isTargetQuantity,
+                        OrderUnitType = orderItem.TryGetProperty("OrderUnitType", out var orderUnitType)
+                            ? orderUnitType.GetString() ?? CustomerOrderUnitClassifier.Classify(unit)
+                            : CustomerOrderUnitClassifier.Classify(unit),
+                        PreferredMaterialUnit = orderItem.TryGetProperty("PreferredMaterialUnit", out var preferredMaterialUnit)
+                            ? preferredMaterialUnit.GetString() ?? CustomerOrderUnitClassifier.GetPreferredMaterialUnit(unit)
+                            : CustomerOrderUnitClassifier.GetPreferredMaterialUnit(unit),
+                        IsCaseOrder = orderItem.TryGetProperty("IsCaseOrder", out var isCaseOrder)
+                            ? isCaseOrder.GetBoolean()
+                            : CustomerOrderUnitClassifier.IsCase(unit),
+                        IsPieceOrder = orderItem.TryGetProperty("IsPieceOrder", out var isPieceOrder)
+                            ? isPieceOrder.GetBoolean()
+                            : CustomerOrderUnitClassifier.Classify(unit) == CustomerOrderUnitClassifier.Piece
                     });
                 }
             }

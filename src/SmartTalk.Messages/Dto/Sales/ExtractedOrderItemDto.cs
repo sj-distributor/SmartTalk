@@ -24,6 +24,14 @@ public class ExtractedOrderItemDto
     public string MaterialNumber { get; set; }
 
     public string Unit { get; set; }
+
+    public string OrderUnitType { get; set; }
+
+    public string PreferredMaterialUnit { get; set; }
+
+    public bool IsCaseOrder { get; set; }
+
+    public bool IsPieceOrder { get; set; }
     
     public bool MarkForDelete { get; set; } 
     

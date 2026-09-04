@@ -34,6 +34,10 @@ public class AiSpeechAssistantMapping : Profile
             .ForMember(dest => dest.MaterialQuantity, opt => opt.MapFrom(src => src.Quantity))
             .ForMember(dest => dest.MaterialNumber, opt => opt.MapFrom(src => src.MaterialNumber))
             .ForMember(dest => dest.AiUnit, opt => opt.MapFrom(src => src.Unit))
+            .ForMember(dest => dest.OrderUnitType, opt => opt.MapFrom(src => src.OrderUnitType))
+            .ForMember(dest => dest.PreferredMaterialUnit, opt => opt.MapFrom(src => src.PreferredMaterialUnit))
+            .ForMember(dest => dest.IsCaseOrder, opt => opt.MapFrom(src => src.IsCaseOrder))
+            .ForMember(dest => dest.IsPieceOrder, opt => opt.MapFrom(src => src.IsPieceOrder))
             .ForMember(dest => dest.IsTargetQuantity, opt => opt.MapFrom(src => src.IsTargetQuantity));
         CreateMap<AiSpeechAssistantInboundRoute, AiSpeechAssistantInboundRouteDto>().ReverseMap();
 

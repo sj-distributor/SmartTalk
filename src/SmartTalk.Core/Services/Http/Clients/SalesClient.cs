@@ -9,6 +9,8 @@ public interface ISalesClient : IScopedDependency
 {
     Task<GetCustomerMaterialOverviewResponseDto> GetCustomerMaterialOverviewAsync(GetCustomerMaterialOverviewRequestDto request, CancellationToken cancellationToken);
 
+    Task<GetMaterialAtrResponseDto> GetMaterialAtrAsync(GetMaterialAtrRequestDto request, CancellationToken cancellationToken);
+
     Task<GetAskInfoDetailListByCustomerResponseDto> GetAskInfoDetailListByCustomerAsync(GetAskInfoDetailListByCustomerRequestDto request, CancellationToken cancellationToken);
     
     Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken);
@@ -77,6 +79,14 @@ public class SalesClient : ISalesClient
                 headers: _headers,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task<GetMaterialAtrResponseDto> GetMaterialAtrAsync(GetMaterialAtrRequestDto request, CancellationToken cancellationToken)
+    {
+        if (request?.Items == null || request.Items.Count == 0)
+            return new GetMaterialAtrResponseDto { Code = 200, Data = [] };
+
+        return await _httpClientFactory.PostAsJsonAsync<GetMaterialAtrResponseDto>($"{_salesSetting.BaseUrl}/api/SalesOrder/GetMaterialAtr", request, headers: _headers, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<GetOrderHistoryByCustomerResponseDto> GetOrderHistoryByCustomerAsync(GetOrderHistoryByCustomerRequestDto request, CancellationToken cancellationToken)

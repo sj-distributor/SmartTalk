@@ -39,6 +39,20 @@ public class AiOrderItemDto
     public int MaterialQuantity { get; set; } = 1;
 
     public string AiUnit { get; set; }
+
+    /// <summary>
+    /// Normalized customer order unit: CS, PC, or LB.
+    /// </summary>
+    public string OrderUnitType { get; set; }
+
+    /// <summary>
+    /// Preferred HIFOOD material unit. Empty for pound orders.
+    /// </summary>
+    public string PreferredMaterialUnit { get; set; }
+
+    public bool IsCaseOrder { get; set; }
+
+    public bool IsPieceOrder { get; set; }
     
     public bool MarkForDelete { get; set; }
     

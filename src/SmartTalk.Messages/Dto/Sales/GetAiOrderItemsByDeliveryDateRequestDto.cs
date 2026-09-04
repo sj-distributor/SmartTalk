@@ -30,6 +30,14 @@ public class AiOrderItemSimpleDto
     
     public string AiUnit { get; set; }
 
+    public string OrderUnitType { get; set; }
+
+    public string PreferredMaterialUnit { get; set; }
+
+    public bool IsCaseOrder { get; set; }
+
+    public bool IsPieceOrder { get; set; }
+
     public bool MarkForDelete { get; set; }
 
     public bool Restored { get; set; }

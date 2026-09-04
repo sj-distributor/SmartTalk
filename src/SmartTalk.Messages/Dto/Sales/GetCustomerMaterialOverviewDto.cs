@@ -87,6 +87,12 @@ public class CustomerMaterialItemDto
 
     [JsonProperty("lastInvoiceDate")]
     public DateTime? LastInvoiceDate { get; set; }
+
+    [JsonProperty("isAssign")]
+    public string IsAssign { get; set; }
+
+    [JsonProperty("lastUpdate")]
+    public DateTime? LastUpdate { get; set; }
 }
 
 public class CustomerMaterialLevel5HabitDto
