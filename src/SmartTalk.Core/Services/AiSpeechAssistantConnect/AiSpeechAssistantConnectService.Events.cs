@@ -9,9 +9,23 @@ public partial class AiSpeechAssistantConnectService
 {
     private async Task HandleSessionReadyAsync(RealtimeAiSessionActions actions)
     {
-        if (string.IsNullOrEmpty(_ctx.Knowledge?.Greetings)) return;
-        
-        await actions.SendTextToProviderAsync($"Greet the user with: '{_ctx.Knowledge.Greetings}'").ConfigureAwait(false);
+        await SendOpeningGreetingOnceAsync(_ctx, actions).ConfigureAwait(false);
+    }
+
+    internal static async Task SendOpeningGreetingOnceAsync(
+        AiSpeechAssistantConnectContext context,
+        RealtimeAiSessionActions actions)
+    {
+        var greeting = context.Knowledge?.Greetings;
+        if (string.IsNullOrEmpty(greeting)) return;
+
+        if (Interlocked.CompareExchange(ref context.OpeningGreetingTriggered, 1, 0) != 0)
+        {
+            Log.Debug("[AiAssistant] Opening greeting already triggered, CallSid: {CallSid}", context.CallSid);
+            return;
+        }
+
+        await actions.SendTextToProviderAsync($"Greet the user with: '{greeting}'").ConfigureAwait(false);
     }
 
     private Task HandleClientStartAsync(string sessionId, Dictionary<string, string> metadata)

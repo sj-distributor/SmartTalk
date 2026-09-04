@@ -54,9 +54,9 @@ public class AiResourceSyncProcessJobService : IAiResourceSyncProcessJobService
             {
                 var executionResult = await _aiResourceSyncService.SyncInternalAsync(command, cancellationToken).ConfigureAwait(false);
 
-                await _aiResourceSyncService.RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, true, null, cancellationToken).ConfigureAwait(false);
+                await _aiResourceSyncService.RecordSyncRunAsync(command, executionResult.Stats, executionResult.IsInitialRelease, executionResult.IsSuccess, executionResult.ErrorMessage, cancellationToken).ConfigureAwait(false);
 
-                await _aiResourceSyncService.SendNotifyAsync(true, command.IsManual, cancellationToken).ConfigureAwait(false);
+                await _aiResourceSyncService.SendNotifyAsync(executionResult.IsSuccess, command.IsManual, cancellationToken).ConfigureAwait(false);
 
                 return;
             }
