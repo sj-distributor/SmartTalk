@@ -1,0 +1,1 @@
+CREATE INDEX `idx_pos_order_store_push_created_date` ON `pos_order` (`store_id`, `is_push`, `created_date`);

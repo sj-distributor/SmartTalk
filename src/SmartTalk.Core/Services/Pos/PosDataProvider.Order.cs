@@ -24,6 +24,10 @@ public partial interface IPosDataProvider
     Task<List<PosOrder>>GetPosOrdersByStoreIdsAsync(
         List<int> storeIds, PosOrderModifiedStatus? modifiedStatus = null, bool? isPush = null, DateTimeOffset? startDate = null,
         DateTimeOffset? endDate = null, CancellationToken cancellationToken = default);
+
+    Task<List<PosOrderDashboardProjection>> GetPosOrderDashboardProjectionsAsync(
+        List<int> storeIds, bool? isPush = null, DateTimeOffset? startDate = null,
+        DateTimeOffset? endDate = null, CancellationToken cancellationToken = default);
     
     Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken);
     
@@ -38,6 +42,17 @@ public partial interface IPosDataProvider
     Task UpdatePhoneOrderReservationInformationAsync(PhoneOrderReservationInformation reservationInformation, bool isForceSave = true, CancellationToken cancellationToken = default);
 
     Task DeletePhoneOrderReservationInformationAsync(PhoneOrderReservationInformation reservationInformation, CancellationToken cancellationToken);
+}
+
+public class PosOrderDashboardProjection
+{
+    public int StoreId { get; set; }
+
+    public DateTimeOffset CreatedDate { get; set; }
+
+    public PosOrderModifiedStatus ModifiedStatus { get; set; }
+
+    public decimal Total { get; set; }
 }
 
 public partial class PosDataProvider
@@ -114,6 +129,36 @@ public partial class PosDataProvider
             query = query.Where(x => x.CreatedDate <= endDate.Value);
         
         return await query.OrderByDescending(x => x.CreatedDate).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<List<PosOrderDashboardProjection>> GetPosOrderDashboardProjectionsAsync(
+        List<int> storeIds, bool? isPush = null, DateTimeOffset? startDate = null,
+        DateTimeOffset? endDate = null, CancellationToken cancellationToken = default)
+    {
+        if (storeIds == null || storeIds.Count == 0) return [];
+
+        var query = _repository.QueryNoTracking<PosOrder>()
+            .Where(x => storeIds.Contains(x.StoreId) && x.OrderId != null);
+
+        if (isPush.HasValue)
+            query = query.Where(x => x.IsPush == isPush.Value);
+
+        if (startDate.HasValue)
+            query = query.Where(x => x.CreatedDate >= startDate.Value);
+
+        if (endDate.HasValue)
+            query = query.Where(x => x.CreatedDate <= endDate.Value);
+
+        return await query
+            .Select(x => new PosOrderDashboardProjection
+            {
+                StoreId = x.StoreId,
+                CreatedDate = x.CreatedDate,
+                ModifiedStatus = x.ModifiedStatus,
+                Total = x.Total
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
     
     public async Task<List<PosOrder>> GetPosCustomerInfosAsync(CancellationToken cancellationToken)

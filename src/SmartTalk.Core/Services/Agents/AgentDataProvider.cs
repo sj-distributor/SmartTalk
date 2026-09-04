@@ -264,9 +264,9 @@ public class AgentDataProvider : IAgentDataProvider
     public async Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default)
     {
         var query =
-            from posAgent in _repository.Query<PosAgent>()
-            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
-            join agentAssistant in _repository.Query<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
+            from posAgent in _repository.QueryNoTracking<PosAgent>()
+            join agent in _repository.QueryNoTracking<Agent>() on posAgent.AgentId equals agent.Id
+            join agentAssistant in _repository.QueryNoTracking<AgentAssistant>() on agent.Id equals agentAssistant.AgentId
             where (storeIds == null || storeIds.Count == 0 || storeIds.Contains(posAgent.StoreId)) && agent.IsSurface && agent.IsDisplay
             select new StoreAgentFlatDto
             {

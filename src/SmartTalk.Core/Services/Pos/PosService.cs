@@ -63,6 +63,8 @@ public partial interface IPosService : IScopedDependency
     
     Task<GetDataDashBoardCompanyWithStoresResponse> GetDataDashBoardCompanyWithStoresAsync(GetDataDashBoardCompanyWithStoresRequest request, CancellationToken cancellationToken);
     
+    Task<GetDataDashBoardOptionsResponse> GetDataDashBoardOptionsAsync(GetDataDashBoardOptionsRequest request, CancellationToken cancellationToken);
+
     Task<GetStoreByAgentIdResponse> GetStoreByAgentIdAsync(GetStoreByAgentIdRequest request, CancellationToken cancellationToken);
 }
 
@@ -406,12 +408,17 @@ public partial class PosService : IPosService
         var stores = _mapper.Map<List<CompanyStoreDto>>(
             await _posDataProvider.GetPosCompanyStoresAsync(ids: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false));
         
-        var allAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var posAgents = await _posDataProvider.GetPosAgentsAsync(storeIds: storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var flatAgents = await _agentDataProvider.GetStoreAgentsAsync(storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agentLookup = BuildStoreAgentLookup(flatAgents);
         
         var enrichStores = stores.Select(store => new GetCurrentUserStoresResponseData
         {
             Store = store,
-            AgentIds = allAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList()
+            AgentIds = posAgents.Where(x => x.StoreId == store.Id).Select(x => x.AgentId).ToList(),
+            Agents = agentLookup.TryGetValue(store.Id, out var agents)
+                ? agents
+                : new List<AgentDetailDto>()
         }).ToList();
 
         return new GetCurrentUserStoresResponse { Data = enrichStores };
@@ -440,6 +447,50 @@ public partial class PosService : IPosService
         }).ToList();
         
         return new GetStoresAgentsResponse { Data = enrichStores };
+    }
+
+    public async Task<GetDataDashBoardOptionsResponse> GetDataDashBoardOptionsAsync(GetDataDashBoardOptionsRequest request, CancellationToken cancellationToken)
+    {
+        var companyStoreRows = await _posDataProvider.GetDashboardCompanyStoresAsync(
+            request.ServiceProviderId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var companyStores = companyStoreRows
+            .GroupBy(x => x.Company.Id)
+            .Select(g =>
+            {
+                var stores = g.Where(x => x.Store != null).Select(x => x.Store).ToList();
+
+                return new DataDashBoardCompanyWithStoresOptionDto
+                {
+                    Company = g.First().Company,
+                    Stores = stores,
+                    Count = stores.Count
+                };
+            })
+            .ToList();
+        var stores = companyStores.SelectMany(x => x.Stores ?? []).ToList();
+        var storeIds = stores.Select(x => Convert.ToInt32(x.Id)).Distinct().ToList();
+        var flatAgents = storeIds.Count == 0
+            ? []
+            : await _agentDataProvider.GetStoreAgentsAsync(storeIds, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var agentLookup = BuildStoreAgentLookup(flatAgents);
+        var storesAgents = stores.Select(store => new DataDashBoardStoreAgentsOptionDto
+        {
+            Store = store,
+            Agents = agentLookup.TryGetValue(store.Id, out var agents)
+                ? agents
+                : new List<AgentDetailDto>()
+        }).ToList();
+
+        return new GetDataDashBoardOptionsResponse
+        {
+            Data = new GetDataDashBoardOptionsResponseData
+            {
+                Companies = companyStores,
+                StoresAgents = storesAgents,
+                AllStoreIds = storeIds,
+                AllAgentIds = flatAgents.Select(x => x.AgentId).Distinct().ToList()
+            }
+        };
     }
 
     public async Task<GetAllStoresResponse> GetAllStoresAsync(GetAllStoresRequest request, CancellationToken cancellationToken)
@@ -552,13 +603,10 @@ public partial class PosService : IPosService
 
     private async Task CheckAiSpeechAssistantOrderPushSwitchAsync(int storeId, bool isManualReview, CancellationToken cancellationToken)
     {
-        var assistants = await _aiSpeechAssistantDataProvider.GetAiSpeechAssistantsByStoreIdAsync(storeId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var updatedCount = await _aiSpeechAssistantDataProvider
+            .UpdateAiSpeechAssistantOrderPushByStoreIdAsync(storeId, !isManualReview, cancellationToken).ConfigureAwait(false);
         
-        Log.Information("Get assistants: {@Assistants} by store id: {StoreId}", assistants, storeId);
-        
-        assistants.ForEach(x => x.IsAllowOrderPush = !isManualReview);
-        
-        await _aiSpeechAssistantDataProvider.UpdateAiSpeechAssistantsAsync(assistants, cancellationToken: cancellationToken).ConfigureAwait(false);
+        Log.Information("Updated assistant order push switch by store id: {StoreId}, IsAllowOrderPush={IsAllowOrderPush}, UpdatedCount={UpdatedCount}", storeId, !isManualReview, updatedCount);
     }
 
     private async Task InitialAgentAsync(int storeId, CancellationToken cancellationToken)
@@ -596,5 +644,20 @@ public partial class PosService : IPosService
                 Data = await EnrichPosCompaniesAsync(result, cancellationToken).ConfigureAwait(false)
             }
         };
+    }
+
+    private static Dictionary<int, List<AgentDetailDto>> BuildStoreAgentLookup(List<StoreAgentFlatDto> flatAgents)
+    {
+        return flatAgents
+            .GroupBy(x => x.StoreId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => new AgentDetailDto
+                    {
+                        Id = x.AgentId,
+                        Name = x.AgentName
+                    })
+                    .DistinctBy(x => x.Id)
+                    .ToList());
     }
 }

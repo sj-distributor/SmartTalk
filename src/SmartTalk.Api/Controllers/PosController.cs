@@ -395,6 +395,18 @@ public class PosController : ControllerBase
      
         return Ok(response);
     }
+    
+    /// <summary>
+    /// Optimizes dashboard interactions by returning the prerequisite fields needed by the service provider dashboard view in one response.
+    /// </summary>
+    [Route("data/dashboard/options"), HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetDataDashBoardOptionsResponse))]
+    public async Task<IActionResult> GetDataDashBoardOptionsAsync([FromQuery] GetDataDashBoardOptionsRequest request)
+    {
+        var response = await _mediator.RequestAsync<GetDataDashBoardOptionsRequest, GetDataDashBoardOptionsResponse>(request).ConfigureAwait(false);
+
+        return Ok(response);
+    }
 
     [Route("get/reservationInfo"), HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GetOrderReservationInfoResponse))]
