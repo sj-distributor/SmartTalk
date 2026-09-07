@@ -35,6 +35,78 @@ public class SalesClientTests
     }
 
     [Fact]
+    public async Task GetMaterialAtrAsync_ShouldPostItemsToSalesOrderEndpoint()
+    {
+        var capturedRequests = new List<GetMaterialAtrRequestDto>();
+        var sut = BuildClient();
+
+        _httpClientFactory.PostAsJsonAsync<GetMaterialAtrResponseDto>(
+                "https://sales.example.com/api/SalesOrder/GetMaterialAtr",
+                Arg.Do<object>(value => capturedRequests.Add((GetMaterialAtrRequestDto)value)),
+                Arg.Any<CancellationToken>(),
+                headers: Arg.Any<Dictionary<string, string>>())
+            .Returns(new GetMaterialAtrResponseDto
+            {
+                Code = 200,
+                Data =
+                [
+                    new GetMaterialAtrItemDto
+                    {
+                        CustomerNumber = "00001",
+                        SourceType = "AskInfo",
+                        Plant = "1200",
+                        MaterialNumber = "10010001",
+                        MaterialType = "ASK",
+                        Atr = 12
+                    }
+                ]
+            });
+
+        var response = await sut.GetMaterialAtrAsync(
+            new GetMaterialAtrRequestDto
+            {
+                Items =
+                [
+                    new GetMaterialAtrItemDto
+                    {
+                        CustomerNumber = "00001",
+                        SourceType = "AskInfo",
+                        Plant = "1200",
+                        MaterialNumber = "10010001",
+                        MaterialType = "ASK"
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        capturedRequests.Count.ShouldBe(1);
+        capturedRequests[0].Items.Count.ShouldBe(1);
+        capturedRequests[0].Items[0].SourceType.ShouldBe("AskInfo");
+        response.Data[0].Atr.ShouldBe(12);
+    }
+
+    [Fact]
+    public async Task GetMaterialAtrAsync_ShouldReturnEmptySuccessWithoutCallingSalesWhenItemsAreEmpty()
+    {
+        var sut = BuildClient();
+
+        var response = await sut.GetMaterialAtrAsync(new GetMaterialAtrRequestDto(), CancellationToken.None);
+
+        response.Code.ShouldBe(200);
+        response.Data.ShouldBeEmpty();
+        _ = _httpClientFactory.DidNotReceiveWithAnyArgs()
+            .PostAsJsonAsync<GetMaterialAtrResponseDto>(
+                default,
+                default,
+                default,
+                default,
+                default,
+                default,
+                default,
+                default);
+    }
+
+    [Fact]
     public async Task GetAskInfoDetailListByCustomerAsync_ShouldPostCustomerNumbersOnce()
     {
         var capturedRequests = new List<GetAskInfoDetailListByCustomerRequestDto>();
