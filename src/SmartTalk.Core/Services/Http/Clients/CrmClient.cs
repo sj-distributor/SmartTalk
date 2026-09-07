@@ -176,7 +176,7 @@ public class CrmClient : ICrmClient
             var pagedUrl = $"{url}?page={page}";
 
             CrmSalesAutoSyncPagedResponseDto? response = null;
-            const int maxRetry = 3;
+            const int maxRetry = 5;
 
             for (var retry = 1; retry <= maxRetry; retry++)
             {
@@ -190,7 +190,7 @@ public class CrmClient : ICrmClient
                     response = null;
                     if (retry < maxRetry)
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
                         continue;
                     }
 
@@ -198,11 +198,11 @@ public class CrmClient : ICrmClient
                 }
                 catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested && retry < maxRetry)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
                 }
                 catch (HttpRequestException) when (retry < maxRetry)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
                 }
             }
 
