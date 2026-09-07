@@ -6,6 +6,9 @@ namespace SmartTalk.Messages.Requests.Twilio;
 
 public class SendTwilioMessageRequest : IRequest
 {
+    [Range(1, int.MaxValue)]
+    public int CompanyId { get; set; }
+
     [Required]
     public string FromNumber { get; set; }
 
@@ -33,4 +36,8 @@ public class SendTwilioMessageResponse : SmartTalkResponse
     public int? ErrorCode { get; set; }
 
     public string ErrorMessage { get; set; }
+
+    public bool IsSkipped { get; set; }
+
+    public string SkipReason { get; set; }
 }

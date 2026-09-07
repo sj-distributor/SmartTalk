@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using SmartTalk.Messages.Responses;
+using SmartTalk.Core.Middlewares.Authorization;
 using SmartTalk.Core.Middlewares.Security;
 
 namespace SmartTalk.Api.Filters;
@@ -15,6 +16,7 @@ public class GlobalExceptionFilter : IExceptionFilter
         {
             ValidationException => HttpStatusCode.BadRequest,
             AccountExpiredException => HttpStatusCode.Unauthorized,
+            ForbiddenAccessException => HttpStatusCode.Forbidden,
             _ => HttpStatusCode.InternalServerError
         };
 

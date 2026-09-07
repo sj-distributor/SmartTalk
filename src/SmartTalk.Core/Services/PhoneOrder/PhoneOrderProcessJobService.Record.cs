@@ -28,6 +28,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using SmartTalk.Core.Domain.Sales;
 using SmartTalk.Core.Services.Sale;
+using SmartTalk.Core.Services.Notification;
 using SmartTalk.Messages.Enums.Sales;
 
 namespace SmartTalk.Core.Services.PhoneOrder;
@@ -220,6 +221,10 @@ public partial class PhoneOrderProcessJobService
         });
 
         await _phoneOrderDataProvider.AddPhoneOrderRecordReportsAsync(reports, true, cancellationToken).ConfigureAwait(false);
+
+        // The notification job runs after the report and scenario have been persisted.
+        _smartTalkBackgroundJobClient.Enqueue<ICallNotificationService>(
+            service => service.ProcessCallNotificationAsync(record.Id, CancellationToken.None));
         
         await _posUtilService.GenerateAiDraftAsync(agent, aiSpeechAssistant, record, cancellationToken).ConfigureAwait(false);
         

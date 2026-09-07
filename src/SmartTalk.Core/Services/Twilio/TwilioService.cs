@@ -31,11 +31,13 @@ public class TwilioService : ITwilioService
 {
     private readonly ISmartTalkHttpClientFactory _httpClientFactory;
     private readonly TwilioSettings _twilioSettings;
+    private readonly ISmsOptOutService _smsOptOutService;
 
-    public TwilioService(TwilioSettings twilioSettings, ISmartTalkHttpClientFactory httpClientFactory)
+    public TwilioService(TwilioSettings twilioSettings, ISmartTalkHttpClientFactory httpClientFactory, ISmsOptOutService smsOptOutService)
     {
         _twilioSettings = twilioSettings;
         _httpClientFactory = httpClientFactory;
+        _smsOptOutService = smsOptOutService;
     }
 
     public async Task UpdateCallTwimlAsync(string callSid, string twiml)
@@ -128,6 +130,21 @@ public class TwilioService : ITwilioService
 
     public async Task<SendTwilioMessageResponse> SendMessageAsync(SendTwilioMessageRequest request, CancellationToken cancellationToken = default)
     {
+        await _smsOptOutService.EnsureSenderNumberOwnedByCompanyAsync(request.CompanyId, request.FromNumber, cancellationToken).ConfigureAwait(false);
+
+        if (await _smsOptOutService.IsOptedOutAsync(request.CompanyId, request.ToNumber, cancellationToken).ConfigureAwait(false))
+        {
+            Log.Information(
+                "Twilio message skipped because the customer opted out. CompanyId: {CompanyId}, ToNumber: {ToNumber}",
+                request.CompanyId, request.ToNumber);
+
+            return new SendTwilioMessageResponse
+            {
+                IsSkipped = true,
+                SkipReason = "Customer opted out of SMS notifications."
+            };
+        }
+
         var requestUrl =
             $"https://api.twilio.com/2010-04-01/Accounts/{Uri.EscapeDataString(_twilioSettings.AccountSid)}/Messages.json";
         var authValue = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_twilioSettings.AccountSid}:{_twilioSettings.AuthToken}"));
