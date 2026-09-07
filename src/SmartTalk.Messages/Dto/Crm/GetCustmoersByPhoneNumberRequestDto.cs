@@ -23,6 +23,12 @@ public class GetCustomersPhoneNumberDataDto
     
     [JsonProperty("customer_name")]
     public string CustomerName { get; set; }
+
+    [JsonProperty("restaurant_cn_name")]
+    public string RestaurantCnName { get; set; }
+
+    [JsonProperty("restaurant_name_remark")]
+    public string RestaurantNameRemark { get; set; }
     
     [JsonProperty("street")]
     public string Street { get; set; }

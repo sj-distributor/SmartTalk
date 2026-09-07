@@ -65,6 +65,42 @@ public class SalesCustomerMatchServiceTests
     }
 
     [Fact]
+    public async Task MatchCustomerAsync_ShouldUseRestaurantNameRemarkToDisambiguatePhoneCandidates()
+    {
+        var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
+
+        _crmClient.GetCrmTokenAsync(Arg.Any<CancellationToken>()).Returns("crm-token");
+        _crmClient.GetCustomersByPhoneNumberAsync(
+                Arg.Any<GetCustmoersByPhoneNumberRequestDto>(),
+                "crm-token",
+                Arg.Any<CancellationToken>())
+            .Returns([
+                new GetCustomersPhoneNumberDataDto
+                {
+                    SapId = "00012345",
+                    CustomerName = "Customer A",
+                    RestaurantNameRemark = "Moon House"
+                },
+                new GetCustomersPhoneNumberDataDto
+                {
+                    SapId = "00067890",
+                    CustomerName = "Customer B",
+                    RestaurantNameRemark = "Lucky House"
+                }
+            ]);
+
+        var result = await sut.MatchCustomerAsync(
+            "+1 (916) 428-4295",
+            null,
+            "Moon House",
+            ["+1 (916) 428-4295"],
+            CancellationToken.None);
+
+        result.SoldToId.ShouldBe("12345");
+        result.SoldToIds.ShouldBe(["12345"]);
+    }
+
+    [Fact]
     public async Task MatchCustomerAsync_ShouldFallbackToSalesGroup_WhenCustomerIdNotMatched()
     {
         var sut = new SalesCustomerMatchService(_crmClient, _daovikaClient);
