@@ -30,9 +30,14 @@ public partial class AiSpeechAssistantConnectService
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
 
         // Describes the prompt rather than reproducing it: the resolved text carries the caller's
-        // number, their CRM record and the menu, and this ran on every inbound call. The engine's
-        // session-start line logs the same length and hash, so the two are cross-checkable.
-        Log.Information("[AiAssistant] Prompt resolved, PromptChars: {PromptChars}", _ctx.Prompt?.Length ?? 0);
+        // number, their CRM record and the menu, and this ran on every inbound call.
+        //
+        // This is the prompt as the KNOWLEDGE stage leaves it, not what the engine receives: the
+        // assistant-data stage runs next and may append to it, and a call carrying an instruction
+        // hands the engine that instead. So it is deliberately not named PromptChars — the engine's
+        // session-start line owns that name, with the hash, for the prompt actually sent, and two
+        // different numbers under one property name would read as a fault that is not there.
+        Log.Information("[AiAssistant] Prompt resolved, KnowledgePromptChars: {KnowledgePromptChars}", _ctx.Prompt?.Length ?? 0);
     }
 
     private async Task LoadAssistantInfoAsync(CancellationToken cancellationToken)
