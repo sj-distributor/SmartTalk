@@ -46,9 +46,24 @@ EXPECTED_V2_MIN="${EXPECTED_V2_MIN:-650}"
 # they are not this effort's scope (CLAUDE.md Rule 3). L2 fails if the set of
 # failing tests differs from this list in either direction — a quarantined test
 # that starts passing is also a signal worth seeing.
+#
+# This is exactly the set that fails on a pristine checkout of origin/main, and
+# it must be re-derived that way whenever main is merged in — never by copying
+# whatever this branch happens to fail. Last derived against origin/main @
+# a31d269fd (781 passing / 10 failing entries there, 9 distinct methods once
+# theory cases collapse): run the full unit suite in a detached worktree of
+# origin/main and list what fails. Nothing on this branch touches the code
+# under any of these tests.
 QUARANTINED=(
+  "SmartTalk.UnitTests.Services.Agents.AgentServiceTests.GetSurfaceAgentsAsync_WhenNoiseReductionConfigured_ShouldReturnTrue"
+  "SmartTalk.UnitTests.Services.AiResourceSync.AiResourceSyncServiceTests.SyncInternalAsync_AutomaticSyncWithPartialLanguageMappings_CreatesAssistantForAvailableLanguage"
+  "SmartTalk.UnitTests.Services.AiResourceSync.AiResourceSyncServiceTests.SyncInternalAsync_ManualSync_SplitsExistingAssistantWhenOnlyChangedCustomerIsReturned"
+  "SmartTalk.UnitTests.Services.AiResourceSync.AiResourceSyncServiceTests.SyncInternalAsync_ManualSync_UsesChangedCustomersEndpoint"
+  "SmartTalk.UnitTests.Services.AiResourceSync.AiResourceSyncServiceTests.SyncInternalAsync_WhenCustomerSalesChanges_ShouldMoveAssistantToTargetSalesAgentWithoutMovingSourceAgent"
   "SmartTalk.UnitTests.Services.Http.Clients.DaovikaClientTests.GetSalesGroupByPhoneNumberAsync_ShouldQueryDaovikaTableWithPhone"
   "SmartTalk.UnitTests.Services.PhoneOrder.PhoneOrderProcessJobServiceSummaryFlowTests.HandleReleasedDiarizedTranscribeAsync_ShortAiGreetingOnlyCall_ShouldCompleteWithFixedSummary"
+  "SmartTalk.UnitTests.Services.Sale.AiResourceSyncGroupingTests.BuildCustomerGroups_CombinesDistinctContactLanguages"
+  "SmartTalk.UnitTests.Services.Sale.AiResourceSyncGroupingTests.ToModelLanguage_MapsCrmLanguageToModelCode"
 )
 
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; BOLD=$'\033[1m'; OFF=$'\033[0m'
