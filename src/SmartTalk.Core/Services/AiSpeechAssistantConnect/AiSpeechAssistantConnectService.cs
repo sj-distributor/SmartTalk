@@ -183,6 +183,11 @@ public partial class AiSpeechAssistantConnectService : IAiSpeechAssistantConnect
         var transferCallConfigs = await _agentDataProvider.GetAgentTransferCallConfigsAsync([agent.Id], cancellationToken).ConfigureAwait(false);
 
         _ctx.AgentId = agent.Id;
+
+        // Here rather than at Twilio's start frame, which is where it used to join the scope: the
+        // agent is known now, several seconds and the whole knowledge build before that frame — and a
+        // forwarded call never reaches that frame's handler at all, so it never carried AgentId.
+        _ctx.LogScope?.Set(LogProperties.AgentId, agent.Id);
         _ctx.TimeZone = await _agentTransferCallRoutingService.ResolveTimeZoneAsync(agent, cancellationToken).ConfigureAwait(false);
         _ctx.AgentTransferCallConfigs = transferCallConfigs;
         _ctx.TransferCallNumber = transferCallConfigs.Count > 0

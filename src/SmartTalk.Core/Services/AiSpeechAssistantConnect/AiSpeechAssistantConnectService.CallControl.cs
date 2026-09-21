@@ -39,8 +39,9 @@ public partial class AiSpeechAssistantConnectService
 
     private void HandleForwardStart(JsonDocument jsonDocument, string forwardPhoneNumber)
     {
-        _ctx.CallSid = jsonDocument.RootElement.GetProperty("start").GetProperty("callSid").GetString();
-        _ctx.StreamSid = jsonDocument.RootElement.GetProperty("start").GetProperty("streamSid").GetString();
+        var start = jsonDocument.RootElement.GetProperty("start");
+
+        ApplyTelephonyIdentifiers(_ctx, start.GetProperty("callSid").GetString(), start.GetProperty("streamSid").GetString());
 
         Log.Information("[AiAssistant] Forward started, CallSid: {CallSid}, StreamSid: {StreamSid}", _ctx.CallSid, _ctx.StreamSid);
 
