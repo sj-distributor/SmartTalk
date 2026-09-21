@@ -9,6 +9,7 @@ using SmartTalk.Core.Domain.AISpeechAssistant;
 using SmartTalk.Core.Domain.Pos;
 using SmartTalk.Core.Domain.Restaurants;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
+using SmartTalk.Messages.Enums.Agent;
 using SmartTalk.Messages.Requests.Agent;
 
 namespace SmartTalk.Core.Services.Agents;
@@ -44,6 +45,8 @@ public interface IAgentDataProvider : IScopedDependency
     Task<(int Count, List<Agent> Agents)> GetAgentsPagingAsync(int pageIndex, int pageSize, List<int> agentIds, string keyword = null, CancellationToken cancellationToken = default);
 
     Task<List<Agent>> GetAgentsByIdsAsync(List<int> ids, CancellationToken cancellationToken = default);
+
+    Task<Agent> GetCrmAutoSyncAgentByStoreAndNameAsync(int storeId, string agentName, CancellationToken cancellationToken = default);
 
     Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default);
 }
@@ -237,6 +240,23 @@ public class AgentDataProvider : IAgentDataProvider
     {
         return await _repository.Query<Agent>().Where(x => ids.Contains(x.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task<Agent> GetCrmAutoSyncAgentByStoreAndNameAsync(int storeId, string agentName, CancellationToken cancellationToken = default)
+    {
+        if (storeId <= 0 || string.IsNullOrWhiteSpace(agentName))
+            return null;
+
+        var query =
+            from posAgent in _repository.Query<PosAgent>()
+            join agent in _repository.Query<Agent>() on posAgent.AgentId equals agent.Id
+            where posAgent.StoreId == storeId
+                  && agent.Type == AgentType.Sales
+                  && agent.Name == agentName
+            orderby agent.CreatedDate descending
+            select agent;
+        
+        return await query.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
     
     public async Task<List<StoreAgentFlatDto>> GetStoreAgentsAsync(List<int> storeIds, CancellationToken cancellationToken = default)
     {
@@ -254,4 +274,5 @@ public class AgentDataProvider : IAgentDataProvider
 
         return await query.Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
+
 }

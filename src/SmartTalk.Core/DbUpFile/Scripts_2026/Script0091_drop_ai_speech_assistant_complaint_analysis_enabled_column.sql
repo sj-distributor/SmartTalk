@@ -1,0 +1,1 @@
+ALTER TABLE `ai_speech_assistant` DROP COLUMN `is_complaint_analysis_enabled`;

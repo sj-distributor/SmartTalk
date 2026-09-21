@@ -29,6 +29,8 @@ public class UpdateAgentCommand : HasServiceProviderId, ICommand
     public List<AgentTransferCallConfigDto> AgentTransferCallConfigs { get; set; }
     
     public AiSpeechAssistantChannel Channel { get; set; }
+
+    public bool? PhoneNoiseReductionEnabled { get; set; }
 }
 
 public class UpdateAgentResponse : SmartTalkResponse<AgentDto>

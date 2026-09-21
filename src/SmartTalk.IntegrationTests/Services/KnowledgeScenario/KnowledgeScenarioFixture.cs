@@ -45,6 +45,35 @@ public class KnowledgeScenarioFixture : KnowledgeScenarioFixtureBase
     }
 
     [Fact]
+    public async Task ShouldGetKnowledgeSceneFolderTree()
+    {
+        var caseId = Guid.NewGuid().ToString("N")[..8];
+        int matchFolderId = 0;
+
+        await RunWithUnitOfWork<IRepository, IUnitOfWork>(async (repository, unitOfWork) =>
+        {
+            var matchFolder = await CreateFolderAsync(repository, unitOfWork, $"Folder-Match-{caseId}");
+            matchFolderId = matchFolder.Id;
+            await CreateSceneAsync(repository, unitOfWork, matchFolderId, $"Scene-Match-{caseId}", "desc", KnowledgeSceneStatus.Published);
+            await CreateSceneAsync(repository, unitOfWork, matchFolderId, $"Scene-Other-{caseId}", "desc", KnowledgeSceneStatus.OffShelf);
+            var otherFolder = await CreateFolderAsync(repository, unitOfWork, $"Folder-Other-{caseId}");
+            await CreateSceneAsync(repository, unitOfWork, otherFolder.Id, $"Scene-Ignore-{caseId}", "desc", KnowledgeSceneStatus.Published);
+        });
+
+        await Run<IMediator>(async mediator =>
+        {
+            var response = await mediator.RequestAsync<GetKnowledgeSceneFolderTreeRequest, GetKnowledgeSceneFolderTreeResponse>(
+                new GetKnowledgeSceneFolderTreeRequest { });
+
+            response.ShouldNotBeNull();
+            response.Data.Count.ShouldBe(1);
+            response.Data.Single().Id.ShouldBe(matchFolderId);
+            response.Data.Single().Scenes.Count.ShouldBe(2);
+            response.Data.Single().Scenes.Any(x => x.Name == $"Scene-Match-{caseId}").ShouldBeTrue();
+        });
+    }
+
+    [Fact]
     public async Task ShouldAddKnowledgeSceneFolder()
     {
         var caseId = Guid.NewGuid().ToString("N")[..8];

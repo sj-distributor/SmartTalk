@@ -124,7 +124,6 @@ public class SalesJobProcessJobServiceTests
             _salesService,
             _salesDataProvider,
             _backgroundJobClient,
-            null,
             new CustomerItemsRefreshBatchSizeSetting(configuration));
     }
 }

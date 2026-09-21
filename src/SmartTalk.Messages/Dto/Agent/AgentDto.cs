@@ -49,7 +49,9 @@ public class AgentDto
     public string TransferCallNumber { get; set; }
     
     public string ServiceHours { get; set; }
-
+    
+    public bool PhoneNoiseReductionEnabled { get; set; }
+    
     public List<AgentTransferCallConfigDto> AgentTransferCallConfigs { get; set; }
     
     public DateTimeOffset CreatedDate { get; set; }
