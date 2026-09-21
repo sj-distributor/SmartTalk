@@ -1,6 +1,8 @@
 using System.Text;
 using Newtonsoft.Json;
 using Serilog;
+using Serilog.Context;
+using SmartTalk.Core.Logging;
 using SmartTalk.Core.Ioc;
 using SmartTalk.Core.Services.AiSpeechAssistant;
 using SmartTalk.Core.Services.Attachments;
@@ -70,6 +72,13 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
     {
         var options = await BuildSessionOptionsAsync(command, cancellationToken).ConfigureAwait(false);
 
+        // Same correlation key the engine pushes, so this session's lines join in Seq. Opened around
+        // the connect rather than the build because BuildSessionOptionsAsync is also called on its
+        // own by other transports, which own their scope.
+        using var callScope = LogContext.Push(new DeferredLogScope()
+            .Set(LogProperties.RealtimeSessionId, options.SessionId)
+            .Set(LogProperties.AssistantId, command.AssistantId));
+
         await _realtimeAiService.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
     }
 
@@ -85,6 +94,8 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
         CancellationToken cancellationToken,
         CancellationToken callbackCancellationToken)
     {
+        var sessionId = Guid.NewGuid().ToString();
+
         var assistant = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantWithKnowledgeAsync(command.AssistantId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Could not find assistant by id: {command.AssistantId}");
@@ -103,6 +114,7 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
 
         var options = new RealtimeSessionOptions
         {
+            SessionId = sessionId,
             ClientConfig = new RealtimeAiClientConfig
             {
                 Client = RealtimeAiClient.Default
@@ -294,7 +306,9 @@ public class AiKidRealtimeServiceV2 : IAiKidRealtimeServiceV2
             finalPrompt = finalPrompt.Replace("#{hr_interview_questions}", cache.FirstOrDefault()?.CacheValue);
         }
 
-        Log.Information("The final prompt: {FinalPrompt}", finalPrompt);
+        // Length only — the engine's session-start line already carries the hash that identifies
+        // which revision was live.
+        Log.Information("[AiKidRealtimeV2] Prompt resolved, PromptChars: {PromptChars}", finalPrompt?.Length ?? 0);
 
         return finalPrompt;
     }

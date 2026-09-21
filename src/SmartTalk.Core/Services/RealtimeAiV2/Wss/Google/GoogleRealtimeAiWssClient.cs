@@ -14,7 +14,17 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly GoogleSettings _googleSettings;
 
+    /// <summary>
+    /// The endpoint WITHOUT credentials. Every log site reads this property, and Google authenticates
+    /// by query string, so exposing the authenticated form here published the API key to the sink on
+    /// every session. It is also what the engine compares against the configured service URL to
+    /// decide whether it is already connected — a comparison that could never match while the key
+    /// was appended.
+    /// </summary>
     public Uri EndpointUri { get; private set; }
+
+    /// <summary>The credentialed URI. Used only to dial; never logged, never exposed.</summary>
+    private Uri _authenticatedUri;
     public RealtimeAiProvider Provider => RealtimeAiProvider.Google;
     public WebSocketState CurrentState => _webSocket?.State ?? WebSocketState.None;
 
@@ -31,12 +41,13 @@ public class GoogleRealtimeAiWssClient : IRealtimeAiWssClient
 
     public async Task ConnectAsync(Uri endpointUri, Dictionary<string, string> customHeaders, CancellationToken cancellationToken)
     {
-        EndpointUri = new Uri($"{endpointUri}?key={_googleSettings.ApiKey}");
+        EndpointUri = endpointUri;
+        _authenticatedUri = new Uri($"{endpointUri}?key={_googleSettings.ApiKey}");
 
         try
         {
             Log.Information("Google Realtime Wss Client: Connecting to {EndpointUri}...", EndpointUri);
-            await _webSocket.ConnectAsync(EndpointUri, cancellationToken).ConfigureAwait(false);
+            await _webSocket.ConnectAsync(_authenticatedUri, cancellationToken).ConfigureAwait(false);
             Log.Information("Google Realtime Wss Client: Successfully connected to {EndpointUri}. State: {State}", EndpointUri, CurrentState);
             await (StateChangedAsync?.Invoke(CurrentState, "Connected") ?? Task.CompletedTask);
 

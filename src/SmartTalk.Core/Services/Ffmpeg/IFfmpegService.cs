@@ -475,7 +475,24 @@ public class FfmpegService : IFfmpegService
                 proc.BeginErrorReadLine();
                 proc.BeginOutputReadLine();
 
-                await proc.WaitForExitAsync(cancellationToken);
+                // Bounded because this is the one ffmpeg call on the live-call path: the repeat-order
+                // handler runs inline on the provider receive loop with the caller's microphone
+                // suspended, so a wedged ffmpeg mutes the customer until they hang up. The bound kills
+                // the child before the finally below unlinks the temp files — unlinking alone does not
+                // stop ffmpeg (it keeps its fds on the deleted inodes and still exits 0).
+                //
+                // Bounds this wait ONLY. The WriteAllBytesAsync above and the ReadAllBytesAsync below
+                // take the same token and remain unbounded; a storage stall on the working directory
+                // stalls those identically. And do not copy this onto GetAudioDurationAsync — that one
+                // blocks first on an uncancellable StandardError.ReadToEndAsync (line ~337) that runs
+                // before its WaitForExitAsync, so this pattern alone would not unwedge it.
+                var bound = FfmpegProcessBound.ResolveUlawBound();
+
+                if (!await FfmpegProcessBound.TryWaitForExitWithinAsync(proc, bound, cancellationToken).ConfigureAwait(false))
+                {
+                    Log.Error("[FfmpegBound] uLaw conversion exceeded its {BoundSeconds}s bound and was killed, InputLength: {Length}", bound.TotalSeconds, wavBytes.Length);
+                    return [];
+                }
 
                 if (proc.ExitCode != 0)
                 {

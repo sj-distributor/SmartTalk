@@ -66,9 +66,12 @@ public partial class RealtimeAiService
         await OnAiTurnCompletedAsync().ConfigureAwait(false);
     }
 
-    // Absolute backstop for an external (text) turn: armed at its first text. Covers the provider that
-    // streams text then stalls without ever sending response.done — the TTS-synthesis watchdog never arms
-    // there (it arms on provider-done), so without this the turn would hang forever.
+    // Absolute backstop for a turn: armed when a response starts, and additionally at first text on the
+    // external-TTS path, where the provider may stream text and then stall without ever sending
+    // response.done and the TTS-synthesis watchdog never arms (it arms on provider-done).
+    //
+    // Re-armed rather than fired while the engine's own function-call handlers hold the receive loop —
+    // see ForceTurnCompletionAtHardCeilingAsync.
     private void ArmTurnHardCeilingWatchdog()
     {
         var generation = Interlocked.Read(ref _ctx.CurrentTurnGeneration);
@@ -95,6 +98,19 @@ public partial class RealtimeAiService
     {
         if (!IsProviderSessionActive) return;
 
+        // The bound means "the provider went quiet", never "our own tool is still working". Handlers run
+        // inline on the provider receive loop, which cannot hold back this timer, so without this a
+        // healthy turn whose tool is merely slow gets closed behind its back: barge-in loses the two
+        // fields it needs and the assistant talks over the caller for the rest of the turn, Round
+        // advances so the follow-up and auto-hangup arm early, and the idle timer starts — whose
+        // default handling schedules the job that hangs up the call.
+        if (_ctx.IsRunningFunctionCallHandlers)
+        {
+            ArmTurnHardCeilingWatchdog();
+
+            return;
+        }
+
         var token = _ctx.SessionCts?.Token ?? CancellationToken.None;
         var shouldComplete = false;
 
@@ -104,11 +120,22 @@ public partial class RealtimeAiService
             if (Interlocked.Read(ref _ctx.CurrentTurnGeneration) != generation) return;
             if (_ctx.CurrentResponseTurnCompletedHandled) return;   // already completed via the gate
 
+            // Audio mode has no handled latch, so this is what stops a ceiling from adding a second
+            // completion behind a turn that already finished on its own.
+            if (Interlocked.Read(ref _ctx.NormallyCompletedTurnGeneration) == generation) return;
+
+            // Two ceilings can be armed for one external-TTS turn (response.created and its first
+            // text); only the first may close it.
+            if (Interlocked.Read(ref _ctx.ForceCompletedTurnGeneration) == generation) return;
+
             // Force BOTH gate legs: the provider may have stalled before response.done, and the TTS may
-            // still be mid-synthesis. The handled latch (waitsForExternalTts is true here) keeps it exactly-once.
+            // still be mid-synthesis. Audio mode has no handled latch, so exactly-once there comes from
+            // the two generation stamps above, not from the latch.
             _ctx.CurrentResponseProviderTurnCompleted = true;
             _ctx.CurrentResponseTtsSynthesisCompleted = true;
             shouldComplete = TryMarkCurrentResponseTurnCompletedLocked();
+
+            if (shouldComplete) Interlocked.Exchange(ref _ctx.ForceCompletedTurnGeneration, generation);
         }
         finally
         {

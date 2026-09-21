@@ -142,10 +142,18 @@ public class RealtimeAiServiceTtsSynthesisWatchdogTests : RealtimeAiServiceTestB
 
         await FakeWssClient.SimulateMessageReceivedAsync("delta");     // turn N: first text arms the hard ceiling
         await FakeWssClient.SimulateMessageReceivedAsync("started");   // turn N+1 begins → generation bumps
+        await FakeWssClient.SimulateMessageReceivedAsync("delta");     // turn N+1 produces text, so its gate waits
+        await FakeWssClient.SimulateMessageReceivedAsync("done");      // and then finishes on its own
 
-        await Task.Delay(PastCeiling);   // the stale turn-N hard ceiling fires here — must no-op against turn N+1
+        // Turn N+1 completed once, normally. Waiting past the ceiling lets turn N's stale watchdog
+        // fire; if it ignored the generation it would complete turn N+1 a second time.
+        //
+        // Turn N+1 now carries a ceiling of its own — every turn does, since the bound stopped being
+        // external-TTS-only — so "no completions at all" is no longer the right expectation. Exactly
+        // one is: the turn's own, not the stale one and not a duplicate from its own ceiling.
+        await Task.Delay(PastCeiling);
 
-        TurnCompletedCount().ShouldBe(0);
+        TurnCompletedCount().ShouldBe(1);
 
         await CloseAsync(sessionTask);
     }
@@ -156,7 +164,11 @@ public class RealtimeAiServiceTtsSynthesisWatchdogTests : RealtimeAiServiceTestB
         // The backstop durations are fixed engineering safety limits, not configuration. Pin them so a change
         // is a deliberate, visible decision rather than an accidental edit to a load-bearing timing constant.
         RealtimeAiTurnWatchdogDefaults.TtsSynthesisTimeout.ShouldBe(TimeSpan.FromSeconds(8));
-        RealtimeAiTurnWatchdogDefaults.TurnHardCeiling.ShouldBe(TimeSpan.FromSeconds(45));
+        // Raised from 45s when the ceiling started arming on the built-in audio path too. It is now a
+        // backstop for every turn rather than for external TTS only, and it is deliberately far above
+        // any plausible turn: a bound that can only fire on an already-broken turn needs no
+        // production latency data to justify, where a tighter one would.
+        RealtimeAiTurnWatchdogDefaults.TurnHardCeiling.ShouldBe(TimeSpan.FromSeconds(120));
     }
 
     private void UseExternalTts(IRealtimeAiTtsProvider tts) =>

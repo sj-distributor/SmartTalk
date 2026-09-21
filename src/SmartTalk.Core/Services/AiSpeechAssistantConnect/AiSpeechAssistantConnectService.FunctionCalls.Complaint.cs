@@ -19,7 +19,7 @@ public partial class AiSpeechAssistantConnectService
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "[AiAssistant] Deserialize complaint info failed. Arguments: {Arguments}", functionCallData.ArgumentsJson);
+            Log.Warning(ex, "[AiAssistant] Deserialize complaint info failed, ArgumentChars: {ArgumentChars}", functionCallData.ArgumentsJson?.Length ?? 0);
         }
 
         _ctx.ComplaintInfo = AiSpeechAssistantComplaintInfoHelper.Merge(_ctx.ComplaintInfo, incoming);

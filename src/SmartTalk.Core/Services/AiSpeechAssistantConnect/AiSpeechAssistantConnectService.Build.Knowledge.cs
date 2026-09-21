@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Logging;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Smarties;
@@ -28,7 +29,15 @@ public partial class AiSpeechAssistantConnectService
         await ResolveDeliveryInfoAsync(cancellationToken).ConfigureAwait(false);
         await ResolveItemDescriptionAsync(cancellationToken).ConfigureAwait(false);
 
-        Log.Information("[AiAssistant] Prompt resolved, Prompt: {Prompt}", _ctx.Prompt);
+        // Describes the prompt rather than reproducing it: the resolved text carries the caller's
+        // number, their CRM record and the menu, and this ran on every inbound call.
+        //
+        // This is the prompt as the KNOWLEDGE stage leaves it, not what the engine receives: the
+        // assistant-data stage runs next and may append to it, and a call carrying an instruction
+        // hands the engine that instead. So it is deliberately not named PromptChars — the engine's
+        // session-start line owns that name, with the hash, for the prompt actually sent, and two
+        // different numbers under one property name would read as a fault that is not there.
+        Log.Information("[AiAssistant] Prompt resolved, KnowledgePromptChars: {KnowledgePromptChars}", _ctx.Prompt?.Length ?? 0);
     }
 
     private async Task LoadAssistantInfoAsync(CancellationToken cancellationToken)
@@ -41,6 +50,12 @@ public partial class AiSpeechAssistantConnectService
         EnsureAssistantInfoComplete(assistant, knowledge);
 
         _ctx.Assistant = _mapper.Map<AiSpeechAssistantDto>(assistant);
+
+        // Puts AssistantId on every line of the call from here on, including the engine's own, so the
+        // engine's token line carries the dimension the consumer's duplicate used to add. Null-safe on
+        // purpose: DeferredLogScope treats a null as "remove the property", so a missing assistant
+        // costs a facet rather than the call.
+        _ctx.LogScope?.Set(LogProperties.AssistantId, _ctx.Assistant?.Id);
         _ctx.Knowledge = _mapper.Map<AiSpeechAssistantKnowledgeDto>(knowledge);
 
         _ctx.Prompt = string.Join("\n\n", new[]

@@ -2,7 +2,16 @@ namespace SmartTalk.Messages.Enums.RealtimeAi;
 
 public enum RealtimeAiWssEventType
 {
+    /// <summary>An event type this adapter does not recognise. Operator-visible: logged at Warning.</summary>
     Unknown,
+
+    /// <summary>
+    /// Recognised provider chatter the engine deliberately does not act on — lifecycle echoes,
+    /// rate-limit notices, item-created acknowledgements. Behaviourally identical to
+    /// <see cref="Unknown"/> (neither reaches a handler), but separating them keeps Warning
+    /// meaningful: OpenAI GA emits several of these per conversational round trip.
+    /// </summary>
+    Ignored,
     SessionInitializing,    // 会话正在初始化 (Engine 内部状态或发给外部)
     SessionInitialized,     // AI 服务商确认会话已初始化/更新
     SessionUpdateFailed,    // 会话初始化/更新失败

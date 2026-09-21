@@ -36,10 +36,25 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
     private bool _turnTextDone;
     private bool _turnSynthesisRaised;
 
-    private ClientWebSocket _webSocket;
+    private WebSocket _webSocket;
+
+    /// <summary>
+    /// Test-only seam (internal, not an operator surface): supplies an already-connected socket in
+    /// place of dialling MiniMax. Everything below this line speaks the abstract WebSocket, so a
+    /// test can drive the vendor's handshake and streaming protocol without a network.
+    /// Null in production — <see cref="ConnectClientWebSocketAsync"/> runs.
+    /// </summary>
+    internal Func<RealtimeAiTtsConfig, CancellationToken, Task<WebSocket>> WebSocketConnectorOverride { get; set; }
     private CancellationTokenSource _receiveLoopCts;
     private Task _receiveLoopTask;
     private RealtimeAiTtsConfig _config;
+
+    /// <summary>
+    /// Set once StopAsync has run, read only under <c>_connectionLock</c>. A redial started by an
+    /// interrupt races the stop for that lock: whichever wins, this makes the loser a no-op or a
+    /// close rather than a socket that outlives its session.
+    /// </summary>
+    private bool _stopped;
     private int _generation;
     private int _loggedAudioSampleRate;
     private int _targetSampleRate = DefaultSampleRate;
@@ -62,6 +77,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
     public async Task InitializeAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
     {
         _config = config;
+        _stopped = false;
         _targetSampleRate = config.SampleRate ?? DefaultSampleRate;
         _assumedSourceSampleRate = GetIntConfig(config.ProviderSpecificConfig, "source_sample_rate", _targetSampleRate);
         ClearTextState(clearPending: true);
@@ -120,7 +136,10 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         {
             Log.Information("[RealtimeAi][MiniMaxTts] Interrupt received, restarting TTS session.");
             await CloseConnectionAsync(CancellationToken.None).ConfigureAwait(false);
-            await OpenConnectionAsync(_config ?? new RealtimeAiTtsConfig(), cancellationToken).ConfigureAwait(false);
+
+            if (_stopped) return;
+
+            ReopenInBackground(cancellationToken);
         }
         finally
         {
@@ -136,6 +155,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            _stopped = true;
             await CloseConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -144,18 +164,55 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         }
     }
 
+    /// <summary>
+    /// Redials the vendor without holding up the caller. Closing is what silences an interrupted turn;
+    /// the new task is preparation for the next one, and the engine awaits HandleInterruptAsync from
+    /// its provider event loop — dialling inline stalled every provider event for a full TCP+TLS+
+    /// handshake. Text that arrives before the socket is up is queued by QueueOrSendSegmentAsync and
+    /// flushed at the end of OpenConnectionAsync, which is the path that already existed for a
+    /// not-yet-ready socket.
+    ///
+    /// <para>Takes _connectionLock, so it serialises against Initialize/Interrupt/Stop exactly as the
+    /// inline redial did. A redial that fails is logged rather than thrown — it used to surface into
+    /// the event loop, which would cost the whole call — and the turn is then closed by the engine's
+    /// TTS-synthesis watchdog, since no audio will arrive for it.</para>
+    ///
+    /// <para>It dials on the session's token, not CancellationToken.None. StopAsync needs the same
+    /// lock, and teardown cancels the session before calling it (RealtimeAiService.Connect.cs:108
+    /// then :115) — so an uncancellable dial would hand the vendor's connect timeout straight to
+    /// teardown, holding the DI scope, the unit of work and the transcript flush open for the whole
+    /// of it. The handshake waits are separately bounded at ten seconds; the TCP/TLS connect is not,
+    /// which is what makes the token load-bearing rather than decorative.</para>
+    /// </summary>
+    private void ReopenInBackground(CancellationToken sessionToken) => _ = Task.Run(async () =>
+    {
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_stopped) return;
+
+            await OpenConnectionAsync(_config ?? new RealtimeAiTtsConfig(), sessionToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The session ended while the redial was in flight. Expected, not a fault.
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[RealtimeAi][MiniMaxTts] Redial after interrupt failed; this turn has no voice and will close on the synthesis watchdog.");
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }, CancellationToken.None);
+
     private async Task OpenConnectionAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
     {
-        var ws = new ClientWebSocket();
-        ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
+        var ws = WebSocketConnectorOverride is null
+            ? await ConnectClientWebSocketAsync(config, cancellationToken).ConfigureAwait(false)
+            : await WebSocketConnectorOverride(config, cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrWhiteSpace(config.ApiKey))
-            ws.Options.SetRequestHeader("Authorization", $"Bearer {config.ApiKey}");
-
-        var serviceUrl = string.IsNullOrWhiteSpace(config.ServiceUrl) ? DefaultServiceUrl : config.ServiceUrl;
-        Log.Information("[RealtimeAi][MiniMaxTts] Connecting websocket, Url: {Url}", serviceUrl);
-
-        await ws.ConnectAsync(new Uri(serviceUrl), cancellationToken).ConfigureAwait(false);
         await WaitForEventAsync(ws, "connected_success", cancellationToken).ConfigureAwait(false);
         await SendTaskStartAsync(ws, config, cancellationToken).ConfigureAwait(false);
         await WaitForEventAsync(ws, "task_started", cancellationToken).ConfigureAwait(false);
@@ -169,6 +226,26 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         _receiveLoopTask = loopTask;
 
         await FlushPendingSegmentsAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The real dial. Isolated here because ClientWebSocket.Options is the only thing in this class
+    /// that needs the concrete type — everything after the connect speaks the abstract WebSocket.
+    /// </summary>
+    private static async Task<WebSocket> ConnectClientWebSocketAsync(RealtimeAiTtsConfig config, CancellationToken cancellationToken)
+    {
+        var ws = new ClientWebSocket();
+        ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
+
+        if (!string.IsNullOrWhiteSpace(config.ApiKey))
+            ws.Options.SetRequestHeader("Authorization", $"Bearer {config.ApiKey}");
+
+        var serviceUrl = string.IsNullOrWhiteSpace(config.ServiceUrl) ? DefaultServiceUrl : config.ServiceUrl;
+        Log.Information("[RealtimeAi][MiniMaxTts] Connecting websocket, Url: {Url}", serviceUrl);
+
+        await ws.ConnectAsync(new Uri(serviceUrl), cancellationToken).ConfigureAwait(false);
+
+        return ws;
     }
 
     private async Task CloseConnectionAsync(CancellationToken cancellationToken)
@@ -226,7 +303,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         loopCts?.Dispose();
     }
 
-    private async Task SendTaskStartAsync(ClientWebSocket ws, RealtimeAiTtsConfig config, CancellationToken cancellationToken)
+    private async Task SendTaskStartAsync(WebSocket ws, RealtimeAiTtsConfig config, CancellationToken cancellationToken)
     {
         var model = GetStringConfig(config.ProviderSpecificConfig, "model", DefaultModel);
         var voiceId = string.IsNullOrWhiteSpace(config.Voice) ? DefaultVoiceId : config.Voice;
@@ -344,7 +421,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
             : $"{normalized[..MaxLoggedTextChars]}...(truncated, total={normalized.Length})";
     }
 
-    private async Task<bool> SendAsyncInternal(ClientWebSocket ws, object payload, CancellationToken cancellationToken)
+    private async Task<bool> SendAsyncInternal(WebSocket ws, object payload, CancellationToken cancellationToken)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
 
@@ -361,7 +438,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         }
     }
 
-    private async Task WaitForEventAsync(ClientWebSocket ws, string expectedEvent, CancellationToken cancellationToken)
+    private async Task WaitForEventAsync(WebSocket ws, string expectedEvent, CancellationToken cancellationToken)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
@@ -380,7 +457,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         }
     }
 
-    private async Task ReceiveLoopAsync(ClientWebSocket ws, int generation, CancellationToken cancellationToken)
+    private async Task ReceiveLoopAsync(WebSocket ws, int generation, CancellationToken cancellationToken)
     {
         try
         {
@@ -623,7 +700,7 @@ public class MiniMaxRealtimeAiTtsProvider : IRealtimeAiTtsProvider, IRealtimeAiT
         return BuildLogTextPreview(fallback);
     }
 
-    private static async Task<string> ReceiveTextMessageAsync(ClientWebSocket ws, CancellationToken cancellationToken)
+    private static async Task<string> ReceiveTextMessageAsync(WebSocket ws, CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
         using var stream = new MemoryStream();

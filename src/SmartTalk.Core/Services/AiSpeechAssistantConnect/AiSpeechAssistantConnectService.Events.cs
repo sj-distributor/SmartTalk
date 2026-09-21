@@ -1,4 +1,5 @@
 using Serilog;
+using SmartTalk.Core.Logging;
 using SmartTalk.Core.Services.RealtimeAiV2;
 using SmartTalk.Messages.Dto.AiSpeechAssistant;
 using SmartTalk.Messages.Enums.AiSpeechAssistant;
@@ -28,13 +29,30 @@ public partial class AiSpeechAssistantConnectService
         await actions.SendTextToProviderAsync($"Greet the user with: '{greeting}'").ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Records the telephony identifiers the moment Twilio's start frame supplies them — on the context
+    /// and on the ambient log scope TOGETHER, so from here on every line of the call (consumer, engine,
+    /// provider transport) carries CallSid without any of them passing it.
+    ///
+    /// <para>One helper because two paths receive that frame, the AI path and the forward-to-a-human
+    /// path, and when each set the fields itself only one of them remembered the scope: a forwarded
+    /// call never carried CallSid on any line, so filtering a complaint about a transferred call by
+    /// CallSid returned nothing. Static so that is testable without constructing the service.</para>
+    /// </summary>
+    internal static void ApplyTelephonyIdentifiers(AiSpeechAssistantConnectContext context, string callSid, string streamSid)
+    {
+        context.CallSid = callSid;
+        context.StreamSid = streamSid;
+
+        context.LogScope?.Set(LogProperties.CallSid, callSid).Set(LogProperties.StreamSid, streamSid);
+    }
+
     private Task HandleClientStartAsync(string sessionId, Dictionary<string, string> metadata)
     {
         metadata.TryGetValue("callSid", out var callSid);
         metadata.TryGetValue("streamSid", out var streamSid);
 
-        _ctx.CallSid = callSid;
-        _ctx.StreamSid = streamSid;
+        ApplyTelephonyIdentifiers(_ctx, callSid, streamSid);
 
         Log.Information("[AiAssistant] Call started, CallSid: {CallSid}, StreamSid: {StreamSid}", callSid, streamSid);
 
@@ -87,10 +105,4 @@ public partial class AiSpeechAssistantConnectService
         return Task.CompletedTask;
     }
 
-    private Task HandleRecordingCompleteAsync(string sessionId, byte[] wavBytes)
-    {
-        Log.Information("[AiAssistant] Recording complete, SessionId: {SessionId}, Size: {Size}bytes", sessionId, wavBytes.Length);
-
-        return Task.CompletedTask;
-    }
 }
