@@ -1,4 +1,6 @@
 using Serilog;
+using SmartTalk.Core.Services.AiResourceSync;
+using SmartTalk.Core.Services.Sale;
 using SmartTalk.Core.Services.AiSpeechAssistantConnect.Exceptions;
 using SmartTalk.Core.Utils;
 using SmartTalk.Messages.Dto.Smarties;
@@ -34,6 +36,23 @@ public partial class AiSpeechAssistantConnectService
     {
         var (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
             .GetAiSpeechAssistantInfoByNumbersAsync(_ctx.From, _ctx.To, _ctx.ForwardAssistantId ?? _ctx.AssistantId, cancellationToken).ConfigureAwait(false);
+       
+        Log.Information(
+            "[AiAssistant] LoadAssistantInfo initial lookup, AssistantId: {AssistantId}, KnowledgeId: {KnowledgeId}, HasProfile: {HasProfile}, RequestedAssistantId: {RequestedAssistantId}, ForwardAssistantId: {ForwardAssistantId}, From: {From}, To: {To}",
+            assistant?.Id, knowledge?.Id, userProfile != null, _ctx.AssistantId, _ctx.ForwardAssistantId, _ctx.From, _ctx.To);
+
+        if (!_ctx.AssistantId.HasValue && !_ctx.ForwardAssistantId.HasValue && assistant != null)
+        {
+            Log.Information(
+                "[AiAssistant] LoadAssistantInfo resolving customer-specific assistant, MatchedAssistantId: {AssistantId}, AgentId: {AgentId}, From: {From}, To: {To}", assistant.Id, assistant.AgentId, _ctx.From, _ctx.To);
+        
+            var customerAssistantId = await ResolveCustomerSpecificAssistantIdAsync(assistant.AgentId, _ctx.From, cancellationToken).ConfigureAwait(false);
+            if (customerAssistantId.HasValue && customerAssistantId.Value != assistant.Id)
+            {
+                (assistant, knowledge, userProfile) = await _aiSpeechAssistantDataProvider
+                    .GetAiSpeechAssistantInfoByNumbersAsync(_ctx.From, _ctx.To, customerAssistantId.Value, cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         Log.Information("[AiAssistant] Assistant matched, AssistantId: {AssistantId}, HasProfile: {HasProfile}, From: {From}, To: {To}", assistant?.Id, userProfile != null, _ctx.From, _ctx.To);
 
@@ -50,6 +69,19 @@ public partial class AiSpeechAssistantConnectService
             .Where(x => !string.IsNullOrWhiteSpace(x)));
 
         _ctx.UserProfileJson = userProfile?.ProfileJson;
+    }
+
+    private async Task<int?> ResolveCustomerSpecificAssistantIdAsync(int agentId, string callerPhoneNumber, CancellationToken cancellationToken)
+    {
+        var normalizedPhoneNumber = AiResourceSyncGrouping.NormalizePhoneNumber(callerPhoneNumber);
+        if (string.IsNullOrWhiteSpace(normalizedPhoneNumber))
+            return null;
+
+        var mapping = await _aiSpeechAssistantDataProvider
+            .GetCrmCustomerContactPhoneMapByAgentIdAndPhoneAsync(agentId, normalizedPhoneNumber, cancellationToken)
+            .ConfigureAwait(false);
+
+        return mapping?.AssistantId;
     }
 
     /// <summary>

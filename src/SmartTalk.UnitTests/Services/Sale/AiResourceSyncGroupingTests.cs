@@ -148,6 +148,19 @@ public class AiResourceSyncGroupingTests
         Assert.Equal(expected, AiResourceSyncLanguageConverter.ToModelLanguage(rawLanguage));
     }
 
+    [Theory]
+    [InlineData("415-218-2467", "4152182467")]
+    [InlineData("+1 415-218-2467", "4152182467")]
+    [InlineData("1 (415) 218-2467", "4152182467")]
+    [InlineData("   ", "")]
+    [InlineData(null, "")]
+    public void NormalizePhoneNumber_NormalizesForInboundMatching(string rawPhoneNumber, string expected)
+    {
+        var normalized = AiResourceSyncGrouping.NormalizePhoneNumber(rawPhoneNumber);
+
+        Assert.Equal(expected, normalized);
+    }
+
     private static CrmSalesAutoSyncCustomerDto CreateCustomer(string sapId, string salesName, string phone)
         => CreateCustomer(sapId, salesName, "GroupA", phone, null);
 
